@@ -11,6 +11,7 @@ use App\Http\Requests\User\IndexUserRequest;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Events\UserRegistered;
 
 class UserController extends Controller
 {
@@ -46,6 +47,8 @@ class UserController extends Controller
         $user = $this->userService->create(
             $request->validated()
         );
+
+        UserRegistered::dispatch($user);
 
         return ApiResponse::createdResponse(
             new UserResource($user),
