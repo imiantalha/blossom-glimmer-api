@@ -3,7 +3,7 @@ import Button from "../common/form/Button";
 import Select from "../common/form/Select"; 
 
 const UserForm = ({
-    mood = "create",
+    mode = "create",
     form,
     loading = false,
     errors = {},
@@ -13,7 +13,7 @@ const UserForm = ({
     onSubmit,
     onCancel,
 }) => {
-    const isEdit = mood === "edit";
+    const isEdit = mode === "edit";
 
     return (
         <form onSubmit={onSubmit}>
