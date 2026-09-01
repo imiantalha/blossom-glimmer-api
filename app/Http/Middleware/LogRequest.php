@@ -64,48 +64,48 @@ class LogRequest
             'timestamp' => now()->toDateTimeString(),
         ]);
 
-        // $log = RequestLog::create([
-        //     'method'        => $request->method(),
-        //     'url'           => $request->fullUrl(),
-        //     'path'          => $request->path(),
+        $log = RequestLog::create([
+            'method'        => $request->method(),
+            'url'           => $request->fullUrl(),
+            'path'          => $request->path(),
 
-        //     'ip'            => $ip,
-        //     'country'       => $location?->countryName,
-        //     'country_code'  => $location?->countryCode,
-        //     'region'        => $location?->regionName,
-        //     'city'          => $location?->cityName,
-        //     'latitude'      => $location?->latitude,
-        //     'longitude'     => $location?->longitude,
-        //     'timezone'      => $location?->timezone,
+            'ip'            => $ip,
+            'country'       => $location?->countryName,
+            'country_code'  => $location?->countryCode,
+            'region'        => $location?->regionName,
+            'city'          => $location?->cityName,
+            'latitude'      => $location?->latitude,
+            'longitude'     => $location?->longitude,
+            'timezone'      => $location?->timezone,
 
-        //     'user_agent'    => $request->userAgent(),
+            'user_agent'    => $request->userAgent(),
 
-        //     'headers'       => collect($request->headers->all())
-        //                             ->except(['authorization', 'cookie'])
-        //                             ->toArray(),
+            'headers'       => collect($request->headers->all())
+                                    ->except(['authorization', 'cookie'])
+                                    ->toArray(),
 
-        //     'query'         => $request->query(),
+            'query'         => $request->query(),
 
-        //     'payload'       => $request->except([
-        //                             'password',
-        //                             'password_confirmation',
-        //                             'token',
-        //                         ]),
+            'payload'       => $request->except([
+                                    'password',
+                                    'password_confirmation',
+                                    'token',
+                                ]),
 
-        //     'user_id'       => optional($request->user())->id,
+            'user_id'       => optional($request->user())->id,
 
-        //     'timestamp'     => now(),
+            'timestamp'     => now(),
 
-        //     'response_status' => null,
-        //     'response_time_ms' => null,
-        // ]);
+            'response_status' => null,
+            'response_time_ms' => null,
+        ]);
 
-        // $log->update([
-        //     'status'            => 'completed',
-        //     'response_status'   => $response->getStatusCode(),
-        //     'response_headers'  => $response->headers->all(),
-        //     'response_time_ms'  => round((microtime(true) - $start) * 1000, 2),
-        // ]);
+        $log->update([
+            'status'            => 'completed',
+            'response_status'   => $response->getStatusCode(),
+            'response_headers'  => $response->headers->all(),
+            'response_time_ms'  => round((microtime(true) - $start) * 1000, 2),
+        ]);
 
         return $response;
     }
