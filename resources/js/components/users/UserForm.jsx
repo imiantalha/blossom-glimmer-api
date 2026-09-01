@@ -1,11 +1,14 @@
 import Input from "../common/form/Input";
 import Button from "../common/form/Button";
+import Select from "../common/form/Select"; 
 
 const UserForm = ({
     mood = "create",
     form,
     loading = false,
     errors = {},
+    roles = [],
+    rolesLoading = false,
     onChange,
     onSubmit,
     onCancel,
@@ -37,6 +40,28 @@ const UserForm = ({
                 required
             />
 
+            <Select
+                label="Role"
+                name="role"
+                value={form.role}
+                onChange={onChange}
+                placeholder={
+                    rolesLoading
+                        ? "Loading roles..."
+                        : "Select a role"
+                }
+                disabled={rolesLoading}
+                error={errors.role}
+                required
+                iconLeft={
+                    <i className="bi bi-shield-check"></i>
+                }
+                options={roles.map((role) => ({
+                    value: role.name,
+                    label: role.name,
+                }))}
+            />
+            
             <Input
                 label="Password"
                 name="password"

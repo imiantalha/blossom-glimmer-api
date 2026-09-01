@@ -29,8 +29,7 @@ class StoreUserRequest extends FormRequest
             'email'     => ['required', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols() /**->uncompromised() */ ],
             'password_confirmation' => ['required'],
-            // 'roles' => ['required', 'array', 'min:1'],
-            // 'roles.*' => ['exists:roles,name'],
+            'role' => ['required', 'exists:roles,name'],
         ];
     }
 }

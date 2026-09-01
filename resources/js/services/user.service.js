@@ -9,6 +9,7 @@ const getUser = (id) => {
 }
 
 const createUser = (data) => {
+    console.log("Creating user with data:", data);
     return api.post("/users", data);
 }
 

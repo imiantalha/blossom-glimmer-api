@@ -8,6 +8,7 @@ import UserForm from "../../components/users/UserForm";
 import useApi from "../../hooks/useApi";
 import userService from "../../services/user.service";
 import { useToast } from "../../contexts/ToastContext";
+import useRoles from "../../hooks/useRoles";
 
 const CreateUserPage = () => {
     const navigate = useNavigate();
@@ -27,6 +28,12 @@ const CreateUserPage = () => {
         error,
         execute,
     } = useApi(userService.createUser);
+
+    const {
+        roles,
+        loading: rolesLoading,
+        error: rolesError,
+    } = useRoles();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -102,6 +109,8 @@ const CreateUserPage = () => {
                     form={form}
                     errors={errors}
                     loading={loading}
+                    roles={roles}
+                    rolesLoading={rolesLoading}
                     onChange={handleChange}
                     onSubmit={handleSubmit}
                     onCancel={handleCancel}
