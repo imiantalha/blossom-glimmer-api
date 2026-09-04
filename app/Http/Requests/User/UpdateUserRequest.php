@@ -28,8 +28,7 @@ class UpdateUserRequest extends FormRequest
             'email'     => ['sometimes', 'string', 'email:rfc,dns', 'max:255', 'unique:users,email,' . $this->user->id],
             'password'  => ['sometimes', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols() /**->uncompromised() */ ],
             'password_confirmation' => ['sometimes'],
-            'roles' => ['sometimes', 'array'],
-            'roles.*' => ['exists:roles,name'],
+            'role' => ['required', 'exists:roles,name'],
         ];
     }
 }

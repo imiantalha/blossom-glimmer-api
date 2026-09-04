@@ -1,14 +1,26 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import PageHeader from "../../components/common/layout/PageHeader";
 import Card from "../../components/common/data-display/Card";
 import Button from "../../components/common/form/Button";
 import Input from "../../components/common/form/Input";
 import DataTable from "../../components/common/data-display/DataTable";
 import Pagination from "../../components/common/navigation/Pagination";
-import { useNavigate } from "react-router-dom";
+import ConfirmModal from "../../components/common/feedback/ConfirmModal";
+import Alert from "../../components/common/feedback/Alert";
+
+import { useToast } from "../../contexts/ToastContext";
 import useUsers from "../../hooks/useUsers";
+import useApi from "../../hooks/useApi";
+import userService from "../../services/user.service";
 
 const UsersPage = () => {
     const navigate = useNavigate();
+    const toast = useToast();
+
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     const {
         users,
@@ -18,7 +30,49 @@ const UsersPage = () => {
         error,
         search,
         setSearch,
+        refresh,
     } = useUsers();
+
+    const {
+        loading: deleteLoading,
+        error: deleteError,
+        execute: executeDelete,
+    } = useApi(userService.deleteUser);
+
+    const handleEdit = (user) => {
+        navigate(`/users/${user.id}/edit`);
+    };
+
+    const handleDeleteClick = (user) => {
+        setSelectedUser(user);
+        setShowConfirmModal(true);
+    };
+
+    const handleDeleteCancel = () => {
+        if (deleteLoading) return;
+
+        setSelectedUser(null);
+        setShowConfirmModal(false);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!selectedUser) return;
+
+        try {
+            const response = await executeDelete(selectedUser.id);
+
+            toast.success(
+                response.data.message || "User deleted successfully."
+            );
+
+            setSelectedUser(null);
+            setShowConfirmModal(false);
+
+            refresh();
+        } catch (err) {
+            // Error is already handled by useApi
+        }
+    };
 
     const columns = [
         {
@@ -43,13 +97,19 @@ const UsersPage = () => {
             label: "Actions",
             render: (user) => (
                 <div className="d-flex gap-2">
-                    <Button size="sm">
+                    <Button
+                        size="sm"
+                        onClick={() => handleEdit(user)}
+                        title="Edit User"
+                    >
                         <i className="bi bi-pencil-square"></i>
                     </Button>
 
                     <Button
                         size="sm"
                         variant="danger"
+                        onClick={() => handleDeleteClick(user)}
+                        title="Delete User"
                     >
                         <i className="bi bi-trash"></i>
                     </Button>
@@ -108,7 +168,9 @@ const UsersPage = () => {
                         )}
                     </div>
 
-                    <Button onClick={() => navigate("/users/create")}>
+                    <Button
+                        onClick={() => navigate("/users/create")}
+                    >
                         <i className="bi bi-plus-lg me-2"></i>
                         Create User
                     </Button>
@@ -116,9 +178,17 @@ const UsersPage = () => {
                 </div>
 
                 {error && (
-                    <div className="alert alert-danger">
-                        {error}
-                    </div>
+                    <Alert
+                        variant="danger"
+                        message={error}
+                    />
+                )}
+
+                {deleteError && (
+                    <Alert
+                        variant="danger"
+                        message={deleteError}
+                    />
                 )}
 
                 <DataTable
@@ -135,6 +205,21 @@ const UsersPage = () => {
                 )}
 
             </Card>
+
+            <ConfirmModal
+                show={showConfirmModal}
+                title="Delete User"
+                message={
+                    selectedUser
+                        ? `Are you sure you want to delete "${selectedUser.name}"?`
+                        : "Are you sure you want to delete this user?"
+                }
+                confirmText="Delete"
+                cancelText="Cancel"
+                loading={deleteLoading}
+                onConfirm={handleDeleteConfirm}
+                onCancel={handleDeleteCancel}
+            />
         </>
     );
 };

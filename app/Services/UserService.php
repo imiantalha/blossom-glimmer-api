@@ -72,17 +72,17 @@ class UserService
                 unset($data['password']);
             }
 
-            // Extract roles
-            $roles = $data['roles'] ?? null;
+            // Extract role
+            $roles = $data['role'] ?? null;
 
-            unset($data['roles']);
+            unset($data['role']);
 
             // Update user
             $user = $this->userRepository->update($user, $data);
 
-            // Sync roles
+            // Sync role
             if (!is_null($roles)) {
-                $user->syncRoles($roles);
+                $user->syncRoles([$roles]);
             }
 
             return $user->load('roles');
