@@ -68,7 +68,13 @@ const UsersPage = () => {
             setSelectedUser(null);
             setShowConfirmModal(false);
 
-            refresh();
+            const updatedPagination = await refresh();
+
+            // Current page no longer exists
+            if (updatedPagination && page > updatedPagination.last_page) {
+                setPage(Math.max(1, updatedPagination.last_page));
+            }
+
         } catch (err) {
             // Error is already handled by useApi
         }
