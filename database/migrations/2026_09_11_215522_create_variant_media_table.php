@@ -6,20 +6,16 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('variant_media', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
+            $table->foreignId('variant_id')->constrained('product_variants')->cascadeOnDelete();
+            $table->foreignId('media_id')->constrained()->cascadeOnDelete();
+            $table->unsignedInteger('sort_order')->default(0);
+            $table->primary(['variant_id', 'media_id']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('variant_media');
