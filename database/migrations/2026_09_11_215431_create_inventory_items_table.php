@@ -20,7 +20,6 @@ return new class extends Migration
 
             $table->unique('product_id');
             $table->unique('variant_id');
-            $table->check('(product_id IS NOT NULL AND variant_id IS NULL) OR (product_id IS NULL AND variant_id IS NOT NULL)');
         });
     }
 
