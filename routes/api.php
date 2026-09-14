@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\EmailController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductVariantController;
 
 Route::get('/user', function (Request $request) {
     return new UserResource($request->user());
@@ -46,5 +47,7 @@ Route::middleware('throttle:60,1')->group(function () {
         Route::post('/emails/send', [EmailController::class, 'send']);
 
         Route::apiResource('products', ProductController::class);
+
+        Route::apiResource('products.variants', ProductVariantController::class);
     });
 });
