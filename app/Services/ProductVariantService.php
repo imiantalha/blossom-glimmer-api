@@ -33,13 +33,7 @@ class ProductVariantService
             unset($data['option_values']);
 
             $this->validateOptionValuesBelongToProduct($product, $optionValues);
-
-            $valueIds = collect($optionValues)
-                ->pluck('attribute_value_id')
-                ->sort()
-                ->values();
-
-            $combinationKey = $valueIds->implode('-');
+            $combinationKey = $this->buildCombinationKey($optionValues);
 
             if ($product->variants()->where('combination_key', $combinationKey)->exists()) {
                 throw ValidationException::withMessages([
@@ -51,12 +45,7 @@ class ProductVariantService
             $data['combination_key'] = $combinationKey;
 
             $variant = $this->variantRepository->create($data);
-
-            $variant->options()->sync(
-                collect($optionValues)->mapWithKeys(fn ($item) => [
-                    $item['product_option_id'] => ['attribute_value_id' => $item['attribute_value_id']],
-                ])->all()
-            );
+            $this->syncOptions($variant, $optionValues);
 
             return $this->variantRepository->find($variant);
         });
@@ -70,17 +59,11 @@ class ProductVariantService
                 unset($data['option_values']);
 
                 $this->validateOptionValuesBelongToProduct($variant->product, $optionValues);
-
-                $valueIds = collect($optionValues)
-                    ->pluck('attribute_value_id')
-                    ->sort()
-                    ->values();
-
-                $combinationKey = $valueIds->implode('-');
+                $combinationKey = $this->buildCombinationKey($optionValues);
 
                 $exists = $variant->product->variants()
                     ->where('combination_key', $combinationKey)
-                    ->whereKeyNot($variant->id)
+                    ->where('id', '!=', $variant->id)
                     ->exists();
 
                 if ($exists) {
@@ -90,12 +73,7 @@ class ProductVariantService
                 }
 
                 $data['combination_key'] = $combinationKey;
-
-                $variant->options()->sync(
-                    collect($optionValues)->mapWithKeys(fn ($item) => [
-                        $item['product_option_id'] => ['attribute_value_id' => $item['attribute_value_id']],
-                    ])->all()
-                );
+                $this->syncOptions($variant, $optionValues);
             }
 
             $variant = $this->variantRepository->update($variant, $data);
@@ -108,8 +86,29 @@ class ProductVariantService
     {
         return DB::transaction(function () use ($variant) {
             $variant->options()->detach();
+
             return $this->variantRepository->delete($variant);
         });
+    }
+
+    protected function buildCombinationKey(array $optionValues): string
+    {
+        return collect($optionValues)
+            ->pluck('attribute_value_id')
+            ->sort()
+            ->values()
+            ->implode('-');
+    }
+
+    protected function syncOptions(ProductVariant $variant, array $optionValues): void
+    {
+        $variant->options()->sync(
+            collect($optionValues)->mapWithKeys(fn ($item) => [
+                $item['product_option_id'] => [
+                    'attribute_value_id' => $item['attribute_value_id'],
+                ],
+            ])->all()
+        );
     }
 
     protected function validateOptionValuesBelongToProduct(Product $product, array $optionValues): void
@@ -122,7 +121,9 @@ class ProductVariantService
             ]);
         }
 
-        $productOptionIds = $product->options()->whereIn('id', $optionIds)->pluck('id');
+        $productOptionIds = $product->options()
+            ->whereIn('id', $optionIds)
+            ->pluck('id');
 
         if ($productOptionIds->count() !== $optionIds->count()) {
             throw ValidationException::withMessages([
