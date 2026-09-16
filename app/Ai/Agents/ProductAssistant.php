@@ -9,10 +9,11 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
+use Laravel\Ai\Concerns\RemembersConversations;
 
 class ProductAssistant implements Agent, Conversational, HasTools
 {
-    use Promptable;
+    use Promptable, RemembersConversations;
 
     /**
      * Get the instructions that the agent should follow.
@@ -38,10 +39,10 @@ class ProductAssistant implements Agent, Conversational, HasTools
      *
      * @return Message[]
      */
-    public function messages(): iterable
-    {
-        return [];
-    }
+    // public function messages(): iterable
+    // {
+    //     return [];
+    // }
 
     /**
      * Get the tools available to the agent.

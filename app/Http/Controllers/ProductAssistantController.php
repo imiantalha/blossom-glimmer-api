@@ -16,15 +16,26 @@ class ProductAssistantController extends Controller
     {
         $request->validate([
             'message' => ['required', 'string'],
+            'conversation_id' => ['nullable', 'string'],
         ]);
 
-        $response = $this->productAssistant->prompt(
+        $user = $request->user();
+
+        $agent = $request->conversation_id
+            ? $this->productAssistant->continue(
+                $request->conversation_id,
+                as: $user,
+            )
+            : $this->productAssistant->forUser($user);
+
+        $response = $agent->prompt(
             $request->message,
             provider: 'gemini',
         );
 
         return response()->json([
             'message' => $response->text,
+            'conversation_id' => $response->conversationId,
         ]);
     }
 }
