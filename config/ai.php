@@ -102,6 +102,12 @@ return [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
             'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
+
+            'models' => [
+                'text' => [
+                    'default' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+                ],
+            ],
         ],
 
         'groq' => [
@@ -130,6 +136,12 @@ return [
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'store' => env('OPENAI_STORE', true),
+
+            'models' => [
+                'text' => [
+                    'default' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+                ],
+            ],
         ],
 
         'openai-compatible' => [
