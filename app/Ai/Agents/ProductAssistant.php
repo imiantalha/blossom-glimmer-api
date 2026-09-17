@@ -10,6 +10,7 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 use Laravel\Ai\Concerns\RemembersConversations;
+use App\Ai\Tools\SearchProducts;
 
 class ProductAssistant implements Agent, Conversational, HasTools
 {
@@ -31,6 +32,8 @@ class ProductAssistant implements Agent, Conversational, HasTools
             - Never invent product names, prices, features, stock, or other product details.
             - If you do not have enough information to answer, say so clearly.
             - Ask a follow-up question when more information is needed.
+            - When a user asks to find or search for products, use the SearchProducts tool.
+            - Do not claim that products exist unless the tool provides that information.
         PROMPT;
     }
 
@@ -51,6 +54,8 @@ class ProductAssistant implements Agent, Conversational, HasTools
      */
     public function tools(): iterable
     {
-        return [];
+        return [
+            new SearchProducts(),
+        ];
     }
 }
