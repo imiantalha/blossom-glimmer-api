@@ -7,9 +7,15 @@ use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
 use App\Models\Product;
+use App\Services\ProductService;
 
 class SearchProducts implements Tool
 {
+    public function __construct(
+        protected ProductService $productService
+    ) {
+    }
+
     /**
      * Get the description of the tool's purpose.
      */
@@ -34,16 +40,11 @@ class SearchProducts implements Tool
             $query->where('status', $request['status']);
         }
 
-        $products = $query
-            ->limit(5)
-            ->get([
-                'id',
-                'name',
-                'sku',
-                'base_price',
-                'status',
-                'short_description',
-            ]);
+        $products = $this->productService->search(
+            query: $request['query'],
+            maxPrice: $request['max_price'] ?? null,
+            status: $request['status'] ?? null,
+        );
 
         if ($products->isEmpty()) {
             return 'No products found.';

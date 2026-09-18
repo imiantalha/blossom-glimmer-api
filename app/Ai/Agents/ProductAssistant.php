@@ -11,6 +11,7 @@ use Laravel\Ai\Promptable;
 use Stringable;
 use Laravel\Ai\Concerns\RemembersConversations;
 use App\Ai\Tools\SearchProducts;
+use App\Ai\Tools\GetProductDetails;
 
 class ProductAssistant implements Agent, Conversational, HasTools
 {
@@ -56,6 +57,7 @@ class ProductAssistant implements Agent, Conversational, HasTools
     {
         return [
             new SearchProducts(),
+            new GetProductDetails(),
         ];
     }
 }

@@ -68,4 +68,32 @@ class ProductService
             return $this->productRepository->delete($product);
         });
     }
+
+    public function search(
+        string $query,
+        ?float $maxPrice = null,
+        ?string $status = null
+    ): Collection {
+        $products = Product::query()
+            ->where('name', 'like', '%' . $query . '%');
+
+        if ($maxPrice !== null) {
+            $products->where('base_price', '<=', $maxPrice);
+        }
+
+        if ($status !== null) {
+            $products->where('status', $status);
+        }
+
+        return $products
+            ->limit(5)
+            ->get([
+                'id',
+                'name',
+                'sku',
+                'base_price',
+                'status',
+                'short_description',
+            ]);
+    }
 }
