@@ -6,7 +6,6 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
-use App\Models\Product;
 use App\Services\ProductService;
 
 class SearchProducts implements Tool
@@ -29,17 +28,6 @@ class SearchProducts implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $query = Product::query()
-            ->where('name', 'like', '%' . $request['query'] . '%');
-
-        if (!empty($request['max_price'])) {
-            $query->where('base_price', '<=', $request['max_price']);
-        }
-
-        if (!empty($request['status'])) {
-            $query->where('status', $request['status']);
-        }
-
         $products = $this->productService->search(
             query: $request['query'],
             maxPrice: $request['max_price'] ?? null,

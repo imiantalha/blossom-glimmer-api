@@ -56,8 +56,8 @@ class ProductAssistant implements Agent, Conversational, HasTools
     public function tools(): iterable
     {
         return [
-            new SearchProducts(),
-            new GetProductDetails(),
+            app(SearchProducts::class),
+            app(GetProductDetails::class),
         ];
     }
 }
