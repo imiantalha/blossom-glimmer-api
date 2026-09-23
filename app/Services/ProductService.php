@@ -75,26 +75,10 @@ class ProductService
         ?float $maxPrice = null,
         ?string $status = null
     ): Collection {
-        $products = Product::query()
-            ->where('name', 'like', '%' . $query . '%');
-
-        if ($maxPrice !== null) {
-            $products->where('base_price', '<=', $maxPrice);
-        }
-
-        if ($status !== null) {
-            $products->where('status', $status);
-        }
-
-        return $products
-            ->limit(5)
-            ->get([
-                'id',
-                'name',
-                'sku',
-                'base_price',
-                'status',
-                'short_description',
-            ]);
+        return $this->productRepository->search(
+            query: $query,
+            maxPrice: $maxPrice,
+            status: $status,
+        );
     }
 }

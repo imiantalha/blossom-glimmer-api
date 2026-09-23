@@ -16,4 +16,6 @@ interface ProductRepositoryInterface
     public function update(Product $product, array $data): Product;
 
     public function delete(Product $product): bool;
+
+    public function search(string $query, ?float $maxPrice = null, ?string $status = null): Collection;
 }
