@@ -2,20 +2,25 @@
 
 namespace App\Ai\Tools;
 
+use App\Services\ProductService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
-use App\Models\Product;
 
 class GetProductDetails implements Tool
 {
+    public function __construct(
+        protected ProductService $productService
+    ) {
+    }
+
     /**
      * Get the description of the tool's purpose.
      */
     public function description(): Stringable|string
     {
-        return 'A description of the tool.';
+        return 'Get detailed information about a specific product.';
     }
 
     /**
@@ -23,9 +28,7 @@ class GetProductDetails implements Tool
      */
     public function handle(Request $request): Stringable|string
     {
-        $product = Product::query()
-            ->with('brand')
-            ->find($request['product_id']);
+        $product = $this->productService->findById((int) $request['product_id']);
 
         if (!$product) {
             return 'Product not found.';
