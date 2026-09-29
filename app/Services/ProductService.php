@@ -25,6 +25,11 @@ class ProductService
         return $this->productRepository->find($product);
     }
 
+    public function findById(int $productId): ?Product
+    {
+        return $this->productRepository->findById($productId);
+    }
+
     public function create(array $data): Product
     {
         return DB::transaction(function () use ($data) {
