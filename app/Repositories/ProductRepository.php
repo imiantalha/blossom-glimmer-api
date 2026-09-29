@@ -39,6 +39,13 @@ class ProductRepository implements ProductRepositoryInterface
         ]);
     }
 
+    public function findById(int $productId): ?Product
+    {
+        return Product::query()
+            ->with('brand')
+            ->find($productId);
+    }
+
     public function create(array $data): Product
     {
         return Product::create($data);
