@@ -42,4 +42,26 @@ class ProductAssistantController extends Controller
             'conversation_id' => $response->conversationId,
         ]);
     }
+
+    public function stream(Request $request)
+    {
+        $request->validate([
+            'message' => ['required', 'string'],
+            'conversation_id' => ['nullable', 'string'],
+        ]);
+
+        $user = $request->user();
+
+        $agent = $request->conversation_id
+            ? $this->productAssistant->continue(
+                $request->conversation_id,
+                as: $user,
+            )
+            : $this->productAssistant->forUser($user);
+
+        return $agent->stream(
+            $request->message,
+            provider: 'gemini',
+        );
+    }
 }
