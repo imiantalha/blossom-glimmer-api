@@ -12,8 +12,11 @@ use Stringable;
 use Laravel\Ai\Concerns\RemembersConversations;
 use App\Ai\Tools\SearchProducts;
 use App\Ai\Tools\GetProductDetails;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\HasStructuredOutput;
 
-class ProductAssistant implements Agent, Conversational, HasTools
+
+class ProductAssistant implements Agent, Conversational, HasTools, HasStructuredOutput
 {
     use Promptable, RemembersConversations;
 
@@ -35,6 +38,8 @@ class ProductAssistant implements Agent, Conversational, HasTools
             - Ask a follow-up question when more information is needed.
             - When a user asks to find or search for products, use the SearchProducts tool.
             - Do not claim that products exist unless the tool provides that information.
+            - When SearchProducts returns a product that the user wants more details about, use GetProductDetails with the product ID from the search result.
+            - Use the result of SearchProducts to determine which product ID should be passed to GetProductDetails.
         PROMPT;
     }
 
@@ -58,6 +63,29 @@ class ProductAssistant implements Agent, Conversational, HasTools
         return [
             app(SearchProducts::class),
             app(GetProductDetails::class),
+        ];
+    }
+
+    /**
+     * Get the JSON schema that defines the structured output format.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'answer' => $schema
+                ->string()
+                ->required(),
+
+            'products' => $schema
+                ->array()
+                ->items(
+                    $schema->object(fn ($schema) => [
+                        'id' => $schema->integer()->required(),
+                        'name' => $schema->string()->required(),
+                        'price' => $schema->number()->required(),
+                    ])
+                )
+                ->required(),
         ];
     }
 }
