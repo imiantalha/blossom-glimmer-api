@@ -3,6 +3,7 @@
 namespace App\Ai\Agents;
 
 use App\Ai\Tools\GetProductDetails;
+use App\Ai\Tools\RecommendProducts;
 use App\Ai\Tools\SearchProducts;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -31,8 +32,10 @@ class ProductAssistant implements Agent, Conversational, HasTools, HasStructured
             - If you do not have enough information to answer, say so clearly.
             - Ask a follow-up question when more information is needed.
             - When a user asks to find or search for products, use the SearchProducts tool.
-            - Do not claim that products exist unless the tool provides that information.
-            - When SearchProducts returns a product that the user wants more details about, use GetProductDetails with the product ID from the search result.
+            - When a user asks for recommendations based on preferences or use cases, use the RecommendProducts tool.
+            - Use SearchProducts for direct searches and RecommendProducts for recommendation requests.
+            - Do not claim that products exist unless a tool provides that information.
+            - When SearchProducts or RecommendProducts returns a product that the user wants more details about, use GetProductDetails with the product ID from the tool result.
             - Use the result of SearchProducts to determine which product ID should be passed to GetProductDetails.
             - The products in the structured response must only contain products returned by the available tools.
             - Never invent, infer, or substitute product data that was not returned by a tool.
@@ -44,6 +47,7 @@ class ProductAssistant implements Agent, Conversational, HasTools, HasStructured
     {
         return [
             app(SearchProducts::class),
+            app(RecommendProducts::class),
             app(GetProductDetails::class),
         ];
     }
