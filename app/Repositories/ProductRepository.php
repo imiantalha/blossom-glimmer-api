@@ -65,24 +65,34 @@ class ProductRepository implements ProductRepositoryInterface
 
     public function search(
         string $query,
+        ?float $minPrice = null,
         ?float $maxPrice = null,
-        ?string $status = null
+        ?string $status = null,
+        ?string $brand = null,
+        ?string $category = null
     ): Collection {
-        $products = Product::query()
-            ->where('name', 'like', '%' . $query . '%');
-
-        if ($maxPrice !== null) {
-            $products->where('base_price', '<=', $maxPrice);
-        }
-
-        if ($status !== null) {
-            $products->where('status', $status);
-        }
-
-        return $products
+        return Product::query()
+            ->with(['brand', 'categories'])
+            ->where(function ($products) use ($query) {
+                $products
+                    ->where('name', 'like', '%' . $query . '%')
+                    ->orWhere('sku', 'like', '%' . $query . '%')
+                    ->orWhere('short_description', 'like', '%' . $query . '%')
+                    ->orWhere('description', 'like', '%' . $query . '%');
+            })
+            ->when($minPrice !== null, fn ($products) => $products->where('base_price', '>=', $minPrice))
+            ->when($maxPrice !== null, fn ($products) => $products->where('base_price', '<=', $maxPrice))
+            ->when($status !== null, fn ($products) => $products->where('status', $status))
+            ->when($brand !== null, fn ($products) => $products->whereHas('brand', function ($brands) use ($brand) {
+                $brands->where('name', 'like', '%' . $brand . '%');
+            }))
+            ->when($category !== null, fn ($products) => $products->whereHas('categories', function ($categories) use ($category) {
+                $categories->where('name', 'like', '%' . $category . '%');
+            }))
             ->limit(5)
             ->get([
                 'id',
+                'brand_id',
                 'name',
                 'sku',
                 'base_price',
