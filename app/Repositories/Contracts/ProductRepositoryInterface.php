@@ -20,5 +20,12 @@ interface ProductRepositoryInterface
 
     public function delete(Product $product): bool;
 
-    public function search(string $query, ?float $maxPrice = null, ?string $status = null): Collection;
+    public function search(
+        string $query,
+        ?float $minPrice = null,
+        ?float $maxPrice = null,
+        ?string $status = null,
+        ?string $brand = null,
+        ?string $category = null
+    ): Collection;
 }
