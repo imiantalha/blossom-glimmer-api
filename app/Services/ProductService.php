@@ -77,13 +77,19 @@ class ProductService
 
     public function search(
         string $query,
+        ?float $minPrice = null,
         ?float $maxPrice = null,
-        ?string $status = null
+        ?string $status = null,
+        ?string $brand = null,
+        ?string $category = null
     ): Collection {
         return $this->productRepository->search(
             query: $query,
+            minPrice: $minPrice,
             maxPrice: $maxPrice,
             status: $status,
+            brand: $brand,
+            category: $category,
         );
     }
 }
