@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Collection;
 
 class ProductService
 {
@@ -22,6 +23,11 @@ class ProductService
     public function find(Product $product): Product
     {
         return $this->productRepository->find($product);
+    }
+
+    public function findById(int $productId): ?Product
+    {
+        return $this->productRepository->findById($productId);
     }
 
     public function create(array $data): Product
@@ -67,5 +73,23 @@ class ProductService
 
             return $this->productRepository->delete($product);
         });
+    }
+
+    public function search(
+        string $query,
+        ?float $minPrice = null,
+        ?float $maxPrice = null,
+        ?string $status = null,
+        ?string $brand = null,
+        ?string $category = null
+    ): Collection {
+        return $this->productRepository->search(
+            query: $query,
+            minPrice: $minPrice,
+            maxPrice: $maxPrice,
+            status: $status,
+            brand: $brand,
+            category: $category,
+        );
     }
 }
