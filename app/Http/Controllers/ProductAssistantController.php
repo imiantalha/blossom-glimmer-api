@@ -48,6 +48,7 @@ class ProductAssistantController extends Controller
         $request->validate([
             'message' => ['required', 'string'],
             'conversation_id' => ['nullable', 'string'],
+            'message_id' => ['nullable', 'string'],
         ]);
 
         $user = $request->user();
@@ -59,9 +60,13 @@ class ProductAssistantController extends Controller
             )
             : $this->productAssistant->forUser($user);
 
-        return $agent->stream(
-            $request->message,
-            provider: 'gemini',
-        );
+        return $agent
+            ->stream(
+                $request->message,
+                provider: 'gemini',
+            )
+            ->usingVercelDataProtocol(
+                $request->input('message_id'),
+            );
     }
 }
