@@ -12,7 +12,7 @@ use App\Http\Controllers\Api\EmailController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductVariantController;
 use App\Http\Controllers\ProductAssistantController;
- 
+use App\Http\Controllers\Api\EmailLogController;
 
 Route::get('/user', function (Request $request) {
     return new UserResource($request->user());
@@ -53,5 +53,6 @@ Route::middleware('throttle:60,1')->group(function () {
         Route::apiResource('products.variants', ProductVariantController::class);
 
         Route::post('/ai/product-assistant', [ProductAssistantController::class, 'chat']);
+        Route::post('/ai/product-assistant/stream', [ProductAssistantController::class, 'stream']);
     });
 });
