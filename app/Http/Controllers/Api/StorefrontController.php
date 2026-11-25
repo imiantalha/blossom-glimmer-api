@@ -81,12 +81,12 @@ class StorefrontController extends Controller
             'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => $p->vendor->vendorProfile?->slug ?? Str::slug($p->vendor->name), 'rating' => $p->vendor->vendorProfile?->rating, 'reviewCount' => $p->vendor->vendorProfile?->review_count ?? 0] : null,
             'rating' => (float) (DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating') ?? data_get($p->metadata, 'rating', 0)),
             'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count() ?: (int) data_get($p->metadata, 'review_count', 0),
-            'soldCount' => (int) data_get($p->metadata, 'sold_count', 0),
+            'soldCount' => (int) $p->sold_count,
             'badges' => data_get($p->metadata, 'badges', []),
             'season' => data_get($p->metadata, 'season', []), 'occasion' => data_get($p->metadata, 'occasion', []),
             'collections' => data_get($p->metadata, 'collections', []), 'specifications' => data_get($p->metadata, 'specifications', []),
-            'featured' => (bool) data_get($p->metadata, 'featured', false),
-            'newArrival' => (bool) data_get($p->metadata, 'new_arrival', false),
+            'featured' => (bool) $p->is_featured,
+            'newArrival' => (bool) $p->is_new_arrival,
         ];
     }
 
@@ -159,12 +159,12 @@ class StorefrontController extends Controller
 
         $sort = $request->input('sort', 'featured');
         match ($sort) {
-            'newest' => $query->orderByRaw('CASE WHEN metadata LIKE ? THEN 1 ELSE 0 END DESC', ['%"new_arrival":true%'])->latest(),
+            'newest' => $query->orderByDesc('is_new_arrival')->latest(),
             'price_asc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) ASC', ['active']),
             'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) DESC', ['active']),
             'rating' => $query->orderByRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) DESC', ['approved']),
-            'best_selling' => $query->orderByRaw("(SELECT COALESCE(SUM(oi.quantity), 0) FROM customer_order_items oi INNER JOIN customer_orders o ON o.id = oi.order_id WHERE oi.product_id = products.id AND o.status NOT IN ('cancelled', 'failed')) DESC"),
-            default => $query->orderByRaw('CASE WHEN metadata LIKE ? THEN 1 ELSE 0 END DESC', ['%"featured":true%'])->orderByDesc('created_at'),
+            'best_selling' => $query->orderByDesc('sold_count'),
+            default => $query->orderByDesc('is_featured')->orderByDesc('created_at'),
         };
 
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
@@ -583,6 +583,7 @@ class StorefrontController extends Controller
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
                 DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug, 'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
                 if ($inventory && $inventory->manage_inventory) DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => max(0, $inventory->stock_quantity - $i->quantity), 'updated_at' => now()]);
+                DB::table('products')->where('id', $p->id)->increment('sold_count', $i->quantity);
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
             return DB::table('customer_orders')->find($id);
