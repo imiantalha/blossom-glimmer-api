@@ -191,3 +191,35 @@ Known areas requiring immediate verification:
 - PR is open, draft, and GitHub reports it mergeable. It is **not merged**.
 - GitHub Actions status is not visible yet; no passing CI result has been confirmed.
 - The latest migration review caught and corrected a malformed block in migration `000005`; re-review all migration and PHP files before marking validation complete.
+
+
+## Progress update — backend completion and frontend integration (2026-11-25)
+
+### Newly confirmed frontend integration branch
+- Frontend branch: `feat/laravel-api-integration` (66+ commits ahead of main at inspection).
+- It contains centralized API clients, NextAuth bearer-token bridging, read-only mock fallback, guest cart/wishlist persistence, vendor store and product actions, admin store/product queries and checkout/order service integration.
+- Further work is required: cart/wishlist mutations need robust offline reconciliation; address/profile/review/collection/shipping/payment/inventory/shipment flows need end-to-end checks; vendor registration has now been moved to the Laravel endpoint.
+
+### Backend additions in this continuation
+- Added `POST /auth/register/vendor` and frontend server action now uses it instead of frontend Prisma for vendor account creation.
+- Added admin product creation-options endpoint; frontend admin page now calls the admin-scoped endpoint.
+- Reordered admin product GET routes so the ProductRecord-compatible vendor controller responses are not shadowed by generic resource GET routes.
+- Added vendor registration and vendor store onboarding feature tests.
+- Fixed duplicate legacy product catalog migration, skipped MongoDB-backed request logging during automated tests, and installed Microsoft ODBC Driver 18 in SQL Server CI.
+- Added a local SQL Server 2022 Docker Compose service and documented SQL Server configuration and demo accounts.
+
+### CI findings
+- The first CI run failed for three concrete reasons: duplicate `combination_key` migration, MongoDB request logging during tests, and missing Microsoft ODBC Driver 18 in the SQL Server job.
+- Fixes are committed. Verify the newest CI run after these commits; do not treat the earlier failed run as validation.
+
+### Demo dataset
+- Existing development seeders load the frontend's image-backed catalogue: 132 products (simple and variable), categories with hierarchy, 6 brands, 4 vendor stores, 4 collections, and 120 reviews that map to seeded products.
+- Scenario seeder creates customer/admin/vendor test accounts, shipping methods, customer address, cart, wishlist, review, sample order, shipment and tracking event.
+- Development test password: `Password123!`. Never enable demo seeders in production.
+
+### Immediate next actions
+1. Verify current CI results on the latest backend PR head and fix every migration/runtime failure, including SQL Server-specific issues.
+2. Complete remaining backend lifecycle APIs (vendor/admin product/store, review moderation, order cancellation/status, shipment event reads, address and profile validation) only where the frontend requires them.
+3. Complete frontend service integration and API-unavailable fallback behavior, ensuring mutations never claim remote success and local guest data is reconciled safely.
+4. Add frontend tests for fallback and API contract behavior; run TypeScript, ESLint, build, Laravel tests on SQLite and SQL Server.
+5. Update PRs and report exact results; do not merge without user approval.
