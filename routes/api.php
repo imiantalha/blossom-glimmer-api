@@ -63,6 +63,13 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('store/me', [StorefrontController::class, 'myStore']);
             Route::post('store', [StorefrontController::class, 'createStore']);
             Route::patch('store', [StorefrontController::class, 'updateMyStore']);
+            Route::get('products/options', [VendorProductController::class, 'options']);
+            Route::get('products', [VendorProductController::class, 'index']);
+            Route::post('products', [VendorProductController::class, 'store']);
+            Route::get('products/{id}', [VendorProductController::class, 'show']);
+            Route::patch('products/{id}', [VendorProductController::class, 'update']);
+            Route::delete('products/{id}', [VendorProductController::class, 'destroy']);
+            Route::patch('products/{id}/inventory', [VendorProductController::class, 'updateInventory']);
         });
 
         Route::get('cart', [StorefrontController::class, 'cart']);
@@ -100,6 +107,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
             Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
             Route::post('emails/send', [EmailController::class, 'send']);
+            Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
             Route::apiResource('admin/products', ProductController::class);
             Route::apiResource('admin.products.variants', ProductVariantController::class);
         });
