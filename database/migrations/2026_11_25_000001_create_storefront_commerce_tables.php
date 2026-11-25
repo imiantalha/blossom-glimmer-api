@@ -30,7 +30,8 @@ return new class extends Migration
             $table->string('session_id')->nullable()->index();
             $table->string('currency', 3)->default('USD');
             $table->timestamps();
-            $table->index(['user_id', 'updated_at']);
+            $table->unique('user_id');
+            $table->index(['session_id', 'updated_at']);
         });
 
         Schema::create('cart_items', function (Blueprint $table) {
@@ -72,6 +73,9 @@ return new class extends Migration
             $table->string('payment_status')->default('pending');
             $table->string('fulfillment_status')->default('pending');
             $table->string('payment_method', 40);
+            $table->string('shipping_method_code', 60)->nullable();
+            $table->string('shipping_method_name')->nullable();
+            $table->string('shipping_estimated_delivery')->nullable();
             $table->string('currency', 3)->default('USD');
             $table->decimal('subtotal', 12, 2);
             $table->decimal('discount', 12, 2)->default(0);
