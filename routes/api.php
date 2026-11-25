@@ -57,6 +57,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::patch('users/me/addresses/{id}', [StorefrontController::class, 'updateAddress']);
         Route::delete('users/me/addresses/{id}', [StorefrontController::class, 'deleteAddress']);
 
+        Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
+
         Route::get('cart', [StorefrontController::class, 'cart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
         Route::patch('cart/{id}', [StorefrontController::class, 'updateCartItem']);
