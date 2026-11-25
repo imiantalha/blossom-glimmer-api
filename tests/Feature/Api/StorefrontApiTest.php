@@ -11,6 +11,7 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -514,5 +515,59 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('product_reviews', [
             'product_id' => $product->id, 'user_id' => $customer->id, 'status' => 'pending',
         ]);
+    }
+
+    public function test_seeded_admin_can_login_with_admin_role(): void
+    {
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'admin@demo.blossomglimmer.local',
+            'password' => 'Password123!',
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.role', 'admin');
+    }
+
+    public function test_vendor_registration_creates_a_vendor_scoped_account(): void
+    {
+        $this->postJson('/api/v1/auth/register/vendor', [
+            'firstName' => 'New', 'lastName' => 'Seller',
+            'email' => 'NEW-SELLER@EXAMPLE.TEST',
+            'password' => 'Password123!', 'password_confirmation' => 'Password123!',
+        ])->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.role', 'vendor')
+            ->assertJsonPath('data.user.email', 'new-seller@example.test');
+
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_type' => User::class,
+            'model_id' => User::where('email', 'new-seller@example.test')->value('id'),
+            'role_id' => DB::table('roles')->where('name', 'Vendor')->value('id'),
+        ]);
+    }
+
+    public function test_password_change_keeps_current_token_and_revokes_other_sessions(): void
+    {
+        $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $currentToken = $customer->createToken('current-session')->plainTextToken;
+        $otherToken = $customer->createToken('other-session')->plainTextToken;
+
+        $this->withToken($currentToken)->patchJson('/api/v1/users/me/password', [
+            'current_password' => 'Password123!',
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $customer->id, 'name' => 'current-session',
+        ]);
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $customer->id, 'name' => 'other-session',
+        ]);
+
+        Auth::forgetGuards();
+        $this->withToken($currentToken)->getJson('/api/v1/auth/me')->assertOk();
+        Auth::forgetGuards();
+        $this->withToken($otherToken)->getJson('/api/v1/auth/me')->assertUnauthorized();
+        $this->assertTrue(Hash::check('NewPassword123!', $customer->fresh()->password));
     }
 }
