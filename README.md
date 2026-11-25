@@ -46,7 +46,7 @@ Do not enable demo seeding in production. Production catalogues must be populate
 - Admin management routes require the `Admin` role
 - Customer resources are scoped to the authenticated user
 
-## Demo accounts and data\n\nRun `php artisan db:seed` in local/testing to create 132 products (7 simple, 125 variable), 4 vendor stores, a demo admin/customer, a sample cart/wishlist, a sample order with tracking, two shipping methods and catalogue images. Demo login emails are `admin@demo.blossomglimmer.local`, `customer@demo.blossomglimmer.local`, and `vendor+<store-slug>@demo.blossomglimmer.local`; password: `Password123!`. Use only locally/testing.\n\n## API surface
+## API surface
 
 ### Public catalogue
 - `GET /products` — search, filters, sorting and pagination
@@ -132,7 +132,7 @@ Then run `php artisan migrate:fresh --seed` only against this disposable develop
 
 - Shipping methods are configured in the `shipping_methods` table. The API returns a service-unavailable response when no methods are active; it does not invent rates.
 - Cash on delivery is controlled by `STOREFRONT_COD_ENABLED`.
-- Card payment processing, provider webhooks, refunds, carrier integrations and guest-cart merge are not implemented yet.
+- Card payment processing, payment-provider webhooks, refunds, and external carrier integrations remain pending provider credentials/contracts. Guest cart and wishlist merge endpoints are implemented.
 - Password reset requires working mail configuration.
 - Product images can be stored as external URLs in catalogue metadata or uploaded media records.
 
