@@ -113,6 +113,8 @@ class StorefrontApiTest extends TestCase
         $brandId = DB::table('brands')->where('status', 'active')->value('id');
         $categoryId = DB::table('categories')->where('status', 'active')->value('id');
 
+        DB::table('tags')->updateOrInsert(['slug' => 'api-test'], ['name' => 'api-test', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+
         $response = $this->actingAs($vendor, 'sanctum')->postJson('/api/v1/vendor/products', [
             'name' => 'API Test Simple Product',
             'slug' => 'api-test-simple-product',
@@ -1168,6 +1170,44 @@ class StorefrontApiTest extends TestCase
         $this->patchJson('/api/v1/admin/catalog-requests/1', [
             'decision' => 'approve',
         ])->assertForbidden();
+    }
+
+
+    public function test_admin_can_manage_approved_product_attributes_and_tags(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Admin');
+
+        $attribute = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/attributes', [
+                'name' => 'Material',
+                'slug' => 'material',
+                'type' => 'select',
+                'is_variant_attribute' => true,
+                'values' => ['Cotton', 'Linen'],
+            ])->assertCreated()
+            ->assertJsonPath('data.slug', 'material')
+            ->assertJsonPath('data.status', 'ACTIVE')
+            ->assertJsonCount(2, 'data.values');
+
+        $tag = $this->postJson('/api/v1/admin/tags', [
+            'name' => 'Handmade',
+            'slug' => 'handmade',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'ACTIVE');
+
+        $options = $this->getJson('/api/v1/admin/products/options')->assertOk();
+        $options->assertJsonFragment(['name' => 'Material']);
+        $options->assertJsonFragment(['name' => 'Handmade']);
+
+        $this->patchJson('/api/v1/admin/attributes/' . $attribute->json('data.id') . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+        $this->patchJson('/api/v1/admin/tags/' . $tag->json('data.id') . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+
+        $inactiveOptions = $this->getJson('/api/v1/admin/products/options')->assertOk();
+        $this->assertNotContains('Material', collect($inactiveOptions->json('data.attributes'))->pluck('name')->all());
+        $this->assertNotContains('Handmade', collect($inactiveOptions->json('data.tags'))->pluck('name')->all());
     }
 
 }

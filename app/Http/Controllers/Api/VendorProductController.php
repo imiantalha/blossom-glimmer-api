@@ -108,16 +108,18 @@ class VendorProductController extends Controller
         $brands = Brand::where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']);
         $categories = Category::where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']);
         $shipping = DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->get(['code', 'name']);
-        $attributes = DB::table('attributes')->orderBy('name')->get()->map(fn ($attribute) => [
+        $attributes = DB::table('attributes')->where('status', 'active')->orderBy('name')->get()->map(fn ($attribute) => [
             'id' => (string) $attribute->id, 'name' => $attribute->name,
             'values' => DB::table('attribute_values')->where('attribute_id', $attribute->id)->orderBy('value')->get()->map(fn ($value) => ['id' => (string) $value->id, 'value' => $value->value]),
         ]);
+        $tags = DB::table('tags')->where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug'])->map(fn ($tag) => ['id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug]);
         return ApiResponse::successResponse([
             'brands' => $brands->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->name, 'slug' => $item->slug]),
             'categories' => $categories->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->name, 'slug' => $item->slug]),
             'shippingProfiles' => $shipping->map(fn ($item) => ['id' => $item->code, 'name' => $item->name]),
             'productTypes' => [['id' => 'simple', 'name' => 'Simple'], ['id' => 'variable', 'name' => 'Variable']],
             'attributes' => $attributes,
+            'tags' => $tags,
         ], 'Product creation options retrieved.');
     }
 
@@ -228,6 +230,27 @@ class VendorProductController extends Controller
         ]);
         Brand::where('id', $data['brandId'])->where('status', 'active')->firstOrFail();
         Category::where('id', $data['categoryId'])->where('status', 'active')->firstOrFail();
+
+        foreach ($data['tags'] ?? [] as $tagName) {
+            if (!DB::table('tags')->where('slug', Str::slug($tagName))->where('status', 'active')->exists()) {
+                throw ValidationException::withMessages(['tags' => ["The tag '{$tagName}' is not in the approved catalog. Ask an administrator to add it."]]);
+            }
+        }
+
+        foreach ($data['attributes'] ?? [] as $attributeData) {
+            $attribute = DB::table('attributes')->where('name', $attributeData['name'])->where('status', 'active')->first();
+            if (!$attribute) {
+                throw ValidationException::withMessages(['attributes' => ["The attribute '{$attributeData['name']}' is not in the approved catalog."]]);
+            }
+            $submittedValues = collect($attributeData['values'] ?? [])->pluck('value')->filter()->values();
+            if ($submittedValues->isNotEmpty()) {
+                $allowedCount = DB::table('attribute_values')->where('attribute_id', $attribute->id)->whereIn('value', $submittedValues)->count();
+                if ($allowedCount !== $submittedValues->unique()->count()) {
+                    throw ValidationException::withMessages(['attributes' => ["One or more values for '{$attributeData['name']}' are not approved."]]);
+                }
+            }
+        }
+
         return $data;
     }
 
@@ -245,7 +268,10 @@ class VendorProductController extends Controller
     {
         $ids = [];
         foreach ($tags as $name) {
-            $tag = Tag::firstOrCreate(['slug' => Str::slug($name)], ['name' => $name]);
+            $tag = Tag::query()->where('slug', Str::slug($name))->where('status', 'active')->first();
+            if (!$tag) {
+                throw ValidationException::withMessages(['tags' => ["The tag '{$name}' is not in the approved catalog."]]);
+            }
             $ids[] = $tag->id;
         }
         $product->tags()->sync($ids);

@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Attribute as CatalogAttribute;
+use App\Models\AttributeValue;
+use App\Models\Tag;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -149,6 +152,93 @@ class CatalogManagementController extends Controller
         abort_if($category->children_count > 0, 422, 'Delete child categories before deleting this parent category.');
         $category->delete();
         return ApiResponse::successResponse(null, 'Category deleted.');
+    }
+
+
+    public function catalogSettings()
+    {
+        $attributes = CatalogAttribute::query()->with('values')->orderBy('name')->get()->map(fn (CatalogAttribute $attribute) => [
+            'id' => (string) $attribute->id,
+            'name' => $attribute->name,
+            'slug' => $attribute->slug,
+            'type' => $attribute->type,
+            'isVariantAttribute' => (bool) $attribute->is_variant_attribute,
+            'status' => strtoupper($attribute->status ?? 'active'),
+            'values' => $attribute->values->map(fn (AttributeValue $value) => ['id' => (string) $value->id, 'value' => $value->value, 'slug' => $value->slug])->values(),
+        ])->values();
+        $tags = Tag::query()->orderBy('name')->get()->map(fn (Tag $tag) => [
+            'id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug, 'status' => strtoupper($tag->status ?? 'active'),
+        ])->values();
+
+        return ApiResponse::successResponse(['attributes' => $attributes, 'tags' => $tags], 'Catalog settings retrieved.');
+    }
+
+    public function storeAttribute(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:100|unique:attributes,name',
+            'slug' => 'nullable|string|max:120|alpha_dash|unique:attributes,slug',
+            'type' => 'required|in:select,text,number,color',
+            'is_variant_attribute' => 'required|boolean',
+            'values' => 'array|max:30',
+            'values.*' => 'required|string|max:100',
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if($slug === '', 422, 'A valid attribute slug could not be generated.');
+        abort_if(DB::table('attributes')->where('slug', $slug)->exists(), 422, 'This attribute URL is already taken.');
+
+        $attribute = DB::transaction(function () use ($data, $slug) {
+            $attribute = CatalogAttribute::create([
+                'name' => $data['name'],
+                'slug' => $slug,
+                'type' => $data['type'],
+                'is_variant_attribute' => $data['is_variant_attribute'],
+                'status' => 'active',
+            ]);
+            foreach (array_values(array_unique($data['values'] ?? [])) as $value) {
+                $valueSlug = Str::slug($value);
+                if ($valueSlug !== '') {
+                    AttributeValue::create(['attribute_id' => $attribute->id, 'value' => $value, 'slug' => $valueSlug]);
+                }
+            }
+            return $attribute->load('values');
+        });
+
+        return ApiResponse::createdResponse([
+            'id' => (string) $attribute->id, 'name' => $attribute->name, 'slug' => $attribute->slug,
+            'type' => $attribute->type, 'isVariantAttribute' => (bool) $attribute->is_variant_attribute,
+            'status' => strtoupper($attribute->status),
+            'values' => $attribute->values->map(fn (AttributeValue $value) => ['id' => (string) $value->id, 'value' => $value->value, 'slug' => $value->slug])->values(),
+        ], 'Attribute created.');
+    }
+
+    public function updateAttributeStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['status' => 'required|in:active,inactive,ACTIVE,INACTIVE']);
+        $attribute = CatalogAttribute::findOrFail($id);
+        $attribute->update(['status' => strtolower($data['status'])]);
+        return ApiResponse::successResponse(['id' => (string) $attribute->id, 'status' => strtoupper($attribute->status)], 'Attribute status updated.');
+    }
+
+    public function storeTag(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:50|unique:tags,name',
+            'slug' => 'nullable|string|max:80|alpha_dash|unique:tags,slug',
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if($slug === '', 422, 'A valid tag slug could not be generated.');
+        abort_if(DB::table('tags')->where('slug', $slug)->exists(), 422, 'This tag URL is already taken.');
+        $tag = Tag::create(['name' => $data['name'], 'slug' => $slug, 'status' => 'active']);
+        return ApiResponse::createdResponse(['id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug, 'status' => strtoupper($tag->status)], 'Tag created.');
+    }
+
+    public function updateTagStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['status' => 'required|in:active,inactive,ACTIVE,INACTIVE']);
+        $tag = Tag::findOrFail($id);
+        $tag->update(['status' => strtolower($data['status'])]);
+        return ApiResponse::successResponse(['id' => (string) $tag->id, 'status' => strtoupper($tag->status)], 'Tag status updated.');
     }
 
     private function brandPayload(Brand $brand): array
