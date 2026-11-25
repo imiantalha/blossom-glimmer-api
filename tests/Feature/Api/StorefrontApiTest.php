@@ -80,6 +80,44 @@ class StorefrontApiTest extends TestCase
             ->assertJsonStructure(['data' => [['id', 'name', 'slug', 'status', 'variants', 'images']]]);
     }
 
+    public function test_vendor_can_submit_product_and_admin_can_approve_it(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $brandId = DB::table('brands')->where('status', 'active')->value('id');
+        $categoryId = DB::table('categories')->where('status', 'active')->value('id');
+
+        $response = $this->actingAs($vendor, 'sanctum')->postJson('/api/v1/vendor/products', [
+            'name' => 'API Test Simple Product',
+            'slug' => 'api-test-simple-product',
+            'brandId' => $brandId,
+            'categoryId' => $categoryId,
+            'productType' => 'Simple',
+            'shippingProfileId' => 'standard',
+            'shortDescription' => 'A test product.',
+            'fullDescription' => 'Created through the vendor storefront API.',
+            'tags' => ['api-test'],
+            'media' => ['featuredImage' => ['url' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30', 'altText' => 'Test product', 'sortOrder' => 0], 'galleryImages' => []],
+            'attributes' => [],
+            'variants' => [[
+                'label' => 'Default', 'sku' => 'API-TEST-SIMPLE-001', 'price' => 25,
+                'stockQuantity' => 8, 'weight' => 1, 'length' => 1, 'width' => 1, 'height' => 1,
+                'images' => [], 'attributeValues' => [],
+            ]],
+            'specifications' => [], 'faqs' => [], 'intent' => 'submit',
+        ])->assertCreated()->assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
+
+        $productId = $response->json('data.id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $productId . '/approval', ['decision' => 'approve'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'ACTIVE')
+            ->assertJsonPath('data.approvalStatus', 'APPROVED');
+
+        $this->assertDatabaseHas('inventory_items', ['product_id' => $productId, 'stock_quantity' => 8]);
+    }
+
     public function test_vendor_cannot_access_another_vendors_product(): void
     {
         $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
