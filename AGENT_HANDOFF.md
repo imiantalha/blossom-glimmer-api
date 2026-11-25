@@ -114,27 +114,27 @@ Known areas requiring immediate verification:
 
 | Domain | Required backend capability | Status |
 |---|---|---|
-| Auth | Register/login/logout/me/token handling | Existing auth; contract verification pending |
-| Products | List/detail/search/filter/sort/pagination | Partial implementation on feature branch; verify |
+| Auth | Register/login/logout/me/token handling, password reset/change | Implemented; Laravel feature tests pass. Password reset requires configured mail transport |
+| Products | List/detail/search/filter/sort/pagination, vendor/admin CRUD | Implemented; public and management contracts connected to frontend |
 | Categories | Tree/list/detail + admin CRUD | Implemented; SQLite and SQL Server CI pass |
 | Brands | List/detail/products + admin CRUD | Implemented; SQLite and SQL Server CI pass |
-| Vendors | List/detail/products and ownership | Incomplete; verify/fix |
-| Collections | List/detail and collection products | Schema/list/detail started; product resolution pending |
-| Locations | Countries/regions/cities | Not audited fully |
-| Profile | Read/update/password | Partial; verify |
-| Addresses | CRUD/default address | Initial implementation; verify |
-| Cart | Guest/auth cart, CRUD, merge, pricing | Initial implementation; guest support pending |
-| Wishlist | List/add/remove | Initial implementation; verify |
-| Reviews | List/create/moderation/aggregates | Initial implementation; verify |
-| Inventory | Availability and reservation | Existing schema; checkout integration needs review |
-| Checkout | Server-side totals/order creation | Initial COD workflow only; not validated |
-| Shipping | Methods/rates/quotes | Config-backed methods and address/currency quote implemented; validate end-to-end |
-| Payments | Methods/provider lifecycle/webhooks | Not implemented beyond initial method listing |
-| Orders | List/detail/status/cancel | Initial list/detail/create; remaining lifecycle pending |
-| Shipments | Carrier/tracking events | Demo shipment seed and order-embedded tracking; lifecycle/admin integration still needs audit |
-| Admin/vendor | Role-scoped management | Store/product handlers and brand/category management implemented; continue route/authorization audit |
-| AI assistant | Search/recommendation grounded in live data | Existing foundation; verify after catalog completion |
-
+| Vendors | List/detail/products, store setup, ownership | Implemented; vendor products scoped by authenticated owner |
+| Collections | List/detail and collection products | Implemented |
+| Locations | Countries/regions/cities | No dedicated frontend service/endpoint consumer found in current frontend inventory |
+| Profile | Read/update/password | Implemented |
+| Addresses | CRUD/default address | Implemented; order snapshots retained when address is removed |
+| Cart | Auth cart CRUD, guest/auth merge, server pricing | Implemented; guest merge is frontend-triggered after sign-in |
+| Wishlist | List/add/remove/merge | Implemented |
+| Reviews | List/create/moderation/aggregates | Implemented; moderation status enforced |
+| Inventory | Availability validation, vendor stock updates, checkout reservation/decrement | Implemented; server-side validation and checkout locking |
+| Checkout | Server-side totals/order creation/idempotency | COD checkout implemented with transactional stock checks and idempotency |
+| Shipping | Methods/rates/quotes | Database-configured methods and address/currency-aware quotes implemented; no external carrier integration |
+| Payments | Method discovery/provider lifecycle/webhooks | COD enabled; card/provider lifecycle intentionally pending provider selection and credentials |
+| Orders | List/detail/create/status | Customer order APIs and shipment status updates implemented; refunds/cancellation policy not defined |
+| Shipments | Carrier/tracking events | Shipment records and tracking events exposed through order details; external carrier sync pending |
+| Admin/vendor | Role-scoped management | Admin store/product/brand/category and vendor store/product/inventory operations implemented |
+| AI assistant | Search/recommendation grounded in live data | Existing AI assistant foundation preserved; live-catalog evaluation remains a follow-up |
+ 
 ## Engineering rules for all agents
 
 - Work only in `feat/storefront-api-integration` unless the user explicitly changes scope.
