@@ -161,7 +161,7 @@ Known areas requiring immediate verification:
 - Added checkout stock/variant validation, shipping method configuration/quotes, order idempotency support and shipment tracking snapshots/admin updates.
 - Added vendor ownership/profile schema and admin-role protection for administration routes.
 - Added phone, catalog image URLs, collection metadata, vendor profile metadata and order-item product snapshots.
-- Imported the frontend's existing demo JSON fixtures into backend seeder data: 132 products, 9 root categories plus children, 6 brands, 4 vendors, 4 collections and 192 reviews.
+- Imported the frontend's existing demo JSON fixtures into backend seeder data: 132 products, 9 root categories plus children, 6 brands, 4 vendors, 4 collections and 120 matching reviews (72 review fixtures reference products absent from the current catalogue and are skipped).
 - Added `StorefrontDemoSeeder`; `DatabaseSeeder` now seeds roles then the development catalog. Demo catalog seeding is disabled by default in production.
 - Added `API_REQUIREMENTS.md` with the endpoint matrix and frontend integration gaps.
 
