@@ -76,7 +76,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Create test database
-        run: /opt/mssql-tools18/bin/sqlcmd -C -S 127.0.0.1 -U sa -P "Test_password_2026!" -Q "CREATE DATABASE blossom_glimmer_test;"
+        run: docker exec "$(docker ps -q --filter ancestor=mcr.microsoft.com/mssql/server:2022-latest | head -n 1)" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "Test_password_2026!" -Q "CREATE DATABASE blossom_glimmer_test;"
 
       - name: Prepare application
         run: |
