@@ -28,7 +28,7 @@ class EmailLogController extends Controller
             ->paginate($request->integer('per_page', 15));
 
         return ApiResponse::paginatedResponse(
-            $logs,
+            EmailLogResource::collection($logs),
             'Email logs retrieved successfully.'
         );
     }
@@ -36,7 +36,7 @@ class EmailLogController extends Controller
     public function show(EmailLog $emailLog)
     {
         return ApiResponse::successResponse(
-            $emailLog,
+            new EmailLogResource($emailLog),
             'Email log retrieved successfully.'
         );
     }
@@ -69,7 +69,7 @@ class EmailLogController extends Controller
         SendEmailJob::dispatch($emailLog->id);
 
         return ApiResponse::successResponse(
-            $emailLog->fresh(),
+            new EmailLogResource($emailLog->fresh()),
             'Email queued for retry successfully.'
         );
     }
