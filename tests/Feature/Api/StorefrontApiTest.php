@@ -7,8 +7,10 @@ use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\StorefrontDemoSeeder;
 use Database\Seeders\StorefrontScenarioSeeder;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class StorefrontApiTest extends TestCase
@@ -47,6 +49,23 @@ class StorefrontApiTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'role', 'roles', 'permissions', 'createdAt'], 'token', 'tokenType', 'expiresAt']]);
+    }
+
+    public function test_password_reset_request_does_not_disclose_account_existence(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'known-customer@example.test']);
+        $genericMessage = 'If an account exists for this email, password reset instructions will be sent.';
+
+        $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])
+            ->assertOk()
+            ->assertJsonPath('message', $genericMessage);
+
+        $this->postJson('/api/v1/auth/forgot-password', ['email' => 'unknown-customer@example.test'])
+            ->assertOk()
+            ->assertJsonPath('message', $genericMessage);
+
+        Notification::assertSentTo($user, ResetPassword::class);
     }
 
     public function test_customer_cannot_access_admin_routes(): void
@@ -181,6 +200,7 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.items', [])
             ->assertJsonStructure(['data' => ['id', 'currency', 'items', 'subtotal', 'total']]);
     }
+
     public function test_admin_can_create_brands_and_categories(): void
     {
         $admin = User::factory()->create();
@@ -232,5 +252,4 @@ class StorefrontApiTest extends TestCase
             ->getJson('/api/v1/admin/categories')
             ->assertForbidden();
     }
-
 }
