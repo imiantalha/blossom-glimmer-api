@@ -36,6 +36,8 @@ class RoleService
      */
     public function create(array $data): Role
     {
+        $data['guard_name'] ??= 'web';
+
         return DB::transaction(function () use ($data) {
 
             $permissions = $data['permissions'] ?? [];
