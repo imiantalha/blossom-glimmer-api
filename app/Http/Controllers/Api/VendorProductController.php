@@ -129,7 +129,15 @@ class VendorProductController extends Controller
         if ($request->filled('brand_id')) $query->where('brand_id', $request->integer('brand_id'));
         if ($request->filled('category_id')) $query->whereHas('categories', fn ($q) => $q->where('categories.id', $request->integer('category_id')));
         if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
-        if ($request->filled('approval_status')) $query->where('metadata->approvalStatus', strtolower($request->input('approval_status')));
+        if ($request->filled('approval_status')) {
+            $approvalStatus = strtolower($request->input('approval_status'));
+            $query->where(function ($approval) use ($approvalStatus) {
+                $approval->where('metadata->approvalStatus', $approvalStatus);
+                if ($approvalStatus === 'approved') {
+                    $approval->orWhere(fn ($legacy) => $legacy->where('status', 'active')->whereNull('metadata->approvalStatus'));
+                }
+            });
+        }
         if ($request->filled('sku')) $query->where(fn ($q) => $q->where('sku', 'like', '%' . $request->input('sku') . '%')->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', '%' . $request->input('sku') . '%')));
         $page = $query->latest()->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($product) => $this->adminPayload($product));
@@ -464,12 +472,17 @@ class VendorProductController extends Controller
     {
         $data = $request->validate(['status' => 'required|in:active,inactive,archived']);
         $product = Product::with('vendor.vendorProfile')->findOrFail($id);
-        $approval = strtolower((string) data_get($product->metadata, 'approvalStatus', 'pending'));
+        $metadata = $product->metadata ?? [];
+        $approval = strtolower((string) ($metadata['approvalStatus'] ?? ($product->status === 'active' ? 'approved' : 'pending')));
         abort_if($data['status'] === 'active' && $approval !== 'approved', 422, 'Only approved products can be activated.');
         abort_if($data['status'] === 'active' && ($product->vendor?->vendorProfile?->status !== 'active' || $product->vendor?->vendorProfile?->deleted_at), 422, 'The vendor store must be active before activating products.');
+        if (!array_key_exists('approvalStatus', $metadata)) {
+            $metadata['approvalStatus'] = $approval;
+        }
         $product->update([
             'status' => $data['status'],
             'is_featured' => $data['status'] === 'archived' ? false : $product->is_featured,
+            'metadata' => $metadata,
         ]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product status updated.');
     }
