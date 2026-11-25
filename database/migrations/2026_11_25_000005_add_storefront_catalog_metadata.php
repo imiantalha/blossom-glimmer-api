@@ -25,6 +25,12 @@ return new class extends Migration
             $table->json('featured_stores')->nullable()->after('category_slugs');
         });
 
+        Schema::table('products', function (Blueprint $table) {
+            $table->boolean('is_featured')->default(false);
+            $table->boolean('is_new_arrival')->default(false);
+            $table->unsignedInteger('sold_count')->default(0);
+        });
+
         Schema::create('vendor_profiles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
@@ -37,16 +43,10 @@ return new class extends Migration
         });
     }
 
-        Schema::table('products', function (Blueprint $table) {
-            $table->boolean('is_featured')->default(false);
-            $table->boolean('is_new_arrival')->default(false);
-            $table->unsignedInteger('sold_count')->default(0);
-        });
-    }
-
     public function down(): void
     {
         Schema::dropIfExists('vendor_profiles');
+
         Schema::table('products', function (Blueprint $table) {
             $table->dropColumn(['is_featured', 'is_new_arrival', 'sold_count']);
         });
