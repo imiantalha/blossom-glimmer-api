@@ -151,6 +151,10 @@ class StorefrontDemoSeeder extends Seeder
                 ['user_id' => $user->id],
                 [
                     'slug' => $vendor['slug'],
+                    'name' => $vendor['name'],
+                    'status' => 'active',
+                    'commission_type' => 'percentage',
+                    'commission_value' => 10,
                     'description' => $vendor['description'] ?? null,
                     'image_url' => $vendor['imageUrl'] ?? null,
                     'rating' => $vendor['rating'] ?? null,
