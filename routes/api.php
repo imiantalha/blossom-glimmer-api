@@ -59,6 +59,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('cart/{id}', [StorefrontController::class, 'deleteCartItem']);
         Route::delete('cart', [StorefrontController::class, 'clearCart']);
 
+        Route::get('orders', [StorefrontController::class, 'orders']);
+        Route::post('orders', [StorefrontController::class, 'createOrder']);
+        Route::get('orders/{id}', [StorefrontController::class, 'order']);
+
         Route::get('wishlist', [StorefrontController::class, 'wishlist']);
         Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
