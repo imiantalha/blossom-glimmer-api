@@ -357,7 +357,12 @@ class StorefrontController extends Controller
     {
         $address = DB::table('customer_addresses')->where('user_id', $request->user()->id)->where('id', $id)->first();
         abort_unless($address, 404);
-        DB::table('customer_addresses')->where('id', $id)->delete();
+        DB::transaction(function () use ($id, $address, $request) {
+            // Orders retain their immutable shipping_address snapshot; unlink the
+            // mutable address record before deleting it (SQL Server-safe FK behavior).
+            DB::table('customer_orders')->where('address_id', $id)->where('user_id', $request->user()->id)->update(['address_id' => null]);
+            DB::table('customer_addresses')->where('id', $id)->delete();
+        });
         if ($address->is_default) {
             $next = DB::table('customer_addresses')->where('user_id', $request->user()->id)->orderBy('id')->first();
             if ($next) DB::table('customer_addresses')->where('id', $next->id)->update(['is_default' => true]);
