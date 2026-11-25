@@ -1072,4 +1072,102 @@ class StorefrontApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
     }
 
+
+    public function test_vendor_can_submit_brand_and_category_requests_and_admin_can_approve_them(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $brandRequest = $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Vendor Requested Brand',
+                'slug' => 'vendor-requested-brand',
+                'logo' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            ])->assertCreated()
+            ->assertJsonPath('data.type', 'brand')
+            ->assertJsonPath('data.status', 'pending');
+
+        $brandRequestId = $brandRequest->json('data.id');
+
+        $categoryRequest = $this->postJson('/api/v1/vendor/catalog-requests', [
+            'type' => 'category',
+            'name' => 'Vendor Requested Category',
+            'slug' => 'vendor-requested-category',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'pending');
+
+        $categoryRequestId = $categoryRequest->json('data.id');
+
+        $this->getJson('/api/v1/vendor/catalog-requests')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $brandRequestId])
+            ->assertJsonFragment(['id' => (string) $categoryRequestId]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/catalog-requests?status=pending')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $brandRequestId]);
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $brandRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'brand');
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $categoryRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'category');
+
+        $this->assertDatabaseHas('brands', ['slug' => 'vendor-requested-brand', 'status' => 'active']);
+        $this->assertDatabaseHas('categories', ['slug' => 'vendor-requested-category', 'status' => 'active']);
+
+        $this->getJson('/api/v1/brands')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-brand']);
+        $this->getJson('/api/v1/categories')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-category']);
+    }
+
+    public function test_admin_must_provide_a_reason_when_rejecting_a_catalog_request(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $request = $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Rejected Vendor Brand',
+                'slug' => 'rejected-vendor-brand',
+            ])->assertCreated();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/catalog-requests/' . $request->json('data.id'), [
+                'decision' => 'reject',
+            ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $request->json('data.id'), [
+            'decision' => 'reject',
+            'rejection_reason' => 'Please provide an authorized brand logo.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.rejectionReason', 'Please provide an authorized brand logo.');
+
+        $this->assertDatabaseMissing('brands', ['slug' => 'rejected-vendor-brand']);
+    }
+
+    public function test_customer_cannot_submit_or_review_catalog_requests(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Unauthorized Brand',
+            ])->assertForbidden();
+
+        $this->patchJson('/api/v1/admin/catalog-requests/1', [
+            'decision' => 'approve',
+        ])->assertForbidden();
+    }
+
 }

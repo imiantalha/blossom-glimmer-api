@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ProductVariantController;
 use App\Http\Controllers\Api\StorefrontController;
 use App\Http\Controllers\Api\VendorProductController;
 use App\Http\Controllers\Api\CatalogManagementController;
+use App\Http\Controllers\Api\CatalogRequestController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 
@@ -66,6 +67,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('store/me', [StorefrontController::class, 'myStore']);
             Route::post('store', [StorefrontController::class, 'createStore']);
             Route::patch('store', [StorefrontController::class, 'updateMyStore']);
+            Route::get('catalog-requests', [CatalogRequestController::class, 'vendorIndex']);
+            Route::post('catalog-requests', [CatalogRequestController::class, 'store']);
             Route::get('products/options', [VendorProductController::class, 'options']);
             Route::get('products', [VendorProductController::class, 'index']);
             Route::post('products', [VendorProductController::class, 'store']);
@@ -105,6 +108,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/categories/{id}', [CatalogManagementController::class, 'category']);
             Route::patch('admin/categories/{id}', [CatalogManagementController::class, 'updateCategory']);
             Route::delete('admin/categories/{id}', [CatalogManagementController::class, 'deleteCategory']);
+            Route::get('admin/catalog-requests', [CatalogRequestController::class, 'adminIndex']);
+            Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
             Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
             Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
