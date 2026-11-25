@@ -553,6 +553,7 @@ class StorefrontController extends Controller
             abort_unless($shippingMethod, 422, 'The selected shipping method is unavailable.');
             $allowedCountries = $shippingMethod->countries ? (json_decode($shippingMethod->countries, true) ?: []) : [];
             abort_if($allowedCountries && !in_array(strtoupper($address->country), $allowedCountries, true), 422, 'The selected shipping method is not available for this country.');
+            abort_unless(strtoupper($shippingMethod->currency) === strtoupper($cartCurrency = DB::table('carts')->where('user_id', $userId)->value('currency') ?: 'USD'), 422, 'The selected shipping method currency does not match the cart currency.');
         }
         $cart = $this->currentCart($request);
         $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
@@ -656,6 +657,8 @@ class StorefrontController extends Controller
         })->values();
         if ($methods->isEmpty()) return ApiResponse::errorResponse('No shipping methods are available for this address.', null, 503);
         $currency = strtoupper($data['currency'] ?? 'USD');
+        $methods = $methods->where('currency', $currency)->values();
+        if ($methods->isEmpty()) return ApiResponse::errorResponse('No shipping methods are configured for the requested currency.', null, 503);
         return ApiResponse::successResponse([
             'addressId' => $address->id,
             'methods' => $methods->map(fn ($m) => ['id' => $m->code, 'name' => $m->name, 'description' => $m->description, 'price' => (float) $m->price, 'estimatedDelivery' => $m->estimated_delivery])->values(),
