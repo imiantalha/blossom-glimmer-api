@@ -294,7 +294,7 @@ class StorefrontController extends Controller
         abort_unless($collection, 404);
         $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
         $query = $this->productQuery();
-        if ($categorySlugs) $query->whereHas('categories', fn ($q) => $q->whereIn('slug', $categorySlugs));
+        if ($categorySlugs) $query->where(fn ($q) => $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs)));
         else $query->whereRaw('1 = 0');
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
         $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
