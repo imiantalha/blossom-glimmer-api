@@ -68,7 +68,7 @@ class VendorProductController extends Controller
             'attributeName' => $attribute['name'] ?? 'Attribute', 'values' => collect($attribute['values'] ?? [])->map(fn ($value, $valueIndex) => ['id' => (string) ($valueIndex + 1), 'value' => is_array($value) ? ($value['value'] ?? '') : $value])->values(),
         ])->values();
         $ownerName = trim((string) ($product->vendor?->name ?? ''));
-        $ownerParts = preg_split('/\\s+/', $ownerName, 2) ?: [];
+        $ownerParts = preg_split('/\s+/', $ownerName, 2) ?: [];
 
         return [
             'id' => (string) $product->id, 'storeId' => (string) ($profile?->id ?? $product->vendor_id),
