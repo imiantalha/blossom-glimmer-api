@@ -667,4 +667,34 @@ class StorefrontApiTest extends TestCase
             'product_id' => $product->id,
         ]);
     }
+
+    public function test_admin_can_manage_custom_roles_and_permissions(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $permission = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/permissions', ['name' => 'reports.view'])
+            ->assertCreated()
+            ->json('data');
+
+        $role = $this->postJson('/api/v1/roles', [
+            'name' => 'Report Viewer',
+            'permissions' => ['reports.view'],
+        ])->assertCreated()->json('data');
+
+        $this->assertDatabaseHas('role_has_permissions', [
+            'role_id' => $role['id'],
+            'permission_id' => $permission['id'],
+        ]);
+
+        $this->patchJson('/api/v1/permissions/' . $permission['id'], [
+            'name' => 'reports.manage',
+        ])->assertOk();
+
+        $this->deleteJson('/api/v1/roles/' . $role['id'])->assertOk();
+        $this->deleteJson('/api/v1/permissions/' . $permission['id'])->assertOk();
+
+        $this->assertDatabaseMissing('roles', ['id' => $role['id']]);
+        $this->assertDatabaseMissing('permissions', ['id' => $permission['id']]);
+    }
 }
