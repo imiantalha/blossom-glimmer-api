@@ -136,7 +136,10 @@ class StorefrontApiTest extends TestCase
         $productId = $response->json('data.id');
 
         $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/admin/products/' . $productId . '/approval', ['decision' => 'approve'])
+            ->patchJson('/api/v1/admin/products/' . $productId . '/status', ['status' => 'active'])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/products/' . $productId . '/approval', ['decision' => 'approve'])
             ->assertOk()
             ->assertJsonPath('data.status', 'ACTIVE')
             ->assertJsonPath('data.approvalStatus', 'APPROVED');
