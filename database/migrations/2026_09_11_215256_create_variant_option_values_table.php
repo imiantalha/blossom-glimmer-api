@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('variant_option_values', function (Blueprint $table) {
             $table->foreignId('variant_id')->constrained('product_variants')->cascadeOnDelete();
-            $table->foreignId('product_option_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('product_option_id')->constrained()->restrictOnDelete();
             $table->foreignId('attribute_value_id')->constrained()->cascadeOnDelete();
 
             $table->primary(['variant_id', 'product_option_id']);
