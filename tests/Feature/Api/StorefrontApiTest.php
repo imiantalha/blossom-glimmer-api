@@ -1050,4 +1050,26 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.rejectionReason', 'Please provide clearer product images and complete the material details.');
     }
 
+
+
+    public function test_legacy_active_product_without_approval_metadata_can_be_deactivated_and_reactivated(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+        $metadata = $product->metadata ?? [];
+        unset($metadata['approvalStatus']);
+        $product->update(['metadata' => $metadata]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products?status=active&approval_status=approved')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $product->id]);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.approvalStatus', 'APPROVED');
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+    }
+
 }
