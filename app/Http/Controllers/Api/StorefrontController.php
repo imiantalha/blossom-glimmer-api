@@ -120,7 +120,7 @@ class StorefrontController extends Controller
 
     public function vendors()
     {
-        $vendors = \App\Models\User::role('vendor')->withCount(['' => fn ($q) => $q])->get();
+        $vendors = \App\Models\User::role('vendor')->orderBy('name')->get();
         return ApiResponse::successResponse($vendors->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'slug' => Str::slug($v->name), 'description' => null, 'rating' => null, 'reviewCount' => 0, 'productCount' => 0]), 'Vendors retrieved.');
     }
 
@@ -133,7 +133,9 @@ class StorefrontController extends Controller
 
     public function vendorProducts(Request $request, string $slug)
     {
-        $vendor = \\App\\Models\\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);\n        abort_unless($vendor, 404);\n        return ApiResponse::successResponse([], 'No vendor products are currently assigned.');
+        $vendor = \App\Models\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);
+        abort_unless($vendor, 404);
+        return ApiResponse::successResponse([], 'No vendor products are currently assigned.');
     }
 
     public function collections()
