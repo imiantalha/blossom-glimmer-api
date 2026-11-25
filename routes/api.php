@@ -31,6 +31,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('vendors/{slug}/products', [StorefrontController::class, 'vendorProducts']);
     Route::get('collections', [StorefrontController::class, 'collections']);
     Route::get('collections/{slug}', [StorefrontController::class, 'collection']);
+    Route::get('collections/{slug}/products', [StorefrontController::class, 'collectionProducts']);
     Route::get('reviews', [StorefrontController::class, 'reviews']);
     Route::get('shipping/methods', [StorefrontController::class, 'shippingMethods']);
     Route::get('payment/methods', [StorefrontController::class, 'paymentMethods']);
