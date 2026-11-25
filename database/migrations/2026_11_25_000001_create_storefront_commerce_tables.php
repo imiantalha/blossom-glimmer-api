@@ -69,7 +69,7 @@ return new class extends Migration
             $table->string('number')->unique();
             $table->string('idempotency_key', 100)->nullable();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->unique(['user_id', 'idempotency_key']);
+            $table->index(['user_id', 'idempotency_key']);
             $table->foreignId('address_id')->nullable()->constrained('customer_addresses')->nullOnDelete();
             $table->string('status')->default('pending');
             $table->string('payment_status')->default('pending');
