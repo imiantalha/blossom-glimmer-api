@@ -783,4 +783,43 @@ class StorefrontApiTest extends TestCase
         ]);
     }
 
+
+    public function test_checkout_rejects_insufficient_stock_without_creating_an_order_or_clearing_cart(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $cart = DB::table('carts')->where('user_id', $customer->id)->firstOrFail();
+        $item = DB::table('cart_items')->where('cart_id', $cart->id)->firstOrFail();
+        $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->value('id');
+        $inventoryQuery = DB::table('inventory_items')->where(
+            $item->variant_id ? 'variant_id' : 'product_id',
+            $item->variant_id ?? $item->product_id
+        );
+        $inventory = $inventoryQuery->first();
+
+        $this->assertNotNull($inventory);
+        $this->assertNotNull($addressId);
+
+        DB::table('inventory_items')->where('id', $inventory->id)->update([
+            'stock_quantity' => $inventory->reserved_quantity,
+        ]);
+
+        $orderCount = DB::table('customer_orders')->count();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'address_id' => $addressId,
+                'shipping_method_id' => 'standard',
+                'payment_method' => 'cod',
+            ], ['Idempotency-Key' => 'insufficient-stock-regression'])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false);
+
+        $this->assertSame($orderCount, DB::table('customer_orders')->count());
+        $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'cart_id' => $cart->id]);
+        $this->assertDatabaseHas('inventory_items', [
+            'id' => $inventory->id,
+            'stock_quantity' => $inventory->reserved_quantity,
+        ]);
+    }
+
 }
