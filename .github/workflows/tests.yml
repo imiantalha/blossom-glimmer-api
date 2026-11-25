@@ -34,6 +34,19 @@ jobs:
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
 
+      - name: Validate PHP syntax and API route registration
+        run: |
+          find app routes database tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php artisan route:list --path=api/v1
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+
       - name: Run tests
         run: php artisan test
         env:
@@ -98,6 +111,25 @@ jobs:
           DB_PASSWORD: "Test_password_2026!"
           DB_ENCRYPT: "yes"
           DB_TRUST_SERVER_CERTIFICATE: "true"
+
+      - name: Validate PHP syntax and API route registration
+        run: |
+          find app routes database tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php artisan route:list --path=api/v1
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlsrv
+          DB_HOST: 127.0.0.1
+          DB_PORT: 1433
+          DB_DATABASE: blossom_glimmer_test
+          DB_USERNAME: sa
+          DB_PASSWORD: "Test_password_2026!"
+          DB_ENCRYPT: "yes"
+          DB_TRUST_SERVER_CERTIFICATE: "true"
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
 
       - name: Run migrations and feature tests on SQL Server
         run: php artisan test
