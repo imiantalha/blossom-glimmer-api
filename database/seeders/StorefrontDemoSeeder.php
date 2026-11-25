@@ -16,6 +16,7 @@ class StorefrontDemoSeeder extends Seeder
     private array $brandIds = [];
     private array $vendorIds = [];
     private array $productIds = [];
+    private int $seededReviewCount = 0;
 
     public function run(): void
     {
@@ -49,7 +50,7 @@ class StorefrontDemoSeeder extends Seeder
             count($this->categoryIds),
             count($this->brandIds),
             count($this->vendorIds),
-            count($this->loadBatches('reviews-*.json'))
+            $this->seededReviewCount
         ));
     }
 
@@ -323,6 +324,7 @@ class StorefrontDemoSeeder extends Seeder
                     'updated_at' => now(),
                 ]
             );
+            $this->seededReviewCount++;
         }
     }
 }
