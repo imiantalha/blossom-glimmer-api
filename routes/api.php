@@ -75,21 +75,23 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
 
-        Route::get('dashboard', [DashboardController::class, 'index']);
-        Route::apiResource('admin/users', UserController::class);
-        Route::get('admin/users/options', [UserController::class, 'options']);
-        Route::get('roles/options', [RoleController::class, 'options']);
-        Route::apiResource('roles', RoleController::class);
-        Route::get('permissions/options', [PermissionController::class, 'options']);
-        Route::apiResource('permissions', PermissionController::class);
-        Route::get('email-logs', [EmailLogController::class, 'index']);
-        Route::get('email-logs/{emailLog}', [EmailLogController::class, 'show']);
-        Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
-        Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
-        Route::post('emails/send', [EmailController::class, 'send']);
+        Route::middleware('role:Admin')->group(function () {
+            Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::apiResource('admin/users', UserController::class);
+            Route::get('admin/users/options', [UserController::class, 'options']);
+            Route::get('roles/options', [RoleController::class, 'options']);
+            Route::apiResource('roles', RoleController::class);
+            Route::get('permissions/options', [PermissionController::class, 'options']);
+            Route::apiResource('permissions', PermissionController::class);
+            Route::get('email-logs', [EmailLogController::class, 'index']);
+            Route::get('email-logs/{emailLog}', [EmailLogController::class, 'show']);
+            Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
+            Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
+            Route::post('emails/send', [EmailController::class, 'send']);
+            Route::apiResource('admin/products', ProductController::class);
+            Route::apiResource('admin.products.variants', ProductVariantController::class);
+        });
 
-        Route::apiResource('admin/products', ProductController::class);
-        Route::apiResource('admin.products.variants', ProductVariantController::class);
         Route::post('ai/product-assistant', [ProductAssistantController::class, 'chat']);
         Route::post('ai/product-assistant/stream', [ProductAssistantController::class, 'stream']);
     });
