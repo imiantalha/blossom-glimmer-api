@@ -24,7 +24,8 @@ Complete the Laravel backend required by the existing Blossom Glimmer frontend. 
 - [x] Added product vendor ownership migration and started model relationship.
 - [x] Added admin brand/category CRUD endpoints and authorization coverage.
 - [x] Added storefront category hierarchy details and aligned frontend brand/category adapters.
-- [x] Added SQL Server-safe order/address FK handling and explicit unlink-on-address-delete behavior; re-running SQL Server CI.
+- [x] Added SQL Server-safe order/address FK handling and explicit unlink-on-address-delete behavior.
+- [x] SQL Server and SQLite Laravel test workflows pass on the latest validated backend implementation; SQL Server exposed and fixed a `product_tag` `insertOrIgnore` incompatibility.
 - [x] Resolved duplicate `/admin/products` GET route by moving the lower-level ProductController resource to `/catalog/products`.
 - [ ] Complete and validate the current backend implementation.
 - [ ] Finish full frontend-to-backend endpoint inventory.
@@ -115,8 +116,8 @@ Known areas requiring immediate verification:
 |---|---|---|
 | Auth | Register/login/logout/me/token handling | Existing auth; contract verification pending |
 | Products | List/detail/search/filter/sort/pagination | Partial implementation on feature branch; verify |
-| Categories | Tree/list/detail + admin CRUD | Implemented on feature branch; SQL Server CI pending |
-| Brands | List/detail/products + admin CRUD | Implemented on feature branch; SQL Server CI pending |
+| Categories | Tree/list/detail + admin CRUD | Implemented; SQLite and SQL Server CI pass |
+| Brands | List/detail/products + admin CRUD | Implemented; SQLite and SQL Server CI pass |
 | Vendors | List/detail/products and ownership | Incomplete; verify/fix |
 | Collections | List/detail and collection products | Schema/list/detail started; product resolution pending |
 | Locations | Countries/regions/cities | Not audited fully |
