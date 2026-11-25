@@ -492,10 +492,20 @@ class StorefrontController extends Controller
 
     public function createOrder(Request $request)
     {
-        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'nullable|string|max:60', 'notes' => 'nullable|string|max:2000']);
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'nullable|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:2000']);
         $userId = $request->user()->id;
+        abort_unless(config('storefront.cash_on_delivery'), 422, 'Cash on delivery is not enabled.');
+        $idempotencyKey = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
+        if ($idempotencyKey) {
+            $existingOrder = DB::table('customer_orders')->where('user_id', $userId)->where('idempotency_key', $idempotencyKey)->first();
+            if ($existingOrder) return ApiResponse::successResponse($this->orderPayload($existingOrder), 'Order already placed.');
+        }
         $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $userId)->first();
         abort_unless($address, 422, 'A valid shipping address is required.');
+        $shippingConfigured = DB::table('shipping_methods')->where('is_active', true)->exists();
+        if ($shippingConfigured && empty($data['shipping_method_id'])) {
+            throw ValidationException::withMessages(['shipping_method_id' => ['Select an available shipping method.']]);
+        }
         $shippingMethod = null;
         if (!empty($data['shipping_method_id'])) {
             $shippingMethod = DB::table('shipping_methods')->where('code', $data['shipping_method_id'])->where('is_active', true)->first();
@@ -507,7 +517,7 @@ class StorefrontController extends Controller
         $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
         if ($items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Your cart is empty.']]);
 
-        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId, $shippingMethod) {
+        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId, $shippingMethod, $idempotencyKey) {
             $subtotal = 0;
             $lines = [];
             foreach ($items as $item) {
@@ -526,7 +536,7 @@ class StorefrontController extends Controller
             }
             $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
             $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
-            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
                 DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
