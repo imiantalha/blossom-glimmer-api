@@ -124,7 +124,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/products', [VendorProductController::class, 'adminIndex']);
             Route::get('admin/products/{id}', [VendorProductController::class, 'adminShow']);
             Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
-            Route::apiResource('admin/products', ProductController::class);
+            // Keep the storefront admin contract on VendorProductController; expose
+            // the lower-level product resource separately to avoid duplicate GET routes.
+            Route::apiResource('catalog/products', ProductController::class);
             Route::apiResource('admin.products.variants', ProductVariantController::class);
         });
 
