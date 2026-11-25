@@ -389,6 +389,7 @@ class StorefrontController extends Controller
     {
         $data = $request->validate([
             'items' => 'required|array|min:1|max:100',
+            'items.*.cart_item_id' => 'nullable|string|max:100',
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.variant_id' => 'nullable|integer|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1|max:99',
@@ -398,28 +399,28 @@ class StorefrontController extends Controller
         foreach ($data['items'] as $index => $item) {
             $product = Product::where('id', $item['product_id'])->where('status', 'active')->first();
             if (!$product) {
-                $issues[] = ['index' => $index, 'productId' => $item['product_id'], 'reason' => 'unavailable', 'message' => 'This product is unavailable.'];
+                $issues[] = ['index' => $index, 'cartItemId' => $item['cart_item_id'] ?? $index, 'productId' => $item['product_id'], 'requested' => $item['quantity'], 'available' => null, 'reason' => 'unavailable', 'message' => 'This product is unavailable.'];
                 continue;
             }
             $variant = null;
             if (!empty($item['variant_id'])) {
                 $variant = DB::table('product_variants')->where('id', $item['variant_id'])->where('product_id', $product->id)->where('status', 'active')->first();
                 if (!$variant) {
-                    $issues[] = ['index' => $index, 'productId' => $product->id, 'variantId' => $item['variant_id'], 'reason' => 'unavailable', 'message' => 'This product option is unavailable.'];
+                    $issues[] = ['index' => $index, 'cartItemId' => $item['cart_item_id'] ?? $index, 'productId' => $product->id, 'variantId' => $item['variant_id'], 'requested' => $item['quantity'], 'available' => null, 'reason' => 'unavailable', 'message' => 'This product option is unavailable.'];
                     continue;
                 }
             } elseif ($product->type === 'variable') {
-                $issues[] = ['index' => $index, 'productId' => $product->id, 'reason' => 'variant_required', 'message' => 'Select a product option.'];
+                $issues[] = ['index' => $index, 'cartItemId' => $item['cart_item_id'] ?? $index, 'productId' => $product->id, 'requested' => $item['quantity'], 'available' => null, 'reason' => 'variant_required', 'message' => 'Select a product option.'];
                 continue;
             }
             $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant->id ?? $product->id)->first();
             if (!$inventory) {
-                $issues[] = ['index' => $index, 'productId' => $product->id, 'reason' => 'unavailable', 'message' => 'Inventory is not configured.'];
+                $issues[] = ['index' => $index, 'cartItemId' => $item['cart_item_id'] ?? $index, 'productId' => $product->id, 'requested' => $item['quantity'], 'available' => null, 'reason' => 'unavailable', 'message' => 'Inventory is not configured.'];
                 continue;
             }
             $available = $inventory->manage_inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : null;
             if ($available === 0 || ($available !== null && $item['quantity'] > $available)) {
-                $issues[] = ['index' => $index, 'productId' => $product->id, 'variantId' => $variant->id ?? null, 'requested' => $item['quantity'], 'available' => $available, 'reason' => $available === 0 ? 'out_of_stock' : 'insufficient_stock', 'message' => $available === 0 ? 'This item is out of stock.' : "Only {$available} available."];
+                $issues[] = ['index' => $index, 'cartItemId' => $item['cart_item_id'] ?? $index, 'productId' => $product->id, 'variantId' => $variant->id ?? null, 'requested' => $item['quantity'], 'available' => $available, 'reason' => $available === 0 ? 'out_of_stock' : 'insufficient_stock', 'message' => $available === 0 ? 'This item is out of stock.' : "Only {$available} available."];
             }
         }
 
