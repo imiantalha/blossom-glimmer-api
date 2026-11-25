@@ -39,7 +39,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('cart_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
+            $table->foreignId('variant_id')->nullable()->constrained('product_variants')->noActionOnDelete();
             $table->unsignedInteger('quantity');
             $table->timestamps();
             $table->unique(['cart_id', 'product_id', 'variant_id']);
@@ -99,7 +99,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('order_id')->constrained('customer_orders')->cascadeOnDelete();
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
+            $table->foreignId('variant_id')->nullable()->constrained('product_variants')->noActionOnDelete();
             $table->string('name');
             $table->string('product_slug')->nullable();
             $table->text('image_url')->nullable();
