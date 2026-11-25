@@ -46,7 +46,7 @@ Do not enable demo seeding in production. Production catalogues must be populate
 - Admin management routes require the `Admin` role
 - Customer resources are scoped to the authenticated user
 
-## API surface
+## Demo accounts and data\n\nRun `php artisan db:seed` in local/testing to create 132 products (7 simple, 125 variable), 4 vendor stores, a demo admin/customer, a sample cart/wishlist, a sample order with tracking, two shipping methods and catalogue images. Demo login emails are `admin@demo.blossomglimmer.local`, `customer@demo.blossomglimmer.local`, and `vendor+<store-slug>@demo.blossomglimmer.local`; password: `Password123!`. Use only locally/testing.\n\n## API surface
 
 ### Public catalogue
 - `GET /products` — search, filters, sorting and pagination
@@ -59,7 +59,7 @@ Do not enable demo seeding in production. Production catalogues must be populate
 - `GET /shipping/methods`, `GET /payment/methods`
 
 ### Authentication and customer commerce
-- `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
+- `POST /auth/register`, `POST /auth/register/vendor`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
 - `POST /auth/forgot-password`, `POST /auth/reset-password`
 - `PATCH /users/me`, `PATCH /users/me/password`
 - `GET|POST /users/me/addresses`, `PATCH|DELETE /users/me/addresses/{id}`
@@ -78,7 +78,7 @@ Order creation recalculates prices and validates stock on the server. Send an `I
 - `PATCH /vendor/products/{id}/inventory` updates vendor-owned stock.
 - Admin store review, approval/suspension, commission and product approval endpoints are role-protected.
 
-### Administration and tracking
+### Vendor and administration\n- Vendor store profile CRUD, vendor product CRUD, inventory adjustments, admin store approval/suspension and commission settings.\n- Admin product listing/detail, product approval/rejection and existing user/role/permission management.\n- Guest carts and wishlists merge into an authenticated account by product slug and variant SKU.\n\n### Administration and tracking
 - Admin user, product, variant, role, permission, dashboard and email-log routes require the `Admin` role.
 - `POST /admin/orders/{id}/shipment` updates carrier/tracking data and order fulfillment status.
 
