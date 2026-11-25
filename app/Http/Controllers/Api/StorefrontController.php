@@ -341,7 +341,21 @@ class StorefrontController extends Controller
         $data = $request->validate(['product_id' => 'required|integer|exists:products,id', 'variant_id' => 'nullable|integer|exists:product_variants,id', 'quantity' => 'required|integer|min:1|max:99']);
         $cart = $this->currentCart($request);
         $product = Product::where('id', $data['product_id'])->where('status', 'active')->firstOrFail();
-        if ($data['variant_id'] ?? null) abort_unless(DB::table('product_variants')->where('id', $data['variant_id'])->where('product_id', $product->id)->where('status', 'active')->exists(), 422);
+        if ($product->type === 'variable' && empty($data['variant_id'])) {
+            throw ValidationException::withMessages(['variant_id' => ['Select a product variant before adding this item.']]);
+        }
+        $variant = null;
+        if ($data['variant_id'] ?? null) {
+            $variant = DB::table('product_variants')->where('id', $data['variant_id'])->where('product_id', $product->id)->where('status', 'active')->first();
+            abort_unless($variant, 422, 'The selected variant is unavailable.');
+        }
+        $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant->id ?? $product->id)->first();
+        if (!$inventory) throw ValidationException::withMessages(['inventory' => ['Inventory is not configured for this product.']]);
+        $existingQuantity = (int) DB::table('cart_items')->where('cart_id', $cart->id)->where('product_id', $product->id)->where('variant_id', $variant->id ?? null)->value('quantity');
+        $requestedQuantity = $existingQuantity + $data['quantity'];
+        if ($inventory->manage_inventory && ($inventory->stock_quantity - $inventory->reserved_quantity) < $requestedQuantity) {
+            throw ValidationException::withMessages(['quantity' => ['The requested quantity is not available.']]);
+        }
         DB::transaction(function () use ($cart, $data) {
             $existing = DB::table('cart_items')->where('cart_id', $cart->id)->where('product_id', $data['product_id'])->where('variant_id', $data['variant_id'] ?? null)->first();
             if ($existing) DB::table('cart_items')->where('id', $existing->id)->update(['quantity' => $existing->quantity + $data['quantity'], 'updated_at' => now()]);
