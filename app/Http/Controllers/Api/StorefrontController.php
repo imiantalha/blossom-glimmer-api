@@ -543,6 +543,7 @@ class StorefrontController extends Controller
         }
         $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $userId)->first();
         abort_unless($address, 422, 'A valid shipping address is required.');
+        $cart = $this->currentCart($request);
         $shippingConfigured = DB::table('shipping_methods')->where('is_active', true)->exists();
         if ($shippingConfigured && empty($data['shipping_method_id'])) {
             throw ValidationException::withMessages(['shipping_method_id' => ['Select an available shipping method.']]);
@@ -553,9 +554,8 @@ class StorefrontController extends Controller
             abort_unless($shippingMethod, 422, 'The selected shipping method is unavailable.');
             $allowedCountries = $shippingMethod->countries ? (json_decode($shippingMethod->countries, true) ?: []) : [];
             abort_if($allowedCountries && !in_array(strtoupper($address->country), $allowedCountries, true), 422, 'The selected shipping method is not available for this country.');
-            abort_unless(strtoupper($shippingMethod->currency) === strtoupper($cartCurrency = DB::table('carts')->where('user_id', $userId)->value('currency') ?: 'USD'), 422, 'The selected shipping method currency does not match the cart currency.');
+            abort_unless(strtoupper($shippingMethod->currency) === strtoupper($cart->currency), 422, 'The selected shipping method currency does not match the cart currency.');
         }
-        $cart = $this->currentCart($request);
         $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
         if ($items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Your cart is empty.']]);
 
