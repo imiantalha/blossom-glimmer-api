@@ -86,6 +86,7 @@ class ProductVariantService
     {
         return DB::transaction(function () use ($variant) {
             $variant->options()->detach();
+            DB::table('inventory_items')->where('variant_id', $variant->id)->delete();
 
             return $this->variantRepository->delete($variant);
         });
