@@ -308,10 +308,41 @@ class VendorProductController extends Controller
             $key = ['product_id' => $product->id, 'variant_id' => null];
             $values = [];
         }
-        DB::table('inventory_items')->updateOrInsert($key, $values + [
-            'manage_inventory' => $data['manage_inventory'] ?? true, 'stock_quantity' => $data['stock_quantity'],
-            'reserved_quantity' => 0, 'low_stock_threshold' => $data['low_stock_threshold'] ?? 5, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        return ApiResponse::successResponse(['productId' => $product->id, 'variantId' => $data['variant_id'] ?? null, 'stockQuantity' => $data['stock_quantity']], 'Inventory updated.');
+        $inventory = DB::transaction(function () use ($key, $values, $data) {
+            $query = DB::table('inventory_items');
+            foreach ($key as $column => $value) {
+                $query->where($column, $value);
+            }
+            $inventory = $query->lockForUpdate()->first();
+
+            $reserved = (int) ($inventory->reserved_quantity ?? 0);
+            if ($data['stock_quantity'] < $reserved) {
+                abort(422, 'Stock quantity cannot be lower than the quantity reserved for existing orders.');
+            }
+
+            $attributes = $values + [
+                'manage_inventory' => $data['manage_inventory'] ?? (bool) ($inventory->manage_inventory ?? true),
+                'stock_quantity' => $data['stock_quantity'],
+                'reserved_quantity' => $reserved,
+                'low_stock_threshold' => $data['low_stock_threshold'] ?? (int) ($inventory->low_stock_threshold ?? 5),
+                'updated_at' => now(),
+            ];
+
+            if ($inventory) {
+                DB::table('inventory_items')->where('id', $inventory->id)->update($attributes);
+            } else {
+                DB::table('inventory_items')->insert($attributes + ['created_at' => now()]);
+            }
+
+            return $reserved;
+        });
+
+        return ApiResponse::successResponse([
+            'productId' => $product->id,
+            'variantId' => $data['variant_id'] ?? null,
+            'stockQuantity' => $data['stock_quantity'],
+            'reservedQuantity' => $inventory,
+            'availableQuantity' => max(0, $data['stock_quantity'] - $inventory),
+        ], 'Inventory updated.');
     }
 }
