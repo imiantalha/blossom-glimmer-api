@@ -640,7 +640,7 @@ class StorefrontApiTest extends TestCase
             ->whereNull('i.variant_id')
             ->where('p.type', 'simple')
             ->where('p.status', 'active')
-            ->where('i.manage_inventory', false)
+            ->whereRaw('i.stock_quantity - i.reserved_quantity >= ?', [2])
             ->select('p.id', 'p.slug')
             ->first();
 
