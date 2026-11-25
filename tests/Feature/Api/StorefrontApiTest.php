@@ -352,4 +352,164 @@ class StorefrontApiTest extends TestCase
             ->getJson('/api/v1/vendor/products')
             ->assertForbidden();
     }
+
+    public function test_customer_address_crud_is_scoped_to_the_authenticated_owner(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $otherCustomer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+
+        $created = $this->actingAs($customer, 'sanctum')->postJson('/api/v1/users/me/addresses', [
+            'firstName' => 'Test', 'lastName' => 'Customer', 'address1' => '42 Test Street',
+            'city' => 'Lahore', 'state' => 'Punjab', 'postalCode' => '54000',
+            'country' => 'us', 'phone' => '+923001112233', 'isDefault' => true,
+        ])->assertCreated()->assertJsonPath('data.country', 'US');
+
+        $addressId = $created->json('data.id');
+
+        $this->actingAs($otherCustomer, 'sanctum')
+            ->patchJson('/api/v1/users/me/addresses/' . $addressId, ['city' => 'Karachi'])
+            ->assertNotFound();
+
+        $this->actingAs($customer, 'sanctum')
+            ->patchJson('/api/v1/users/me/addresses/' . $addressId, ['city' => 'Islamabad'])
+            ->assertOk()
+            ->assertJsonPath('data.city', 'Islamabad');
+
+        $this->actingAs($customer, 'sanctum')
+            ->deleteJson('/api/v1/users/me/addresses/' . $addressId)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('customer_addresses', ['id' => $addressId]);
+    }
+
+    public function test_customer_cart_supports_add_update_and_clear_with_inventory_checks(): void
+    {
+        $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $product = DB::table('products as p')
+            ->join('inventory_items as i', 'i.product_id', '=', 'p.id')
+            ->whereNull('i.variant_id')
+            ->where('p.type', 'simple')
+            ->where('p.status', 'active')
+            ->whereRaw('i.stock_quantity - i.reserved_quantity >= ?', [5])
+            ->select('p.id')
+            ->first();
+
+        $this->assertNotNull($product);
+
+        $added = $this->actingAs($customer, 'sanctum')->postJson('/api/v1/cart', [
+            'product_id' => $product->id, 'quantity' => 2,
+        ])->assertOk()->assertJsonPath('data.items.0.quantity', 2);
+
+        $itemId = $added->json('data.items.0.id');
+
+        $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 3])
+            ->assertOk()->assertJsonPath('data.items.0.quantity', 3);
+
+        $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 99])
+            ->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/cart')
+            ->assertOk()->assertJsonPath('data.items', []);
+
+        $this->assertDatabaseMissing('cart_items', ['id' => $itemId]);
+    }
+
+    public function test_customer_wishlist_is_idempotent_and_owner_scoped(): void
+    {
+        $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $otherCustomer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->where('type', 'simple')->orderByDesc('id')->firstOrFail();
+
+        $first = $this->actingAs($customer, 'sanctum')->postJson('/api/v1/wishlist', [
+            'product_id' => $product->id,
+        ])->assertCreated();
+        $wishlistId = $first->json('data.id');
+
+        $this->postJson('/api/v1/wishlist', ['product_id' => $product->id])->assertCreated();
+        $this->assertSame(1, DB::table('wishlists')->where('user_id', $customer->id)->where('product_id', $product->id)->count());
+
+        $this->actingAs($otherCustomer, 'sanctum')
+            ->deleteJson('/api/v1/wishlist/' . $wishlistId)
+            ->assertOk();
+
+        $this->assertDatabaseHas('wishlists', ['id' => $wishlistId, 'user_id' => $customer->id]);
+
+        $this->actingAs($customer, 'sanctum')
+            ->deleteJson('/api/v1/wishlist/' . $wishlistId)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('wishlists', ['id' => $wishlistId]);
+    }
+
+    public function test_shipping_quote_is_address_owned_and_uses_seeded_methods(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $otherCustomer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->value('id');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/shipping/quote', ['address_id' => $addressId, 'currency' => 'USD'])
+            ->assertOk()
+            ->assertJsonPath('data.source', 'live')
+            ->assertJsonCount(2, 'data.methods');
+
+        $this->actingAs($otherCustomer, 'sanctum')
+            ->postJson('/api/v1/shipping/quote', ['address_id' => $addressId, 'currency' => 'USD'])
+            ->assertNotFound();
+    }
+
+    public function test_vendor_can_create_store_and_admin_can_moderate_it(): void
+    {
+        $vendor = User::factory()->create(['email' => 'new-vendor@example.test']);
+        $vendor->assignRole('Vendor');
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $created = $this->actingAs($vendor, 'sanctum')->postJson('/api/v1/vendor/store', [
+            'name' => 'Feature Test Store',
+            'slug' => 'feature-test-store-' . $vendor->id,
+            'description' => 'A store created by the API feature test.',
+        ])->assertCreated()->assertJsonPath('data.status', 'pending');
+
+        $storeId = $created->json('data.id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $storeId . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'active');
+
+        $this->patchJson('/api/v1/admin/stores/' . $storeId . '/commission', [
+            'commission_type' => 'percentage', 'commission_value' => 12.5,
+        ])->assertOk()->assertJsonPath('data.commissionValue', 12.5);
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/vendor/store/me')
+            ->assertOk()->assertJsonPath('data.status', 'active');
+    }
+
+    public function test_customer_cannot_read_another_customers_order(): void
+    {
+        $owner = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $otherCustomer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $orderId = DB::table('customer_orders')->where('user_id', $owner->id)->where('number', 'BG-DEMO-1001')->value('id');
+
+        $this->assertNotNull($orderId);
+
+        $this->actingAs($otherCustomer, 'sanctum')
+            ->getJson('/api/v1/orders/' . $orderId)
+            ->assertNotFound();
+    }
+
+    public function test_customer_review_is_saved_as_pending_moderation(): void
+    {
+        $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->where('type', 'simple')->orderByDesc('id')->firstOrFail();
+
+        $this->actingAs($customer, 'sanctum')->postJson('/api/v1/reviews', [
+            'product_id' => $product->id, 'rating' => 4,
+            'title' => 'Feature test review', 'body' => 'This review must wait for moderation.',
+        ])->assertCreated()->assertJsonPath('data.rating', 4);
+
+        $this->assertDatabaseHas('product_reviews', [
+            'product_id' => $product->id, 'user_id' => $customer->id, 'status' => 'pending',
+        ]);
+    }
 }
