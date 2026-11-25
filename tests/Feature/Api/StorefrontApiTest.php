@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Product;
 use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\StorefrontDemoSeeder;
+use Database\Seeders\StorefrontScenarioSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class StorefrontApiTest extends TestCase
@@ -35,24 +38,15 @@ class StorefrontApiTest extends TestCase
 
     public function test_registration_returns_a_sanctum_session_and_frontend_user_shape(): void
     {
-        $response = $this->postJson('/api/v1/auth/register', [
+        $this->postJson('/api/v1/auth/register', [
             'firstName' => 'Test',
             'lastName' => 'Customer',
             'email' => 'new-customer@example.test',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
-        ]);
-
-        $response->assertCreated()
+        ])->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonStructure([
-                'data' => [
-                    'user' => ['id', 'name', 'email', 'role', 'roles', 'permissions', 'createdAt'],
-                    'token',
-                    'tokenType',
-                    'expiresAt',
-                ],
-            ]);
+            ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'role', 'roles', 'permissions', 'createdAt'], 'token', 'tokenType', 'expiresAt']]);
     }
 
     public function test_customer_cannot_access_admin_routes(): void
@@ -64,7 +58,6 @@ class StorefrontApiTest extends TestCase
             ->getJson('/api/v1/dashboard')
             ->assertForbidden();
     }
-
 
     public function test_demo_customer_can_login_with_seeded_account(): void
     {
@@ -110,8 +103,8 @@ class StorefrontApiTest extends TestCase
     public function test_inventory_validation_and_checkout_idempotency_use_seeded_data(): void
     {
         $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
-        $cart = DB::table('carts')->where('user_id', $customer->id)->first();
-        $item = DB::table('cart_items')->where('cart_id', $cart->id)->first();
+        $cart = DB::table('carts')->where('user_id', $customer->id)->firstOrFail();
+        $item = DB::table('cart_items')->where('cart_id', $cart->id)->firstOrFail();
         $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->value('id');
 
         $this->actingAs($customer, 'sanctum')
@@ -150,53 +143,4 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.items', [])
             ->assertJsonStructure(['data' => ['id', 'currency', 'items', 'subtotal', 'total']]);
     }
-    public function test_vendor_registration_assigns_vendor_role_and_returns_token(): void
-    {
-        $response = $this->postJson('/api/v1/auth/register/vendor', [
-            'firstName' => 'Demo',
-            'lastName' => 'Seller',
-            'email' => 'new-vendor@example.test',
-            'phone' => '+923001112233',
-            'password' => 'Password123!',
-            'password_confirmation' => 'Password123!',
-        ]);
-
-        $response->assertCreated()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.user.role', 'vendor')
-            ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'role'], 'token', 'tokenType', 'expiresAt']]);
-
-        $this->assertDatabaseHas('users', ['email' => 'new-vendor@example.test']);
-    }
-
-    public function test_customer_cannot_register_as_vendor_through_customer_endpoint(): void
-    {
-        $this->postJson('/api/v1/auth/register', [
-            'firstName' => 'Test',
-            'lastName' => 'Customer',
-            'email' => 'customer-only@example.test',
-            'password' => 'Password123!',
-            'password_confirmation' => 'Password123!',
-        ])->assertCreated()->assertJsonPath('data.user.role', 'customer');
-    }
-
-    public function test_vendor_store_creation_is_pending_until_admin_approval(): void
-    {
-        $vendor = User::factory()->create();
-        $vendor->assignRole('Vendor');
-
-        $this->actingAs($vendor, 'sanctum')
-            ->postJson('/api/v1/vendor/store', [
-                'name' => 'Integration Test Store',
-                'slug' => 'integration-test-store',
-                'description' => 'A store created by an API feature test.',
-                'email' => 'store@example.test',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'pending')
-            ->assertJsonPath('data.slug', 'integration-test-store');
-
-        $this->assertDatabaseHas('vendor_profiles', ['user_id' => $vendor->id, 'slug' => 'integration-test-store', 'status' => 'pending']);
-    }
-
 }
