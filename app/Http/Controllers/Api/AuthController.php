@@ -22,18 +22,20 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
+        $credentials['email'] = strtolower(trim($credentials['email']));
 
         $user = User::where('email', $credentials['email'])->first();
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return ApiResponse::unauthorizedResponse('Invalid email or password.');
         }
-        $token = $user->createToken('storefront', ['*'], now()->addMinutes((int) config('sanctum.expiration', 10080)))->plainTextToken;
+        $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
+        $token = $user->createToken('storefront', ['*'], $expiresAt)->plainTextToken;
 
         return ApiResponse::successResponse([
             'user' => new UserResource($user),
             'token' => $token,
             'tokenType' => 'Bearer',
-            'expiresAt' => now()->addMinutes((int) config('sanctum.expiration', 10080))->toISOString(),
+            'expiresAt' => $expiresAt->toISOString(),
         ], 'Login successful.');
     }
 
@@ -46,6 +48,7 @@ class AuthController extends Controller
             'phone' => ['nullable', 'string', 'max:40'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+        $data['email'] = strtolower(trim($data['email']));
 
         $user = User::create([
             'name' => trim($data['firstName'] . ' ' . $data['lastName']),
@@ -55,16 +58,16 @@ class AuthController extends Controller
         ]);
         $user->assignRole(Role::CUSTOMER);
 
-        $token = $user->createToken('storefront', ['*'], now()->addMinutes((int) config('sanctum.expiration', 10080)))->plainTextToken;
+        $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
+        $token = $user->createToken('storefront', ['*'], $expiresAt)->plainTextToken;
 
         return ApiResponse::createdResponse([
             'user' => new UserResource($user),
             'token' => $token,
             'tokenType' => 'Bearer',
-            'expiresAt' => now()->addMinutes((int) config('sanctum.expiration', 10080))->toISOString(),
+            'expiresAt' => $expiresAt->toISOString(),
         ], 'Registration successful.');
     }
-
 
     public function registerVendor(Request $request)
     {
@@ -75,22 +78,24 @@ class AuthController extends Controller
             'phone' => ['nullable', 'string', 'max:40'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+        $data['email'] = strtolower(trim($data['email']));
 
         $user = User::create([
             'name' => trim($data['firstName'] . ' ' . $data['lastName']),
-            'email' => strtolower($data['email']),
+            'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
             'password' => $data['password'],
         ]);
         $user->assignRole(Role::VENDOR);
 
-        $token = $user->createToken('storefront-vendor', ['*'], now()->addMinutes((int) config('sanctum.expiration', 10080)))->plainTextToken;
+        $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
+        $token = $user->createToken('storefront-vendor', ['*'], $expiresAt)->plainTextToken;
 
         return ApiResponse::createdResponse([
             'user' => new UserResource($user),
             'token' => $token,
             'tokenType' => 'Bearer',
-            'expiresAt' => now()->addMinutes((int) config('sanctum.expiration', 10080))->toISOString(),
+            'expiresAt' => $expiresAt->toISOString(),
         ], 'Vendor account created successfully. Create your store to start selling.');
     }
 
@@ -108,13 +113,22 @@ class AuthController extends Controller
     public function forgotPassword(Request $request)
     {
         $data = $request->validate(['email' => ['required', 'email']]);
+        $data['email'] = strtolower(trim($data['email']));
         $status = Password::sendResetLink($data);
 
-        if ($status !== Password::RESET_LINK_SENT) {
-            throw ValidationException::withMessages(['email' => [__($status)]]);
+        // Do not disclose whether the email belongs to an account.
+        if (in_array($status, [Password::RESET_LINK_SENT, Password::INVALID_USER], true)) {
+            return ApiResponse::successResponse(
+                null,
+                'If an account exists for this email, password reset instructions will be sent.'
+            );
         }
 
-        return ApiResponse::successResponse(null, __($status));
+        if ($status === Password::RESET_THROTTLED) {
+            return ApiResponse::errorResponse('Please wait before requesting another password reset.', null, 429);
+        }
+
+        throw ValidationException::withMessages(['email' => [__($status)]]);
     }
 
     public function resetPassword(Request $request)
@@ -124,6 +138,7 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+        $data['email'] = strtolower(trim($data['email']));
 
         $status = Password::reset($data, function (User $user, string $password) {
             $user->forceFill(['password' => $password])->setRememberToken(Str::random(60));
