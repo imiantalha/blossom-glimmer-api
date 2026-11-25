@@ -252,6 +252,27 @@ class VendorProductController extends Controller
         return ApiResponse::deletedResponse('Product archived.');
     }
 
+    public function adminIndex(Request $request)
+    {
+        $query = Product::with(['vendor.vendorProfile', 'brand', 'categories.parent', 'variants.inventoryItems']);
+        if ($request->filled('name')) $query->where('name', 'like', '%' . $request->input('name') . '%');
+        if ($request->filled('brand_id')) $query->where('brand_id', $request->integer('brand_id'));
+        if ($request->filled('category_id')) $query->whereHas('categories', fn ($q) => $q->where('categories.id', $request->integer('category_id')));
+        if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
+        if ($request->filled('sku')) $query->where(fn ($q) => $q->where('sku', 'like', '%' . $request->input('sku') . '%')->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', '%' . $request->input('sku') . '%')));
+        $page = $query->latest()->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        $data = $page->getCollection()->map(fn ($product) => $this->adminPayload($product));
+        return response()->json(['success' => true, 'message' => 'Admin products retrieved.', 'data' => $data, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $data->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(), 'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
+    }
+
+    public function adminShow(int $id)
+    {
+        return ApiResponse::successResponse($this->adminPayload(Product::findOrFail($id)), 'Product retrieved.');
+    }
+
     public function updateApproval(Request $request, int $id)
     {
         $data = $request->validate(['decision' => 'required|in:approve,reject']);
