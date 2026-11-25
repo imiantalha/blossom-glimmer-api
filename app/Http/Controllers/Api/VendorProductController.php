@@ -76,6 +76,7 @@ class VendorProductController extends Controller
             'name' => $product->name, 'slug' => $product->slug, 'shortDescription' => $product->short_description,
             'description' => $product->description, 'status' => strtoupper($product->status), 'isFeatured' => (bool) $product->is_featured,
             'approvalStatus' => strtoupper(data_get($product->metadata, 'approvalStatus', $product->status === 'active' ? 'approved' : 'pending')),
+            'rejectionReason' => data_get($product->metadata, 'rejectionReason'),
             'createdById' => (string) $product->vendor_id, 'updatedById' => (string) $product->vendor_id,
             'createdAt' => $product->created_at?->toISOString(), 'updatedAt' => $product->updated_at?->toISOString(),
             'store' => ['id' => (string) ($profile?->id ?? $product->vendor_id), 'name' => $profile?->name ?? $product->vendor?->name, 'slug' => $profile?->slug ?? Str::slug($product->vendor?->name ?? '')],
@@ -422,7 +423,10 @@ class VendorProductController extends Controller
 
     public function updateApproval(Request $request, int $id)
     {
-        $data = $request->validate(['decision' => 'required|in:approve,reject']);
+        $data = $request->validate([
+            'decision' => 'required|in:approve,reject',
+            'reason' => 'required_if:decision,reject|nullable|string|max:1000',
+        ]);
         $product = Product::findOrFail($id);
         $product->load('vendor.vendorProfile');
         abort_if($product->status === 'archived', 422, 'Archived products cannot be approved or rejected.');
@@ -431,6 +435,11 @@ class VendorProductController extends Controller
         }
         $metadata = $product->metadata ?? [];
         $metadata['approvalStatus'] = $data['decision'] === 'approve' ? 'approved' : 'rejected';
+        if ($data['decision'] === 'reject') {
+            $metadata['rejectionReason'] = trim($data['reason']);
+        } else {
+            unset($metadata['rejectionReason']);
+        }
         $product->update(['status' => $data['decision'] === 'approve' ? 'active' : 'inactive', 'metadata' => $metadata]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product approval updated.');
     }
