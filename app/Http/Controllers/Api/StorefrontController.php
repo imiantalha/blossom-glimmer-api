@@ -538,6 +538,52 @@ class StorefrontController extends Controller
         return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
+    public function upsertShipment(Request $request, int $orderId)
+    {
+        abort_unless($request->user()->hasAnyRole(['admin', 'super-admin']), 403);
+        $order = DB::table('customer_orders')->where('id', $orderId)->first();
+        abort_unless($order, 404);
+        $data = $request->validate([
+            'carrier' => 'nullable|string|max:120',
+            'tracking_number' => 'nullable|string|max:160',
+            'tracking_url' => ['nullable', 'url', 'regex:/^https:\\/\\//i'],
+            'status' => 'required|in:pending,label_created,picked_up,in_transit,out_for_delivery,delivered,exception,returned',
+            'estimated_delivery' => 'nullable|date',
+            'shipped_at' => 'nullable|date',
+            'delivered_at' => 'nullable|date',
+            'description' => 'nullable|string|max:1000',
+            'location' => 'nullable|string|max:180',
+        ]);
+        $existing = DB::table('shipments')->where('order_id', $orderId)->first();
+        $values = [
+            'carrier' => $data['carrier'] ?? null,
+            'tracking_number' => $data['tracking_number'] ?? null,
+            'tracking_url' => $data['tracking_url'] ?? null,
+            'status' => $data['status'],
+            'estimated_delivery' => $data['estimated_delivery'] ?? null,
+            'shipped_at' => $data['shipped_at'] ?? null,
+            'delivered_at' => $data['delivered_at'] ?? null,
+            'updated_at' => now(),
+        ];
+        if ($existing) {
+            DB::table('shipments')->where('id', $existing->id)->update($values);
+            $shipmentId = $existing->id;
+        } else {
+            $shipmentId = DB::table('shipments')->insertGetId(array_merge($values, ['order_id' => $orderId, 'created_at' => now()]));
+        }
+        DB::table('shipment_events')->insert([
+            'shipment_id' => $shipmentId, 'status' => $data['status'],
+            'description' => $data['description'] ?? null, 'location' => $data['location'] ?? null,
+            'occurred_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('customer_orders')->where('id', $orderId)->update([
+            'fulfillment_status' => $data['status'] === 'delivered' ? 'delivered' : ($data['status'] === 'pending' ? 'pending' : 'shipped'),
+            'status' => $data['status'] === 'delivered' ? 'delivered' : 'shipped',
+            'updated_at' => now(),
+        ]);
+        return ApiResponse::successResponse($this->shipmentPayload($orderId), 'Shipment tracking updated.');
+    }
+
     public function shippingMethods(Request $request)
     {
         $methods = DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->get();
