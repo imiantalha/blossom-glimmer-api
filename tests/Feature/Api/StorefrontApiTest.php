@@ -1286,4 +1286,49 @@ class StorefrontApiTest extends TestCase
             ->assertJsonMissing(['title' => 'Review for moderation']);
     }
 
+
+    public function test_admin_can_create_and_deactivate_collections_and_shipping_methods(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $categorySlug = DB::table('categories')->where('status', 'active')->value('slug');
+
+        $collection = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/collections', [
+                'name' => 'Admin Test Collection',
+                'slug' => 'admin-test-collection',
+                'eyebrow' => 'Curated',
+                'description' => 'A collection created by an administrator.',
+                'category_slugs' => [$categorySlug],
+                'featured_stores' => [],
+                'is_active' => true,
+                'sort_order' => 90,
+            ])->assertCreated()->assertJsonPath('data.slug', 'admin-test-collection');
+
+        $this->getJson('/api/v1/collections')->assertOk()->assertJsonFragment(['slug' => 'admin-test-collection']);
+        $this->patchJson('/api/v1/admin/collections/' . $collection->json('data.id') . '/status', ['is_active' => false])
+            ->assertOk()->assertJsonPath('data.isActive', false);
+        $this->getJson('/api/v1/collections')->assertOk()->assertJsonMissing(['slug' => 'admin-test-collection']);
+
+        $shipping = $this->postJson('/api/v1/admin/shipping-methods', [
+            'code' => 'admin-test-express',
+            'name' => 'Admin Test Express',
+            'description' => 'Fast test delivery.',
+            'price' => 12.50,
+            'currency' => 'USD',
+            'estimated_delivery' => '2-3 business days',
+            'countries' => ['US', 'CA'],
+            'is_active' => true,
+            'sort_order' => 90,
+        ])->assertCreated()->assertJsonPath('data.code', 'admin-test-express');
+
+        $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonFragment(['id' => 'admin-test-express']);
+        $this->patchJson('/api/v1/admin/shipping-methods/' . $shipping->json('data.id') . '/status', ['is_active' => false])
+            ->assertOk()->assertJsonPath('data.isActive', false);
+        $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonMissing(['id' => 'admin-test-express']);
+
+        $settings = $this->getJson('/api/v1/admin/marketplace-settings')->assertOk();
+        $settings->assertJsonFragment(['slug' => 'admin-test-collection']);
+        $settings->assertJsonFragment(['code' => 'admin-test-express']);
+    }
+
 }

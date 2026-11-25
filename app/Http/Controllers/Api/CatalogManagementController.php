@@ -241,6 +241,164 @@ class CatalogManagementController extends Controller
         return ApiResponse::successResponse(['id' => (string) $tag->id, 'status' => strtoupper($tag->status)], 'Tag status updated.');
     }
 
+
+    public function marketplaceSettings()
+    {
+        $collections = DB::table('collections')->orderBy('sort_order')->orderBy('name')->get()->map(fn ($item) => [
+            'id' => (string) $item->id,
+            'name' => $item->name,
+            'slug' => $item->slug,
+            'eyebrow' => $item->eyebrow,
+            'description' => $item->description,
+            'imageUrl' => $item->image_url,
+            'categorySlugs' => json_decode($item->category_slugs, true) ?: [],
+            'featuredStores' => json_decode($item->featured_stores, true) ?: [],
+            'isActive' => (bool) $item->is_active,
+            'sortOrder' => (int) $item->sort_order,
+        ])->values();
+        $shippingMethods = DB::table('shipping_methods')->orderBy('sort_order')->orderBy('name')->get()->map(fn ($item) => [
+            'id' => (string) $item->id,
+            'code' => $item->code,
+            'name' => $item->name,
+            'description' => $item->description,
+            'price' => (float) $item->price,
+            'currency' => $item->currency,
+            'estimatedDelivery' => $item->estimated_delivery,
+            'countries' => json_decode($item->countries, true) ?: [],
+            'isActive' => (bool) $item->is_active,
+            'sortOrder' => (int) $item->sort_order,
+        ])->values();
+
+        return ApiResponse::successResponse(['collections' => $collections, 'shippingMethods' => $shippingMethods], 'Marketplace settings retrieved.');
+    }
+
+    public function storeCollection(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:150',
+            'slug' => 'nullable|string|max:180|alpha_dash|unique:collections,slug',
+            'eyebrow' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:3000',
+            'image_url' => 'nullable|url|max:500',
+            'category_slugs' => 'array|max:30',
+            'category_slugs.*' => 'string|exists:categories,slug',
+            'featured_stores' => 'array|max:30',
+            'featured_stores.*' => 'string|max:120',
+            'is_active' => 'required|boolean',
+            'sort_order' => 'nullable|integer|min:0|max:100000',
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if($slug === '', 422, 'A valid collection slug could not be generated.');
+        abort_if(DB::table('collections')->where('slug', $slug)->exists(), 422, 'This collection slug is already taken.');
+
+        $id = DB::table('collections')->insertGetId([
+            'name' => $data['name'],
+            'slug' => $slug,
+            'eyebrow' => $data['eyebrow'] ?? null,
+            'description' => $data['description'] ?? null,
+            'image_url' => $data['image_url'] ?? null,
+            'category_slugs' => json_encode(array_values(array_unique($data['category_slugs'] ?? []))),
+            'featured_stores' => json_encode(array_values(array_unique($data['featured_stores'] ?? []))),
+            'is_active' => $data['is_active'],
+            'sort_order' => $data['sort_order'] ?? 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return ApiResponse::createdResponse(['id' => (string) $id, 'slug' => $slug], 'Collection created.');
+    }
+
+    public function updateCollection(Request $request, int $id)
+    {
+        $collection = DB::table('collections')->where('id', $id)->first();
+        abort_unless($collection, 404);
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|min:2|max:150',
+            'slug' => 'sometimes|required|string|max:180|alpha_dash|unique:collections,slug,' . $id,
+            'eyebrow' => 'nullable|string|max:100',
+            'description' => 'nullable|string|max:3000',
+            'image_url' => 'nullable|url|max:500',
+            'category_slugs' => 'array|max:30',
+            'category_slugs.*' => 'string|exists:categories,slug',
+            'featured_stores' => 'array|max:30',
+            'featured_stores.*' => 'string|max:120',
+            'sort_order' => 'sometimes|integer|min:0|max:100000',
+        ]);
+        foreach (['category_slugs', 'featured_stores'] as $field) {
+            if (array_key_exists($field, $data)) $data[$field] = json_encode(array_values(array_unique($data[$field] ?? [])));
+        }
+        if (array_key_exists('image_url', $data)) $data['image_url'] = $data['image_url'] ?: null;
+        $data['updated_at'] = now();
+        DB::table('collections')->where('id', $id)->update($data);
+        return ApiResponse::successResponse(['id' => (string) $id], 'Collection updated.');
+    }
+
+    public function updateCollectionStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['is_active' => 'required|boolean']);
+        abort_unless(DB::table('collections')->where('id', $id)->exists(), 404);
+        DB::table('collections')->where('id', $id)->update(['is_active' => $data['is_active'], 'updated_at' => now()]);
+        return ApiResponse::successResponse(['id' => (string) $id, 'isActive' => (bool) $data['is_active']], 'Collection status updated.');
+    }
+
+    public function storeShippingMethod(Request $request)
+    {
+        $data = $request->validate([
+            'code' => 'required|string|min:2|max:60|alpha_dash|unique:shipping_methods,code',
+            'name' => 'required|string|min:2|max:150',
+            'description' => 'nullable|string|max:2000',
+            'price' => 'required|numeric|min:0|max:1000000',
+            'currency' => 'required|string|size:3',
+            'estimated_delivery' => 'nullable|string|max:120',
+            'countries' => 'array|max:250',
+            'countries.*' => 'string|size:2',
+            'is_active' => 'required|boolean',
+            'sort_order' => 'nullable|integer|min:0|max:100000',
+        ]);
+        $id = DB::table('shipping_methods')->insertGetId([
+            'code' => strtolower($data['code']),
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'price' => $data['price'],
+            'currency' => strtoupper($data['currency']),
+            'estimated_delivery' => $data['estimated_delivery'] ?? null,
+            'countries' => json_encode(array_values(array_unique(array_map('strtoupper', $data['countries'] ?? [])))),
+            'is_active' => $data['is_active'],
+            'sort_order' => $data['sort_order'] ?? 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        return ApiResponse::createdResponse(['id' => (string) $id, 'code' => strtolower($data['code'])], 'Shipping method created.');
+    }
+
+    public function updateShippingMethod(Request $request, int $id)
+    {
+        abort_unless(DB::table('shipping_methods')->where('id', $id)->exists(), 404);
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|min:2|max:150',
+            'description' => 'nullable|string|max:2000',
+            'price' => 'sometimes|required|numeric|min:0|max:1000000',
+            'currency' => 'sometimes|required|string|size:3',
+            'estimated_delivery' => 'nullable|string|max:120',
+            'countries' => 'array|max:250',
+            'countries.*' => 'string|size:2',
+            'sort_order' => 'sometimes|integer|min:0|max:100000',
+        ]);
+        if (array_key_exists('currency', $data)) $data['currency'] = strtoupper($data['currency']);
+        if (array_key_exists('countries', $data)) $data['countries'] = json_encode(array_values(array_unique(array_map('strtoupper', $data['countries'] ?? []))));
+        $data['updated_at'] = now();
+        DB::table('shipping_methods')->where('id', $id)->update($data);
+        return ApiResponse::successResponse(['id' => (string) $id], 'Shipping method updated.');
+    }
+
+    public function updateShippingMethodStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['is_active' => 'required|boolean']);
+        abort_unless(DB::table('shipping_methods')->where('id', $id)->exists(), 404);
+        DB::table('shipping_methods')->where('id', $id)->update(['is_active' => $data['is_active'], 'updated_at' => now()]);
+        return ApiResponse::successResponse(['id' => (string) $id, 'isActive' => (bool) $data['is_active']], 'Shipping method status updated.');
+    }
+
     private function brandPayload(Brand $brand): array
     {
         return [

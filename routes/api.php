@@ -109,6 +109,13 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/categories/{id}', [CatalogManagementController::class, 'category']);
             Route::patch('admin/categories/{id}', [CatalogManagementController::class, 'updateCategory']);
             Route::delete('admin/categories/{id}', [CatalogManagementController::class, 'deleteCategory']);
+            Route::get('admin/marketplace-settings', [CatalogManagementController::class, 'marketplaceSettings']);
+            Route::post('admin/collections', [CatalogManagementController::class, 'storeCollection']);
+            Route::patch('admin/collections/{id}', [CatalogManagementController::class, 'updateCollection']);
+            Route::patch('admin/collections/{id}/status', [CatalogManagementController::class, 'updateCollectionStatus']);
+            Route::post('admin/shipping-methods', [CatalogManagementController::class, 'storeShippingMethod']);
+            Route::patch('admin/shipping-methods/{id}', [CatalogManagementController::class, 'updateShippingMethod']);
+            Route::patch('admin/shipping-methods/{id}/status', [CatalogManagementController::class, 'updateShippingMethodStatus']);
             Route::get('admin/reviews', [ReviewManagementController::class, 'index']);
             Route::patch('admin/reviews/{id}', [ReviewManagementController::class, 'review']);
             Route::get('admin/catalog-settings', [CatalogManagementController::class, 'catalogSettings']);
