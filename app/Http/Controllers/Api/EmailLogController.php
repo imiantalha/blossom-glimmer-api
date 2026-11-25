@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\EmailLog;
+use App\Http\Resources\EmailLogResource;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use App\Jobs\SendEmailJob;
