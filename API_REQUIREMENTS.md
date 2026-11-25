@@ -58,7 +58,7 @@
 ## Data and persistence
 
 - The backend now includes tables for addresses, carts/items, wishlists, product reviews, orders/items, collections, vendor ownership/profiles, shipping methods, shipments and shipment events.
-- Storefront catalog demo fixtures were copied from frontend mock JSON into `database/seeders/data`: 132 products, 9 root categories plus child categories, 6 brands, 4 vendors, 4 collections and 192 reviews.
+- Storefront catalog demo fixtures were copied from frontend mock JSON into `database/seeders/data`: 132 products, 9 root categories plus child categories, 6 brands, 4 vendors, 4 collections and 120 matching reviews (72 orphan review fixtures are skipped).
 - These are **development/demo fixtures copied from the frontend mock catalogue**, not verified live inventory or real vendor business data. Production catalogue records must be supplied/approved by the business.
 - Run `php artisan db:seed` in local/dev with `STOREFRONT_SEED_DEMO_CATALOG=true`. Demo seeding is disabled by default in production.
 - Shipping methods must be configured in `shipping_methods`; no rates are fabricated. Card payments require a provider integration and verified webhooks.
