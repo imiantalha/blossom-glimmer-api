@@ -50,7 +50,7 @@ class StorefrontController extends Controller
     private function productPayload(Product $p): array
     {
         $images = collect([$p->featureMedia])->merge($p->media)->filter()->unique('id')->values()->map(fn ($m) => [
-            'id' => $m->id, 'url' => \Illuminate\Support\Facades\Storage::disk($m->disk)->url($m->file_path), 'alt' => $m->alt_text,
+            'id' => $m->id, 'url' => $m->external_url ?: \Illuminate\Support\Facades\Storage::disk($m->disk)->url($m->file_path), 'alt' => $m->alt_text,
         ]);
         $stock = $p->variants->isNotEmpty()
             ? $p->variants->sum(fn ($v) => $v->inventoryItems->sum(fn ($i) => max(0, $i->stock_quantity - $i->reserved_quantity)))
@@ -177,10 +177,10 @@ class StorefrontController extends Controller
             ->whereNull('parent_id')->orderBy('sort_order');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
         $items = $query->get()->map(fn ($c) => [
-            'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description,
+            'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
             'productCount' => $c->products()->where('status', 'active')->count(),
             'children' => $c->children->map(fn ($child) => [
-                'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description,
+                'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description, 'imageUrl' => $child->image_url,
                 'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => $child->products()->where('status', 'active')->count(),
             ])->values(),
         ]);
@@ -190,7 +190,7 @@ class StorefrontController extends Controller
     public function category(string $slug)
     {
         $c = Category::where('slug', $slug)->where('status', 'active')->with('parent')->firstOrFail();
-        return ApiResponse::successResponse(['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description,
+        return ApiResponse::successResponse(['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
             'parentId' => $c->parent_id, 'parentSlug' => $c->parent?->slug, 'productCount' => $c->products()->where('status', 'active')->count()], 'Category retrieved.');
     }
 
@@ -198,14 +198,14 @@ class StorefrontController extends Controller
     {
         $query = Brand::where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->orderBy('name');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'productCount' => $b->products_count]);
+        $items = $query->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'imageUrl' => $b->image_url, 'productCount' => $b->products_count]);
         return $this->paginatedPayload($items, $request, 100);
     }
 
     public function brand(string $slug)
     {
         $b = Brand::where('slug', $slug)->where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->firstOrFail();
-        return ApiResponse::successResponse(['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'productCount' => $b->products_count], 'Brand retrieved.');
+        return ApiResponse::successResponse(['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'imageUrl' => $b->image_url, 'productCount' => $b->products_count], 'Brand retrieved.');
     }
 
     public function brandProducts(Request $request, string $slug)
@@ -216,21 +216,33 @@ class StorefrontController extends Controller
 
     public function vendors(Request $request)
     {
-        $query = \App\Models\User::role('vendor')->orderBy('name');
+        $query = \App\Models\User::role('vendor')->with('vendorProfile')->orderBy('name');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($v) => [
-            'id' => $v->id, 'name' => $v->name, 'slug' => Str::slug($v->name), 'description' => null,
-            'rating' => null, 'reviewCount' => 0,
-            'productCount' => DB::table('products')->where('vendor_id', $v->id)->where('status', 'active')->count(),
-        ]);
+        $items = $query->get()->map(function ($v) {
+            $profile = $v->vendorProfile;
+            return [
+                'id' => $v->id, 'name' => $v->name, 'slug' => $profile?->slug ?? Str::slug($v->name),
+                'description' => $profile?->description, 'imageUrl' => $profile?->image_url,
+                'rating' => $profile?->rating ? (float) $profile->rating : null,
+                'reviewCount' => $profile?->review_count ?? 0,
+                'productCount' => DB::table('products')->where('vendor_id', $v->id)->where('status', 'active')->count(),
+            ];
+        });
         return $this->paginatedPayload($items, $request, 100);
     }
 
     public function vendor(string $slug)
     {
-        $vendor = \App\Models\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);
+        $vendor = \App\Models\User::role('vendor')->with('vendorProfile')->get()->first(fn ($v) => ($v->vendorProfile?->slug ?? Str::slug($v->name)) === $slug);
         abort_unless($vendor, 404);
-        return ApiResponse::successResponse(['id' => $vendor->id, 'name' => $vendor->name, 'slug' => $slug, 'description' => null, 'rating' => null, 'reviewCount' => 0, 'productCount' => 0], 'Vendor retrieved.');
+        $profile = $vendor->vendorProfile;
+        return ApiResponse::successResponse([
+            'id' => $vendor->id, 'name' => $vendor->name, 'slug' => $profile?->slug ?? Str::slug($vendor->name),
+            'description' => $profile?->description, 'imageUrl' => $profile?->image_url,
+            'rating' => $profile?->rating ? (float) $profile->rating : null,
+            'reviewCount' => $profile?->review_count ?? 0,
+            'productCount' => DB::table('products')->where('vendor_id', $vendor->id)->where('status', 'active')->count(),
+        ], 'Vendor retrieved.');
     }
 
     public function vendorProducts(Request $request, string $slug)
@@ -249,8 +261,25 @@ class StorefrontController extends Controller
     public function collections()
     {
         $items = DB::table('collections')->where('is_active', true)->orderBy('sort_order')->get()
-            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url, 'categories' => json_decode($c->category_slugs, true) ?: []]);
+            ->map(fn ($c) => [
+                'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
+                'description' => $c->description, 'heroImage' => $c->image_url,
+                'categories' => json_decode($c->category_slugs, true) ?: [],
+                'featuredStores' => json_decode($c->featured_stores, true) ?: [],
+            ]);
         return ApiResponse::successResponse($items, 'Collections retrieved.');
+    }
+
+    public function collection(string $slug)
+    {
+        $c = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
+        abort_unless($c, 404);
+        return ApiResponse::successResponse([
+            'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
+            'description' => $c->description, 'heroImage' => $c->image_url,
+            'categories' => json_decode($c->category_slugs, true) ?: [],
+            'featuredStores' => json_decode($c->featured_stores, true) ?: [],
+        ], 'Collection retrieved.');
     }
 
     public function collectionProducts(Request $request, string $slug)
