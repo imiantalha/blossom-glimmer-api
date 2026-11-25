@@ -311,7 +311,13 @@ class StorefrontController extends Controller
 
     public function deleteAddress(Request $request, int $id)
     {
-        DB::table('customer_addresses')->where('user_id', $request->user()->id)->where('id', $id)->delete();
+        $address = DB::table('customer_addresses')->where('user_id', $request->user()->id)->where('id', $id)->first();
+        abort_unless($address, 404);
+        DB::table('customer_addresses')->where('id', $id)->delete();
+        if ($address->is_default) {
+            $next = DB::table('customer_addresses')->where('user_id', $request->user()->id)->orderBy('id')->first();
+            if ($next) DB::table('customer_addresses')->where('id', $next->id)->update(['is_default' => true]);
+        }
         return ApiResponse::deletedResponse('Address deleted.');
     }
 
@@ -427,8 +433,9 @@ class StorefrontController extends Controller
     public function createReview(Request $request)
     {
         $data = $request->validate(['product_id' => 'required|integer|exists:products,id', 'rating' => 'required|integer|min:1|max:5', 'title' => 'nullable|string|max:180', 'body' => 'required|string|max:5000']);
-        $id = DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
-        return ApiResponse::createdResponse(null, 'Review submitted for moderation.');
+        DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
+        $review = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
+        return ApiResponse::createdResponse(['id' => $review->id, 'productId' => $review->product_id, 'rating' => $review->rating, 'title' => $review->title, 'body' => $review->body, 'user' => ['id' => $request->user()->id, 'name' => $request->user()->name], 'createdAt' => $review->created_at], 'Review submitted for moderation.');
     }
 
 
@@ -509,8 +516,9 @@ class StorefrontController extends Controller
                 $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($item->variant_id && !$variant) throw ValidationException::withMessages(['cart' => ['A selected variant is no longer available.']]);
                 $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant?->id ?? $product->id)->lockForUpdate()->first();
-                $available = $inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : 0;
-                if ($inventory && $inventory->manage_inventory && $available < $item->quantity) throw ValidationException::withMessages(['cart' => ["Insufficient stock for {$product->name}."]]);
+                if (!$inventory) throw ValidationException::withMessages(['cart' => ["Inventory is not configured for {$product->name}."]]);
+                $available = max(0, $inventory->stock_quantity - $inventory->reserved_quantity);
+                if ($inventory->manage_inventory && $available < $item->quantity) throw ValidationException::withMessages(['cart' => ["Insufficient stock for {$product->name}."]]);
                 $price = (float) ($variant->price ?? $product->base_price ?? 0);
                 $line = $price * $item->quantity;
                 $subtotal += $line;
