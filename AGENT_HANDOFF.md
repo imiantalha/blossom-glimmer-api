@@ -262,3 +262,31 @@ Known areas requiring immediate verification:
 3. Confirm shipping methods are seeded/configured in staging; the backend intentionally returns a configuration error rather than inventing live shipping rates.
 4. Keep card payments, refunds, and external carrier sync explicitly out of scope until provider contracts/credentials and business rules are supplied.
 5. Keep both PRs draft until staging validation and review are complete. Do not merge without user approval.
+
+
+## Continuation update — 2026-11-25 (security, seed safety, CI)
+
+### Additional fixes
+- Password reset now returns the same generic success response for known, unknown, throttled, and mail-delivery-error cases; delivery exceptions are logged without exposing account existence. Login, customer registration, vendor registration, forgot-password, and reset-password normalize email addresses to lowercase.
+- Added a feature test covering generic password-reset responses and notification delivery.
+- Demo catalog seeding no longer globally deactivates unrelated categories, brands, or products.
+- Demo scenario seeding now resets passwords only for vendor demo accounts, not every vendor profile in a development database.
+- Added a regression test proving manually managed catalog records and a non-demo vendor credential remain unchanged after re-running the demo seeders.
+- Rewrote the backend README to remove duplicated/malformed administration documentation and document setup, endpoints, demo data, SQL Server, and deliberate provider limitations.
+
+### Latest validation
+- Backend GitHub Actions run #229 on the code/test changes: SQLite suite passed (16 tests, 117 assertions); SQL Server 2022 migration and feature-test job passed (16 tests, 117 assertions).
+- Frontend GitHub Actions run #382 passed: TypeScript typecheck, API fallback tests, ESLint, production build, and collection-route runtime smoke test.
+- The frontend fixes in `types/checkout.ts` and `lib/services/order.service.ts` are included in the passing frontend run. The API contract documentation was updated as well.
+- These are CI results; a combined deployed browser/staging API smoke test has not yet been performed.
+
+### Current PR checkpoint
+- Backend PR #46: https://github.com/imiantalha/blossom-glimmer-api/pull/46 — open, draft, mergeable, not merged.
+- Frontend PR #56: https://github.com/imiantalha/blossom-glimmer/pull/56 — open, draft, mergeable, not merged.
+- Both `main` branches remain untouched. Do not merge without user approval.
+
+### Remaining work / blockers
+1. Perform combined staging validation once a staging API URL, database, CORS origin, mail transport, and deployment credentials are available.
+2. Verify live browser flows: sign-in/register, catalog/product detail, guest cart/wishlist merge, address management, stock validation, shipping quote, COD checkout/idempotency, orders, vendor onboarding/product management, admin moderation, and shipment tracking.
+3. Vercel reported a preview build-rate-limit failure for the frontend commit; GitHub Actions CI is green. Retry/verify a Vercel preview when the account's build limit allows it.
+4. Keep card payments, refunds, and external carrier synchronization out of scope until provider contracts, credentials, and business rules are supplied.
