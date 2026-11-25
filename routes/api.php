@@ -66,6 +66,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         });
 
         Route::get('cart', [StorefrontController::class, 'cart']);
+        Route::post('cart/merge', [StorefrontController::class, 'mergeCart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
         Route::patch('cart/{id}', [StorefrontController::class, 'updateCartItem']);
         Route::delete('cart/{id}', [StorefrontController::class, 'deleteCartItem']);
@@ -77,6 +78,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('orders/{id}', [StorefrontController::class, 'order']);
 
         Route::get('wishlist', [StorefrontController::class, 'wishlist']);
+        Route::post('wishlist/merge', [StorefrontController::class, 'mergeWishlist']);
         Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
