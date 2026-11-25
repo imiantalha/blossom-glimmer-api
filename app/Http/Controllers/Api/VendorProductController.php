@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class VendorProductController extends Controller
 {
@@ -218,40 +219,167 @@ class VendorProductController extends Controller
 
     private function saveInventoryAndVariants(Product $product, array $data, string $type): void
     {
-        $variantIds = $product->variants()->pluck('id');
-        if ($variantIds->isNotEmpty()) {
-            DB::table('inventory_items')->whereIn('variant_id', $variantIds)->delete();
-            DB::table('cart_items')->whereIn('variant_id', $variantIds)->delete();
-            DB::table('customer_order_items')->whereIn('variant_id', $variantIds)->update(['variant_id' => null]);
-            DB::table('variant_option_values')->whereIn('variant_id', $variantIds)->delete();
-        }
-        $product->variants()->delete();
-        $product->inventoryItems()->whereNull('variant_id')->delete();
+        $existingVariants = $product->variants()->with('inventoryItems')->get();
+        $incomingVariants = collect($data['variants']);
+        $incomingSkus = $incomingVariants->pluck('sku')->all();
+        $existingIds = $existingVariants->pluck('id');
+
         if ($type === 'simple') {
-            $variant = $data['variants'][0];
+            if ($existingVariants->isNotEmpty()) {
+                $hasReservedStock = DB::table('inventory_items')->whereIn('variant_id', $existingIds)->where('reserved_quantity', '>', 0)->exists();
+                $hasCartReferences = DB::table('cart_items')->whereIn('variant_id', $existingIds)->exists();
+                $hasOrderReferences = DB::table('customer_order_items')->whereIn('variant_id', $existingIds)->exists();
+
+                if ($hasReservedStock || $hasCartReferences || $hasOrderReferences) {
+                    throw ValidationException::withMessages([
+                        'productType' => ['This product cannot be changed to a simple product while its variants have reserved stock, cart items, or order history.'],
+                    ]);
+                }
+
+                DB::table('inventory_items')->whereIn('variant_id', $existingIds)->delete();
+                DB::table('variant_option_values')->whereIn('variant_id', $existingIds)->delete();
+                $product->variants()->delete();
+            }
+
+            $variant = $incomingVariants->first();
             $salePrice = $variant['salePrice'] ?? null;
-            $product->update(['base_price' => $salePrice ?? $variant['price'], 'compare_at_price' => $salePrice ? $variant['price'] : null]);
-            DB::table('inventory_items')->updateOrInsert(
-                ['product_id' => $product->id, 'variant_id' => null],
-                ['manage_inventory' => true, 'stock_quantity' => $variant['stockQuantity'], 'reserved_quantity' => 0, 'low_stock_threshold' => 5, 'created_at' => now(), 'updated_at' => now()]
-            );
+            $product->update([
+                'base_price' => $salePrice ?? $variant['price'],
+                'compare_at_price' => $salePrice ? $variant['price'] : null,
+            ]);
+
+            $inventory = DB::table('inventory_items')
+                ->where('product_id', $product->id)
+                ->whereNull('variant_id')
+                ->lockForUpdate()
+                ->first();
+            $reserved = (int) ($inventory->reserved_quantity ?? 0);
+
+            if ((int) $variant['stockQuantity'] < $reserved) {
+                throw ValidationException::withMessages([
+                    'variants.0.stockQuantity' => ['Stock quantity cannot be lower than stock reserved for existing orders.'],
+                ]);
+            }
+
+            $inventoryValues = [
+                'manage_inventory' => true,
+                'stock_quantity' => $variant['stockQuantity'],
+                'reserved_quantity' => $reserved,
+                'low_stock_threshold' => (int) ($inventory->low_stock_threshold ?? 5),
+                'updated_at' => now(),
+            ];
+
+            if ($inventory) {
+                DB::table('inventory_items')->where('id', $inventory->id)->update($inventoryValues);
+            } else {
+                DB::table('inventory_items')->insert($inventoryValues + [
+                    'product_id' => $product->id,
+                    'variant_id' => null,
+                    'created_at' => now(),
+                ]);
+            }
+
             return;
         }
-        $product->update(['base_price' => null, 'compare_at_price' => null]);
-        foreach ($data['variants'] as $variantData) {
-            $attributes = collect($variantData['attributeValues'] ?? [])->mapWithKeys(fn ($attribute) => [$attribute['attributeName'] => $attribute['value']])->all();
-            $salePrice = $variantData['salePrice'] ?? null;
-            $variant = ProductVariant::create([
-                'product_id' => $product->id, 'sku' => $variantData['sku'], 'name' => $variantData['label'] ?? 'Default',
-                'price' => $salePrice ?? $variantData['price'], 'compare_at_price' => $salePrice ? $variantData['price'] : null,
-                'status' => 'active', 'combination_key' => sha1(json_encode($attributes)),
-                'metadata' => ['attributes' => $attributes, 'weight' => $variantData['weight'], 'length' => $variantData['length'], 'width' => $variantData['width'], 'height' => $variantData['height'], 'images' => $variantData['images'] ?? []],
+
+        $simpleInventory = DB::table('inventory_items')
+            ->where('product_id', $product->id)
+            ->whereNull('variant_id')
+            ->lockForUpdate()
+            ->first();
+
+        if ($simpleInventory && (int) $simpleInventory->reserved_quantity > 0) {
+            throw ValidationException::withMessages([
+                'productType' => ['This product cannot become variable while simple-product stock is reserved for existing orders.'],
             ]);
-            DB::table('inventory_items')->updateOrInsert(
-                ['variant_id' => $variant->id],
-                ['product_id' => null, 'manage_inventory' => true, 'stock_quantity' => $variantData['stockQuantity'], 'reserved_quantity' => 0, 'low_stock_threshold' => 5, 'created_at' => now(), 'updated_at' => now()]
-            );
         }
+
+        if ($simpleInventory) {
+            DB::table('inventory_items')->where('id', $simpleInventory->id)->delete();
+        }
+
+        foreach ($incomingVariants as $index => $variantData) {
+            $attributes = collect($variantData['attributeValues'] ?? [])
+                ->mapWithKeys(fn ($attribute) => [$attribute['attributeName'] => $attribute['value']])
+                ->all();
+            $salePrice = $variantData['salePrice'] ?? null;
+            $metadata = [
+                'attributes' => $attributes,
+                'weight' => $variantData['weight'],
+                'length' => $variantData['length'],
+                'width' => $variantData['width'],
+                'height' => $variantData['height'],
+                'images' => $variantData['images'] ?? [],
+            ];
+
+            $variant = $existingVariants->firstWhere('sku', $variantData['sku']);
+            if ($variant) {
+                $variant->update([
+                    'name' => $variantData['label'] ?? 'Default',
+                    'price' => $salePrice ?? $variantData['price'],
+                    'compare_at_price' => $salePrice ? $variantData['price'] : null,
+                    'status' => 'active',
+                    'combination_key' => sha1(json_encode($attributes)),
+                    'metadata' => $metadata,
+                ]);
+            } else {
+                $variant = ProductVariant::create([
+                    'product_id' => $product->id,
+                    'sku' => $variantData['sku'],
+                    'name' => $variantData['label'] ?? 'Default',
+                    'price' => $salePrice ?? $variantData['price'],
+                    'compare_at_price' => $salePrice ? $variantData['price'] : null,
+                    'status' => 'active',
+                    'combination_key' => sha1(json_encode($attributes)),
+                    'metadata' => $metadata,
+                ]);
+            }
+
+            $inventory = DB::table('inventory_items')->where('variant_id', $variant->id)->lockForUpdate()->first();
+            $reserved = (int) ($inventory->reserved_quantity ?? 0);
+            if ((int) $variantData['stockQuantity'] < $reserved) {
+                throw ValidationException::withMessages([
+                    "variants.{$index}.stockQuantity" => ['Stock quantity cannot be lower than stock reserved for existing orders.'],
+                ]);
+            }
+
+            $inventoryValues = [
+                'product_id' => null,
+                'manage_inventory' => true,
+                'stock_quantity' => $variantData['stockQuantity'],
+                'reserved_quantity' => $reserved,
+                'low_stock_threshold' => (int) ($inventory->low_stock_threshold ?? 5),
+                'updated_at' => now(),
+            ];
+
+            if ($inventory) {
+                DB::table('inventory_items')->where('id', $inventory->id)->update($inventoryValues);
+            } else {
+                DB::table('inventory_items')->insert($inventoryValues + [
+                    'variant_id' => $variant->id,
+                    'created_at' => now(),
+                ]);
+            }
+        }
+
+        $removedVariants = $existingVariants->whereNotIn('sku', $incomingSkus);
+        foreach ($removedVariants as $variant) {
+            $hasReservedStock = DB::table('inventory_items')->where('variant_id', $variant->id)->where('reserved_quantity', '>', 0)->exists();
+            $hasCartReference = DB::table('cart_items')->where('variant_id', $variant->id)->exists();
+            $hasOrderReference = DB::table('customer_order_items')->where('variant_id', $variant->id)->exists();
+
+            if ($hasReservedStock || $hasCartReference || $hasOrderReference) {
+                throw ValidationException::withMessages([
+                    'variants' => ["Variant {$variant->sku} cannot be removed while it has reserved stock, cart items, or order history."],
+                ]);
+            }
+
+            DB::table('inventory_items')->where('variant_id', $variant->id)->delete();
+            DB::table('variant_option_values')->where('variant_id', $variant->id)->delete();
+            $variant->delete();
+        }
+
+        $product->update(['base_price' => null, 'compare_at_price' => null]);
     }
 
     public function destroy(Request $request, int $id)
