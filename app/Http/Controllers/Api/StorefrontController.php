@@ -257,7 +257,7 @@ class StorefrontController extends Controller
 
     public function vendorProducts(Request $request, string $slug)
     {
-        $vendor = \\App\\Models\\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('slug', $slug)->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->first();
+        $vendor = \App\Models\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('slug', $slug)->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->first();
         abort_unless($vendor, 404);
         $query = $this->productQuery()->where('vendor_id', $vendor->id);
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
@@ -721,6 +721,7 @@ class StorefrontController extends Controller
             'reviewCount' => (int) $profile->review_count,
             'productCount' => DB::table('products')->where('vendor_id', $user->id)->where('status', 'active')->count(),
             'createdAt' => $profile->created_at,
+            'owner' => ['id' => $user->id, 'firstName' => preg_split('/\\s+/', trim($user->name), 2)[0] ?? '', 'lastName' => preg_split('/\\s+/', trim($user->name), 2)[1] ?? '', 'email' => $user->email],
         ];
     }
 
