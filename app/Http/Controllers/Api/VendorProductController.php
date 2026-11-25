@@ -131,17 +131,15 @@ class VendorProductController extends Controller
         if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
         if ($request->filled('approval_status')) {
             $approvalStatus = strtolower($request->input('approval_status'));
-            $query->where(function ($approval) use ($approvalStatus) {
-                if (DB::connection()->getDriverName() === 'sqlsrv') {
-                    $approval->whereRaw("JSON_VALUE([metadata], '$.approvalStatus') = ?", [$approvalStatus]);
-                    if ($approvalStatus === 'approved') {
-                        $approval->orWhereRaw("JSON_VALUE([metadata], '$.approvalStatus') IS NULL AND [status] = ?", ['active']);
-                    }
-                } else {
-                    $approval->whereRaw("json_extract(metadata, '$.approvalStatus') = ?", [$approvalStatus]);
-                    if ($approvalStatus === 'approved') {
-                        $approval->orWhereRaw("json_extract(metadata, '$.approvalStatus') IS NULL AND status = ?", ['active']);
-                    }
+            $approvalPattern = '%"approvalStatus":"' . $approvalStatus . '"%';
+            $query->where(function ($approval) use ($approvalStatus, $approvalPattern) {
+                $approval->where('metadata', 'like', $approvalPattern);
+                if ($approvalStatus === 'approved') {
+                    $approval->orWhere(function ($legacy) {
+                        $legacy->where('status', 'active')->where(function ($metadata) {
+                            $metadata->whereNull('metadata')->orWhere('metadata', 'not like', '%"approvalStatus"%');
+                        });
+                    });
                 }
             });
         }
