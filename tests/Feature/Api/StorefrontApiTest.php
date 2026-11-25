@@ -330,14 +330,17 @@ class StorefrontApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true);
 
-        $this->withToken($plainTextToken)
-            ->getJson('/api/v1/auth/me')
-            ->assertUnauthorized();
-
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $customer->id,
             'name' => 'logout-regression',
         ]);
+
+        // The test application reuses resolved guards between HTTP calls; reset
+        // them so this request authenticates against the now-revoked token.
+        Auth::forgetGuards();
+        $this->withToken($plainTextToken)
+            ->getJson('/api/v1/auth/me')
+            ->assertUnauthorized();
     }
 
     public function test_authenticated_customer_cannot_access_vendor_product_management(): void
