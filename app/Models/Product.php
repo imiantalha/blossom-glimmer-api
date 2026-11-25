@@ -82,7 +82,7 @@ class Product extends Model
 
     public function media(): BelongsToMany
     {
-        return $this->belongsToMany(Media::class)->withPivot('sort_order');
+        return $this->belongsToMany(Media::class, 'product_media', 'product_id', 'media_id')->withPivot('sort_order');
     }
 
     public function attributeValues(): BelongsToMany
