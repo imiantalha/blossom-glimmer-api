@@ -962,7 +962,7 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
 
         $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
-            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+            ->assertOk()->assertJsonPath('data.status', 'active');
 
         $this->patchJson('/api/v1/admin/products/' . $product->id . '/featured', ['is_featured' => true])
             ->assertOk()->assertJsonPath('data.isFeatured', true);
@@ -987,7 +987,7 @@ class StorefrontApiTest extends TestCase
 
         $this->actingAs($admin, 'sanctum')
             ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'suspended'])
-            ->assertOk()->assertJsonPath('data.status', 'SUSPENDED');
+            ->assertOk()->assertJsonPath('data.status', 'suspended');
 
         $this->getJson('/api/v1/vendors/' . $profile->slug)->assertNotFound();
 
