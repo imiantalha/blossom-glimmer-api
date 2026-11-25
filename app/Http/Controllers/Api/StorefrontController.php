@@ -366,7 +366,7 @@ class StorefrontController extends Controller
                 $price = (float) ($i->variant_price ?? $i->base_price ?? 0);
                 $metadata = is_array($i->metadata) ? $i->metadata : (json_decode($i->metadata ?? '[]', true) ?: []);
                 $images = data_get($metadata, 'images', []);
-                $imageUrl = $i->image_path ? \Illuminate\${segment}\${segment}\${segment}::disk($i->image_disk)->url($i->image_path) : (data_get($images, '0.url') ?: null);
+                $imageUrl = $i->image_path ? \Illuminate\Support\Facades\Storage::disk($i->image_disk)->url($i->image_path) : (data_get($images, '0.url') ?: null);
                 $inventory = DB::table('inventory_items')->where($i->variant_id ? 'variant_id' : 'product_id', $i->variant_id ?? $i->product_id)->first();
                 $available = $inventory && $inventory->manage_inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : null;
                 return [
