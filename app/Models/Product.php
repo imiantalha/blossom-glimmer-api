@@ -14,6 +14,7 @@ class Product extends Model
 
     protected $fillable = [
         'brand_id',
+        'vendor_id',
         'name',
         'slug',
         'sku',
@@ -36,6 +37,11 @@ class Product extends Model
             'cost_price' => 'decimal:2',
             'metadata' => 'array',
         ];
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'vendor_id');
     }
 
     public function brand(): BelongsTo
