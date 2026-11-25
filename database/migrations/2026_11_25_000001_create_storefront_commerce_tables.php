@@ -67,6 +67,7 @@ return new class extends Migration
         Schema::create('customer_orders', function (Blueprint $table) {
             $table->id();
             $table->string('number')->unique();
+            $table->string('idempotency_key', 100)->nullable()->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('address_id')->nullable()->constrained('customer_addresses')->nullOnDelete();
             $table->string('status')->default('pending');
