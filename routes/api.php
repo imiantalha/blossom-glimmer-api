@@ -109,11 +109,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
             Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
             Route::post('emails/send', [EmailController::class, 'send']);
-            Route::apiResource('admin/products', ProductController::class);
             Route::get('admin/products/options', [VendorProductController::class, 'options']);
             Route::get('admin/products', [VendorProductController::class, 'adminIndex']);
             Route::get('admin/products/{id}', [VendorProductController::class, 'adminShow']);
             Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
+            Route::apiResource('admin/products', ProductController::class);
             Route::apiResource('admin.products.variants', ProductVariantController::class);
         });
 
