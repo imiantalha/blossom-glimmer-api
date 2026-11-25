@@ -452,7 +452,11 @@ class VendorProductController extends Controller
         } else {
             unset($metadata['rejectionReason']);
         }
-        $product->update(['status' => $data['decision'] === 'approve' ? 'active' : 'inactive', 'metadata' => $metadata]);
+        $product->update([
+            'status' => $data['decision'] === 'approve' ? 'active' : 'inactive',
+            'is_featured' => $data['decision'] === 'approve' ? $product->is_featured : false,
+            'metadata' => $metadata,
+        ]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product approval updated.');
     }
 
@@ -463,15 +467,19 @@ class VendorProductController extends Controller
         $approval = strtolower((string) data_get($product->metadata, 'approvalStatus', 'pending'));
         abort_if($data['status'] === 'active' && $approval !== 'approved', 422, 'Only approved products can be activated.');
         abort_if($data['status'] === 'active' && ($product->vendor?->vendorProfile?->status !== 'active' || $product->vendor?->vendorProfile?->deleted_at), 422, 'The vendor store must be active before activating products.');
-        $product->update(['status' => $data['status']]);
+        $product->update([
+            'status' => $data['status'],
+            'is_featured' => $data['status'] === 'archived' ? false : $product->is_featured,
+        ]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product status updated.');
     }
 
     public function updateFeatured(Request $request, int $id)
     {
         $data = $request->validate(['is_featured' => 'required|boolean']);
-        $product = Product::findOrFail($id);
+        $product = Product::with('vendor.vendorProfile')->findOrFail($id);
         abort_if($data['is_featured'] && $product->status !== 'active', 422, 'Only active products can be featured.');
+        abort_if($data['is_featured'] && ($product->vendor?->vendorProfile?->status !== 'active' || $product->vendor?->vendorProfile?->deleted_at), 422, 'The vendor store must be active before featuring products.');
         $product->update(['is_featured' => $data['is_featured']]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product featured status updated.');
     }
