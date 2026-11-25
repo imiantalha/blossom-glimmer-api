@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('product_option_values', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_option_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('attribute_value_id')->constrained()->restrictOnDelete();
+            $table->foreignId('attribute_value_id')->constrained()->noActionOnDelete();
             $table->timestamps();
             $table->unique(
                 ['product_option_id', 'attribute_value_id'],
