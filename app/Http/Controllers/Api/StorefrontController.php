@@ -251,6 +251,22 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($items, 'Collections retrieved.');
     }
 
+    public function collectionProducts(Request $request, string $slug)
+    {
+        $collection = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
+        abort_unless($collection, 404);
+        $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
+        $query = $this->productQuery();
+        if ($categorySlugs) $query->whereHas('categories', fn ($q) => $q->whereIn('slug', $categorySlugs));
+        else $query->whereRaw('1 = 0');
+        $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
+        $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
+        return response()->json(['success' => true, 'message' => 'Collection products retrieved.', 'data' => $data, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $data->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(), 'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
+    }
+
     public function collection(string $slug)
     {
         $c = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
