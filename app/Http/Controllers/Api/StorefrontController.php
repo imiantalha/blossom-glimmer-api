@@ -233,9 +233,15 @@ class StorefrontController extends Controller
 
     public function vendorProducts(Request $request, string $slug)
     {
-        $vendor = \App\Models\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);
+        $vendor = \\App\\Models\\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);
         abort_unless($vendor, 404);
-        return ApiResponse::successResponse([], 'No vendor products are currently assigned.');
+        $query = $this->productQuery()->where('vendor_id', $vendor->id);
+        $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
+        $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
+        return response()->json(['success' => true, 'message' => 'Vendor products retrieved.', 'data' => $data, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $data->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(), 'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
     }
 
     public function collections()
