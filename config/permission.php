@@ -30,11 +30,6 @@ return [
 
         'role' => Role::class,
 
-        /*
-         * Model used by Spatie when resolving users attached to roles.
-         */
-        'user' => \App\Models\User::class,
-
     ],
 
     'table_names' => [
