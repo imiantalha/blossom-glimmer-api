@@ -218,6 +218,11 @@ class VendorProductController extends Controller
 
     private function saveInventoryAndVariants(Product $product, array $data, string $type): void
     {
+        $variantIds = $product->variants()->pluck('id');
+        if ($variantIds->isNotEmpty()) {
+            DB::table('inventory_items')->whereIn('variant_id', $variantIds)->delete();
+            DB::table('variant_option_values')->whereIn('variant_id', $variantIds)->delete();
+        }
         $product->variants()->delete();
         $product->inventoryItems()->whereNull('variant_id')->delete();
         if ($type === 'simple') {
