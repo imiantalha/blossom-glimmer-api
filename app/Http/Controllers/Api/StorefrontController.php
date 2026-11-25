@@ -66,7 +66,7 @@ class StorefrontController extends Controller
             'id' => $p->id, 'name' => $p->name, 'slug' => $p->slug, 'sku' => $p->sku,
             'description' => $p->description, 'shortDescription' => $p->short_description,
             'price' => $p->type === 'variable' ? ($prices->min() ?? null) : (float) $p->base_price,
-            'compareAtPrice' => $p->compare_at_price ? (float) $p->compare_at_price : null,
+            'compareAtPrice' => $p->compare_at_price ? (float) $p->compare_at_price : ($p->variants->pluck('compare_at_price')->filter()->isNotEmpty() ? (float) $p->variants->pluck('compare_at_price')->filter()->min() : null),
             'currency' => 'USD', 'status' => 'published', 'stock' => $stock, 'inStock' => $stock > 0,
             'images' => $images, 'variants' => $p->variants->map(fn ($v) => [
                 'id' => $v->id, 'sku' => $v->sku, 'name' => $v->name, 'price' => (float) $v->price,
