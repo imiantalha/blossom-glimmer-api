@@ -121,7 +121,10 @@ class StorefrontController extends Controller
             $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) <= ?', ['active', (float) $request->max_price]);
         }
         if ($request->boolean('discounted')) {
-            $query->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'base_price');
+            $query->where(function ($q) {
+                $q->where(fn ($simple) => $simple->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'base_price'))
+                    ->orWhereHas('variants', fn ($variant) => $variant->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price'));
+            });
         }
         if ($request->boolean('in_stock')) {
             $query->where(function ($q) {
@@ -146,7 +149,8 @@ class StorefrontController extends Controller
         foreach ($request->query() as $key => $value) {
             if (str_starts_with($key, 'attribute_') && is_scalar($value)) {
                 $attributeName = substr($key, 10);
-                $query->whereHas('variants.attributeValues', fn ($q) => $q->whereHas('attribute', fn ($a) => $a->where('slug', Str::slug($attributeName)))->where('value', (string) $value));
+                $query->whereHas('variants', fn ($variant) => $variant->whereJsonContains('metadata->attributes', [$attributeName => (string) $value])
+                    ->orWhereHas('attributeValues', fn ($attributeValue) => $attributeValue->whereHas('attribute', fn ($a) => $a->where('slug', Str::slug($attributeName)))->where('value', (string) $value)));
             }
         }
         if ($request->filled('min_rating')) {
@@ -155,7 +159,7 @@ class StorefrontController extends Controller
 
         $sort = $request->input('sort', 'featured');
         match ($sort) {
-            'newest' => $query->latest(),
+            'newest' => $query->orderByRaw('CASE WHEN metadata LIKE ? THEN 1 ELSE 0 END DESC', ['%"new_arrival":true%'])->latest(),
             'price_asc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) ASC', ['active']),
             'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) DESC', ['active']),
             'rating' => $query->orderByRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) DESC', ['approved']),
