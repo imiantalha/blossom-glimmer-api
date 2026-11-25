@@ -59,6 +59,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
         Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
+        Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
+            Route::get('store/me', [StorefrontController::class, 'myStore']);
+            Route::post('store', [StorefrontController::class, 'createStore']);
+            Route::patch('store', [StorefrontController::class, 'updateMyStore']);
+        });
 
         Route::get('cart', [StorefrontController::class, 'cart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
@@ -78,6 +83,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Admin')->group(function () {
             Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
+            Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
+            Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
+            Route::patch('admin/stores/{id}/commission', [StorefrontController::class, 'updateStoreCommission']);
             Route::apiResource('admin/users', UserController::class);
             Route::get('admin/users/options', [UserController::class, 'options']);
             Route::get('roles/options', [RoleController::class, 'options']);
