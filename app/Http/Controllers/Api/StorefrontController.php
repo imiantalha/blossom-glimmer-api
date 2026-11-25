@@ -43,7 +43,7 @@ class StorefrontController extends Controller
     private function productQuery()
     {
         return Product::query()->where('status', 'active')
-            ->with(['brand', 'vendor', 'categories', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
+            ->with(['brand', 'vendor', 'categories.parent', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
     }
 
     private function productPayload(Product $p): array
@@ -70,7 +70,8 @@ class StorefrontController extends Controller
                 'attributes' => $v->attributeValues->mapWithKeys(fn ($a) => [$a->attribute->name => $a->value]),
             ])->values(),
             'tags' => $p->tags->pluck('slug')->values(),
-            'category' => $category ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
+            'category' => $category ? ['id' => $category->parent?->id ?? $category->id, 'name' => $category->parent?->name ?? $category->name, 'slug' => $category->parent?->slug ?? $category->slug] : null,
+            'subcategory' => ($category && $category->parent) ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'brand' => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name, 'slug' => $p->brand->slug] : null,
             'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => Str::slug($p->vendor->name)] : null,
             'rating' => (float) DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating'),
@@ -168,14 +169,20 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->productPayload($product), 'Product retrieved.');
     }
 
-    public function categories()
+    public function categories(Request $request)
     {
-        $items = Category::where('status', 'active')->with(['children' => fn ($q) => $q->where('status', 'active')->orderBy('sort_order')])
-            ->whereNull('parent_id')->orderBy('sort_order')->get();
-        $map = fn ($c) => ['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description,
+        $query = Category::where('status', 'active')->with(['children' => fn ($q) => $q->where('status', 'active')->orderBy('sort_order')])
+            ->whereNull('parent_id')->orderBy('sort_order');
+        if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
+        $items = $query->get()->map(fn ($c) => [
+            'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description,
             'productCount' => $c->products()->where('status', 'active')->count(),
-            'children' => $c->children->map(fn ($child) => ['id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description, 'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => $child->products()->where('status', 'active')->count()])->values()];
-        return ApiResponse::successResponse($items->map($map)->values(), 'Categories retrieved.');
+            'children' => $c->children->map(fn ($child) => [
+                'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description,
+                'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => $child->products()->where('status', 'active')->count(),
+            ])->values(),
+        ]);
+        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function category(string $slug)
@@ -185,11 +192,12 @@ class StorefrontController extends Controller
             'parentId' => $c->parent_id, 'parentSlug' => $c->parent?->slug, 'productCount' => $c->products()->where('status', 'active')->count()], 'Category retrieved.');
     }
 
-    public function brands()
+    public function brands(Request $request)
     {
-        $items = Brand::where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->orderBy('name')->get()
-            ->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'productCount' => $b->products_count]);
-        return ApiResponse::successResponse($items, 'Brands retrieved.');
+        $query = Brand::where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->orderBy('name');
+        if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
+        $items = $query->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'productCount' => $b->products_count]);
+        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function brand(string $slug)
@@ -204,10 +212,16 @@ class StorefrontController extends Controller
         return $this->products($request);
     }
 
-    public function vendors()
+    public function vendors(Request $request)
     {
-        $vendors = \App\Models\User::role('vendor')->orderBy('name')->get();
-        return ApiResponse::successResponse($vendors->map(fn ($v) => ['id' => $v->id, 'name' => $v->name, 'slug' => Str::slug($v->name), 'description' => null, 'rating' => null, 'reviewCount' => 0, 'productCount' => 0]), 'Vendors retrieved.');
+        $query = \App\Models\User::role('vendor')->orderBy('name');
+        if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
+        $items = $query->get()->map(fn ($v) => [
+            'id' => $v->id, 'name' => $v->name, 'slug' => Str::slug($v->name), 'description' => null,
+            'rating' => null, 'reviewCount' => 0,
+            'productCount' => DB::table('products')->where('vendor_id', $v->id)->where('status', 'active')->count(),
+        ]);
+        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function vendor(string $slug)
