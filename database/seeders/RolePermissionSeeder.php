@@ -28,6 +28,11 @@ class RolePermissionSeeder extends Seeder
 
             'orders.view',
             'orders.update',
+            'products.approve',
+            'stores.manage',
+            'brands.manage',
+            'categories.manage',
+            'inventory.update',
         ];
 
         foreach ($permissions as $permission) {
@@ -54,6 +59,9 @@ class RolePermissionSeeder extends Seeder
             'products.view',
             'products.create',
             'products.update',
+            'products.delete',
+            'stores.manage',
+            'inventory.update',
             'orders.view',
         ]);
 
