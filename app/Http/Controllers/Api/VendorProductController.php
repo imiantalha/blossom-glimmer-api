@@ -67,6 +67,8 @@ class VendorProductController extends Controller
             'id' => (string) ($index + 1), 'attributeId' => Str::slug($attribute['name'] ?? 'attribute'),
             'attributeName' => $attribute['name'] ?? 'Attribute', 'values' => collect($attribute['values'] ?? [])->map(fn ($value, $valueIndex) => ['id' => (string) ($valueIndex + 1), 'value' => is_array($value) ? ($value['value'] ?? '') : $value])->values(),
         ])->values();
+        $ownerName = trim((string) ($product->vendor?->name ?? ''));
+        $ownerParts = preg_split('/\\s+/', $ownerName, 2) ?: [];
 
         return [
             'id' => (string) $product->id, 'storeId' => (string) ($profile?->id ?? $product->vendor_id),
@@ -79,7 +81,17 @@ class VendorProductController extends Controller
             'rejectionReason' => data_get($product->metadata, 'rejectionReason'),
             'createdById' => (string) $product->vendor_id, 'updatedById' => (string) $product->vendor_id,
             'createdAt' => $product->created_at?->toISOString(), 'updatedAt' => $product->updated_at?->toISOString(),
-            'store' => ['id' => (string) ($profile?->id ?? $product->vendor_id), 'name' => $profile?->name ?? $product->vendor?->name, 'slug' => $profile?->slug ?? Str::slug($product->vendor?->name ?? '')],
+            'store' => [
+                'id' => (string) ($profile?->id ?? $product->vendor_id),
+                'name' => $profile?->name ?? $product->vendor?->name,
+                'slug' => $profile?->slug ?? Str::slug($product->vendor?->name ?? ''),
+                'owner' => $product->vendor ? [
+                    'id' => (string) $product->vendor->id,
+                    'firstName' => $ownerParts[0] ?? '',
+                    'lastName' => $ownerParts[1] ?? '',
+                    'email' => $product->vendor->email,
+                ] : null,
+            ],
             'brand' => $product->brand ? ['id' => (string) $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug, 'logo' => $product->brand->image_url] : null,
             'category' => $category ? ['id' => (string) $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'productType' => ['id' => $product->type, 'name' => ucfirst($product->type)],
