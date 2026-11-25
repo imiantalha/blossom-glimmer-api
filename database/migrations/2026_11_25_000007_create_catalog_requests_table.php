@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('catalog_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('vendor_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->unsignedBigInteger('reviewed_by')->nullable();
             $table->string('type', 32);
             $table->string('status', 24)->default('pending');
             $table->string('name');
