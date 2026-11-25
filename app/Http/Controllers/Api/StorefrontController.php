@@ -62,7 +62,7 @@ class StorefrontController extends Controller
             'description' => $p->description, 'shortDescription' => $p->short_description,
             'price' => $p->type === 'variable' ? ($prices->min() ?? null) : (float) $p->base_price,
             'compareAtPrice' => $p->compare_at_price ? (float) $p->compare_at_price : null,
-            'currency' => 'USD', 'status' => $p->status, 'stock' => $stock, 'inStock' => $stock > 0,
+            'currency' => 'USD', 'status' => 'published', 'stock' => $stock, 'inStock' => $stock > 0,
             'images' => $images, 'variants' => $p->variants->map(fn ($v) => [
                 'id' => $v->id, 'sku' => $v->sku, 'name' => $v->name, 'price' => (float) $v->price,
                 'compareAtPrice' => $v->compare_at_price ? (float) $v->compare_at_price : null,
@@ -72,7 +72,14 @@ class StorefrontController extends Controller
             'tags' => $p->tags->pluck('slug')->values(),
             'category' => $category ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'brand' => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name, 'slug' => $p->brand->slug] : null,
-            'rating' => null, 'reviewCount' => 0, 'featured' => (bool) data_get($p->metadata, 'featured', false),
+            'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => Str::slug($p->vendor->name)] : null,
+            'rating' => (float) DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating'),
+            'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count(),
+            'soldCount' => (int) data_get($p->metadata, 'sold_count', 0),
+            'badges' => data_get($p->metadata, 'badges', []),
+            'season' => data_get($p->metadata, 'season', []), 'occasion' => data_get($p->metadata, 'occasion', []),
+            'collections' => data_get($p->metadata, 'collections', []), 'specifications' => data_get($p->metadata, 'specifications', []),
+            'featured' => (bool) data_get($p->metadata, 'featured', false),
             'newArrival' => (bool) data_get($p->metadata, 'new_arrival', false),
         ];
     }
@@ -144,7 +151,7 @@ class StorefrontController extends Controller
             'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) DESC', ['active']),
             'rating' => $query->orderByRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) DESC', ['approved']),
             'best_selling' => $query->orderByDesc('created_at'),
-            default => $query->orderByRaw("CASE WHEN JSON_EXTRACT(metadata, '$.featured') = true THEN 1 ELSE 0 END DESC")->orderByDesc('created_at'),
+            default => $query->orderByDesc('created_at'),
         };
 
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
