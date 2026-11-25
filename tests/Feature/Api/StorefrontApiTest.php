@@ -1216,6 +1216,10 @@ class StorefrontApiTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.status', 'ACTIVE');
 
+        $settings = $this->getJson('/api/v1/admin/catalog-settings')->assertOk();
+        $settings->assertJsonFragment(['name' => 'Material']);
+        $settings->assertJsonFragment(['name' => 'Handmade']);
+
         $options = $this->getJson('/api/v1/admin/products/options')->assertOk();
         $options->assertJsonFragment(['name' => 'Material']);
         $options->assertJsonFragment(['name' => 'Handmade']);
