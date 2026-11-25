@@ -42,7 +42,12 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
-    public function vendorProfile()\n    {\n        return $this->hasOne(VendorProfile::class);\n    }\n\n    protected function casts(): array
+    public function vendorProfile()
+    {
+        return $this->hasOne(VendorProfile::class);
+    }
+
+    protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
