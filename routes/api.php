@@ -51,7 +51,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('user', fn (Request $request) => new UserResource($request->user()));
         Route::get('users/me', [AuthController::class, 'me']);
         Route::patch('users/me', [StorefrontController::class, 'updateProfile']);
-        Route::put('users/me/password', [AuthController::class, 'changePassword']);
+        Route::patch('users/me/password', [AuthController::class, 'changePassword']);
         Route::get('users/me/addresses', [StorefrontController::class, 'addresses']);
         Route::post('users/me/addresses', [StorefrontController::class, 'storeAddress']);
         Route::patch('users/me/addresses/{id}', [StorefrontController::class, 'updateAddress']);
