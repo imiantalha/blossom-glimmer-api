@@ -290,4 +290,62 @@ class StorefrontApiTest extends TestCase
             ->getJson('/api/v1/admin/categories')
             ->assertForbidden();
     }
+
+    public function test_seeded_customer_and_vendor_accounts_can_login_with_normalized_emails(): void
+    {
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'CUSTOMER@DEMO.BLOSSOMGlimmer.LOCAL',
+            'password' => 'Password123!',
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.email', 'customer@demo.blossomglimmer.local');
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'VENDOR+ATELIER-LANE@DEMO.BLOSSOMGlimmer.LOCAL',
+            'password' => 'Password123!',
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.email', 'vendor+atelier-lane@demo.blossomglimmer.local');
+    }
+
+    public function test_login_rejects_invalid_credentials_without_creating_a_token(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $customer->email,
+            'password' => 'WrongPassword123!',
+        ])->assertUnauthorized();
+
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_logout_revokes_the_current_sanctum_token(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $plainTextToken = $customer->createToken('logout-regression')->plainTextToken;
+
+        $this->withToken($plainTextToken)
+            ->postJson('/api/v1/auth/logout')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->withToken($plainTextToken)
+            ->getJson('/api/v1/auth/me')
+            ->assertUnauthorized();
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $customer->id,
+            'name' => 'logout-regression',
+        ]);
+    }
+
+    public function test_authenticated_customer_cannot_access_vendor_product_management(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($customer, 'sanctum')
+            ->getJson('/api/v1/vendor/products')
+            ->assertForbidden();
+    }
 }
