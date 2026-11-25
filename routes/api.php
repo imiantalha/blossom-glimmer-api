@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\StorefrontController;
 use App\Http\Controllers\Api\VendorProductController;
 use App\Http\Controllers\Api\CatalogManagementController;
 use App\Http\Controllers\Api\CatalogRequestController;
+use App\Http\Controllers\Api\ReviewManagementController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 
@@ -108,6 +109,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/categories/{id}', [CatalogManagementController::class, 'category']);
             Route::patch('admin/categories/{id}', [CatalogManagementController::class, 'updateCategory']);
             Route::delete('admin/categories/{id}', [CatalogManagementController::class, 'deleteCategory']);
+            Route::get('admin/reviews', [ReviewManagementController::class, 'index']);
+            Route::patch('admin/reviews/{id}', [ReviewManagementController::class, 'review']);
             Route::get('admin/catalog-settings', [CatalogManagementController::class, 'catalogSettings']);
             Route::post('admin/attributes', [CatalogManagementController::class, 'storeAttribute']);
             Route::patch('admin/attributes/{id}/status', [CatalogManagementController::class, 'updateAttributeStatus']);

@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('product_reviews', function (Blueprint $table) {
+            $table->unsignedBigInteger('reviewed_by')->nullable();
+            $table->text('rejection_reason')->nullable();
+            $table->index(['status', 'created_at']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('product_reviews', function (Blueprint $table) {
+            $table->dropIndex(['status', 'created_at']);
+            $table->dropColumn(['reviewed_by', 'rejection_reason']);
+        });
+    }
+};

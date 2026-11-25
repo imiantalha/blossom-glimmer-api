@@ -1234,4 +1234,56 @@ class StorefrontApiTest extends TestCase
         $this->assertNotContains('Handmade', collect($inactiveOptions->json('data.tags'))->pluck('name')->all());
     }
 
+
+    public function test_admin_can_moderate_customer_product_reviews(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $reviewedProductIds = DB::table('product_reviews')->where('user_id', $customer->id)->pluck('product_id');
+        $products = Product::where('status', 'active')->whereNotIn('id', $reviewedProductIds)->orderBy('id')->take(2)->get();
+        $this->assertCount(2, $products);
+
+        $approvedReview = $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/reviews', [
+                'product_id' => $products[0]->id,
+                'rating' => 5,
+                'title' => 'Excellent quality',
+                'body' => 'The item arrived as described and the quality is excellent.',
+            ])->assertCreated();
+
+        $rejectedReview = $this->postJson('/api/v1/reviews', [
+            'product_id' => $products[1]->id,
+            'rating' => 1,
+            'title' => 'Review for moderation',
+            'body' => 'This review will be rejected by the administrator.',
+        ])->assertCreated();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/reviews?status=pending')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $approvedReview->json('data.id')]);
+
+        $this->patchJson('/api/v1/admin/reviews/' . $approvedReview->json('data.id'), [
+            'decision' => 'approve',
+        ])->assertOk()->assertJsonPath('data.status', 'approved');
+
+        $this->patchJson('/api/v1/admin/reviews/' . $rejectedReview->json('data.id'), [
+            'decision' => 'reject',
+        ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/reviews/' . $rejectedReview->json('data.id'), [
+            'decision' => 'reject',
+            'rejection_reason' => 'Please keep feedback relevant and respectful.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.rejectionReason', 'Please keep feedback relevant and respectful.');
+
+        $this->getJson('/api/v1/reviews?product_id=' . $products[0]->id)
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Excellent quality']);
+        $this->getJson('/api/v1/reviews?product_id=' . $products[1]->id)
+            ->assertOk()
+            ->assertJsonMissing(['title' => 'Review for moderation']);
+    }
+
 }
