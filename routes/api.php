@@ -108,6 +108,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
             Route::post('emails/send', [EmailController::class, 'send']);
             Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
+            Route::get('admin/products', [VendorProductController::class, 'adminIndex']);
+            Route::get('admin/products/{id}', [VendorProductController::class, 'adminShow']);
             Route::apiResource('admin/products', ProductController::class);
             Route::apiResource('admin.products.variants', ProductVariantController::class);
         });
