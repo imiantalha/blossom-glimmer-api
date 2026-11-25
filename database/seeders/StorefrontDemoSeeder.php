@@ -253,7 +253,7 @@ class StorefrontDemoSeeder extends Seeder
                     ['name' => Str::title(str_replace('-', ' ', $tagSlug)), 'created_at' => now(), 'updated_at' => now()]
                 );
                 $tagId = DB::table('tags')->where('slug', $tagSlug)->value('id');
-                DB::table('product_tag')->insertOrIgnore(['product_id' => $productId, 'tag_id' => $tagId]);
+                DB::table('product_tag')->updateOrInsert(['product_id' => $productId, 'tag_id' => $tagId], []);
             }
 
             foreach ($variants as $variant) {
