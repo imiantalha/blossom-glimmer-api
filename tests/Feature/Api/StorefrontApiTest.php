@@ -1061,7 +1061,7 @@ class StorefrontApiTest extends TestCase
         $product->update(['metadata' => $metadata]);
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/v1/admin/products?status=active')
+            ->getJson('/api/v1/admin/products?status=active&approval_status=approved')
             ->assertOk()
             ->assertJsonFragment(['id' => (string) $product->id]);
 
