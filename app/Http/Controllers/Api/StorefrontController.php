@@ -226,7 +226,7 @@ class StorefrontController extends Controller
 
     public function vendors(Request $request)
     {
-        $query = \App\Models\User::role(Role::VENDOR)->with('vendorProfile')->orderBy('name');
+        $query = \App\Models\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->orderBy('name');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
         $items = $query->get()->map(function ($v) {
             $profile = $v->vendorProfile;
@@ -243,7 +243,7 @@ class StorefrontController extends Controller
 
     public function vendor(string $slug)
     {
-        $vendor = \App\Models\User::role('vendor')->with('vendorProfile')->get()->first(fn ($v) => ($v->vendorProfile?->slug ?? Str::slug($v->name)) === $slug);
+        $vendor = \App\Models\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('slug', $slug)->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->first();
         abort_unless($vendor, 404);
         $profile = $vendor->vendorProfile;
         return ApiResponse::successResponse([
@@ -257,7 +257,7 @@ class StorefrontController extends Controller
 
     public function vendorProducts(Request $request, string $slug)
     {
-        $vendor = \\App\\Models\\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);
+        $vendor = \\App\\Models\\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('slug', $slug)->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->first();
         abort_unless($vendor, 404);
         $query = $this->productQuery()->where('vendor_id', $vendor->id);
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
@@ -780,11 +780,11 @@ class StorefrontController extends Controller
 
     public function adminStores(Request $request)
     {
-        $query = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->whereNull('vp.deleted_at');
+        $query = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->whereNull('vp.deleted_at')->select('vp.*', 'u.name as owner_name', 'u.email as owner_email', 'u.phone as owner_phone');
         if ($request->filled('status')) $query->where('vp.status', $request->input('status'));
         if ($request->filled('search')) $query->where(fn ($q) => $q->where('vp.name', 'like', '%' . $request->input('search') . '%')->orWhere('vp.slug', 'like', '%' . $request->input('search') . '%')->orWhere('u.email', 'like', '%' . $request->input('search') . '%'));
         $page = $query->orderByDesc('vp.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
-        $data = $page->getCollection()->map(fn ($row) => $this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->name ?: $row->name, 'email' => $row->email, 'phone' => $row->phone]));
+        $data = $page->getCollection()->map(fn ($row) => $this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]));
         return response()->json(['success' => true, 'message' => 'Stores retrieved.', 'data' => $data, 'pagination' => [
             'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
             'count' => $data->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(), 'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
