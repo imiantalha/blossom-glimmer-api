@@ -33,7 +33,7 @@ return [
         /*
          * Model used by Spatie when resolving users attached to roles.
          */
-        'user' => \\App\\Models\\User::class,
+        'user' => \App\Models\User::class,
 
     ],
 
