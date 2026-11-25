@@ -603,6 +603,12 @@ class StorefrontApiTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('success', true);
         }
+
+        $product = $this->getJson('/api/v1/products/' . $productSlug)->assertOk();
+        $vendorRating = $product->json('data.vendor.rating');
+        if ($vendorRating !== null) {
+            $this->assertIsFloat($vendorRating);
+        }
     }
 
     public function test_admin_read_endpoints_are_available_to_admin_accounts(): void
