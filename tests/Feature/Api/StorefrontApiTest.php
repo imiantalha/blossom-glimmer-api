@@ -939,4 +939,79 @@ class StorefrontApiTest extends TestCase
         ]);
     }
 
+
+
+    public function test_admin_can_filter_products_and_manage_visibility_and_featured_state(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+        $metadata = $product->metadata ?? [];
+        $metadata['approvalStatus'] = 'approved';
+        $product->update(['metadata' => $metadata]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products?approval_status=approved&status=active')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $product->id]);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/featured', ['is_featured' => true])
+            ->assertOk()->assertJsonPath('data.isFeatured', true);
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'is_featured' => true]);
+
+        $pending = Product::where('status', 'inactive')->first();
+        if ($pending) {
+            $pendingMetadata = $pending->metadata ?? [];
+            $pendingMetadata['approvalStatus'] = 'pending';
+            $pending->update(['metadata' => $pendingMetadata]);
+            $this->patchJson('/api/v1/admin/products/' . $pending->id . '/status', ['status' => 'active'])
+                ->assertUnprocessable();
+        }
+    }
+
+    public function test_suspending_a_store_hides_its_products_and_blocks_vendor_mutations(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $profile = $vendor->vendorProfile()->firstOrFail();
+        $product = Product::where('vendor_id', $vendor->id)->where('status', 'active')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'suspended'])
+            ->assertOk()->assertJsonPath('data.status', 'SUSPENDED');
+
+        $this->getJson('/api/v1/vendors/' . $profile->slug)->assertNotFound();
+
+        $catalog = $this->getJson('/api/v1/products')->assertOk()->json('data');
+        $this->assertFalse(collect($catalog)->contains(fn ($item) => (string) $item['id'] === (string) $product->id));
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $product->id, [])
+            ->assertForbidden();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+    }
+
+    public function test_non_admin_cannot_change_product_or_store_moderation_state(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::firstOrFail();
+        $profileId = DB::table('vendor_profiles')->value('id');
+
+        $this->actingAs($customer, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertForbidden();
+
+        $this->patchJson('/api/v1/admin/stores/' . $profileId . '/status', ['status' => 'suspended'])
+            ->assertForbidden();
+    }
+
 }
