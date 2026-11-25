@@ -15,6 +15,9 @@ class Product extends Model
     protected $fillable = [
         'brand_id',
         'vendor_id',
+        'is_featured',
+        'is_new_arrival',
+        'sold_count',
         'name',
         'slug',
         'sku',
@@ -36,6 +39,9 @@ class Product extends Model
             'compare_at_price' => 'decimal:2',
             'cost_price' => 'decimal:2',
             'metadata' => 'array',
+            'is_featured' => 'boolean',
+            'is_new_arrival' => 'boolean',
+            'sold_count' => 'integer',
         ];
     }
 
