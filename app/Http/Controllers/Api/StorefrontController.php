@@ -200,9 +200,19 @@ class StorefrontController extends Controller
 
     public function category(string $slug)
     {
-        $c = Category::where('slug', $slug)->where('status', 'active')->with('parent')->firstOrFail();
-        return ApiResponse::successResponse(['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
-            'parentId' => $c->parent_id, 'parentSlug' => $c->parent?->slug, 'productCount' => $c->products()->where('status', 'active')->count()], 'Category retrieved.');
+        $c = Category::where('slug', $slug)->where('status', 'active')
+            ->with(['parent', 'children' => fn ($q) => $q->where('status', 'active')->orderBy('sort_order')])->firstOrFail();
+        return ApiResponse::successResponse([
+            'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
+            'parentId' => $c->parent_id, 'parentSlug' => $c->parent?->slug,
+            'parent' => $c->parent ? ['id' => $c->parent->id, 'name' => $c->parent->name, 'slug' => $c->parent->slug] : null,
+            'children' => $c->children->map(fn ($child) => [
+                'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description,
+                'imageUrl' => $child->image_url, 'parentId' => $c->id, 'parentSlug' => $c->slug,
+                'productCount' => $child->products()->where('status', 'active')->count(),
+            ])->values(),
+            'productCount' => $c->products()->where('status', 'active')->count(),
+        ], 'Category retrieved.');
     }
 
     public function brands(Request $request)
