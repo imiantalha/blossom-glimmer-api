@@ -290,3 +290,20 @@ Known areas requiring immediate verification:
 2. Verify live browser flows: sign-in/register, catalog/product detail, guest cart/wishlist merge, address management, stock validation, shipping quote, COD checkout/idempotency, orders, vendor onboarding/product management, admin moderation, and shipment tracking.
 3. Vercel reported a preview build-rate-limit failure for the frontend commit; GitHub Actions CI is green. Retry/verify a Vercel preview when the account's build limit allows it.
 4. Keep card payments, refunds, and external carrier synchronization out of scope until provider contracts, credentials, and business rules are supplied.
+
+
+## Local verification expansion — 2026-11-25
+
+- Expanded `StorefrontApiTest` to 34 feature tests and 262 assertions.
+- Latest backend CI run `45605789990` passed on both SQLite and SQL Server 2022: 34 tests / 262 assertions in each job.
+- Added coverage for seeded admin/vendor/customer login, vendor registration, password changes and token revocation, public catalog read endpoints, admin read endpoints, role/permission CRUD, guest cart/wishlist merge, product vendor rating type, and existing checkout/order/inventory scenarios.
+- Fixed issues exposed by the expanded suite:
+  - Implemented the missing admin user-options endpoint.
+  - Added role/permission management capabilities to the RBAC seed data and explicitly registered Spatie policies.
+  - Ensured API-created roles and permissions use the existing `web` guard rather than the transient Sanctum guard name.
+  - Added an email-log API resource so paginated responses use a resource collection.
+  - Corrected invalid email-retry status handling.
+  - Normalized product vendor ratings to numeric JSON values.
+- The frontend's local full-stack workflow now uses an isolated SQLite database, seeded customer/vendor/admin accounts, and a local PHP server with request logging disabled in the testing environment. No staging or production system is used.
+- Browser validation is being expanded to cover all three role logins/logouts, role boundaries, guest cart/wishlist behavior, and COD checkout. Do not mark the frontend integration complete until the latest full-stack browser run passes.
+- Both feature PRs remain draft/open and must not be merged without explicit approval.
