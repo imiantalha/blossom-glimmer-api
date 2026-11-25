@@ -151,3 +151,34 @@ Known areas requiring immediate verification:
 - Added initial migration/controller/routes and vendor ownership foundation (see commit list above).
 - No local Laravel runtime/database test results have been recorded yet.
 - **Next action:** inspect current feature branch files for interrupted edits and syntax/schema correctness, then complete the endpoint inventory from the frontend before proceeding.
+
+
+## Progress update — 2026-11-25 (continued)
+
+### Backend work added on `feat/storefront-api-integration`
+- Expanded public catalog APIs: product filtering/sorting/pagination, category hierarchy, brand/vendor listings and product listings, collection details/products.
+- Added account profile/password, password reset, address CRUD, cart, wishlist, review and order APIs.
+- Added checkout stock/variant validation, shipping method configuration/quotes, order idempotency support and shipment tracking snapshots/admin updates.
+- Added vendor ownership/profile schema and admin-role protection for administration routes.
+- Added phone, catalog image URLs, collection metadata, vendor profile metadata and order-item product snapshots.
+- Imported the frontend's existing demo JSON fixtures into backend seeder data: 132 products, 9 root categories plus children, 6 brands, 4 vendors, 4 collections and 192 reviews.
+- Added `StorefrontDemoSeeder`; `DatabaseSeeder` now seeds roles then the development catalog. Demo catalog seeding is disabled by default in production.
+- Added `API_REQUIREMENTS.md` with the endpoint matrix and frontend integration gaps.
+
+### Current known limitations / risks
+- The catalog fixtures are copied from frontend mock data and are development/demo data, not verified live business inventory.
+- Frontend integration is not yet complete: auth still uses temporary credentials; service-level API failure fallback, collections, shipping/payment, inventory, shipment and idempotency wiring still need frontend changes.
+- Country/state/city selectors still need a complete component-level audit before deciding whether to add location endpoints.
+- Shipping methods are database-configured and intentionally return a service-unavailable response when none are configured; no rates are invented.
+- Cash on delivery is configurable; card payment is not implemented.
+- Vendor product ownership is available, but vendor dashboard CRUD/permissions still need a frontend-driven audit.
+- Guest carts are not implemented; cart endpoints currently require Sanctum authentication.
+- No PHP runtime, migration, seeder or automated test execution has been performed. The current environment could not reach GitHub from a local runtime, so do not mark validation complete.
+
+### Immediate next actions
+1. Review the latest changed PHP and migrations for syntax/schema compatibility; run local PHP lint and migrations.
+2. Add API feature tests for auth, public catalog, customer ownership, stock validation, checkout and tracking.
+3. Verify the seeded demo catalogue against frontend mock shapes and run the seed idempotently.
+4. Complete frontend page/component audit for locations and any hidden API dependencies.
+5. Integrate frontend API clients with real endpoints and mock fallback on failures.
+6. Run end-to-end checks; then open/review PR. Do not merge without user approval.
