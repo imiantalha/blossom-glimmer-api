@@ -18,6 +18,10 @@ class LogRequest
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (app()->environment('testing')) {
+            return $next($request);
+        }
+
         $start = microtime(true);
 
         $response = $next($request);
