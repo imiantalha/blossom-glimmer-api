@@ -626,10 +626,9 @@ class StorefrontApiTest extends TestCase
         ];
 
         foreach ($paths as $path) {
-            $this->actingAs($admin, 'sanctum')
-                ->getJson($path)
-                ->assertOk()
-                ->assertJsonPath('success', true);
+            $response = $this->actingAs($admin, 'sanctum')->getJson($path);
+            $this->assertSame(200, $response->status(), "GET {$path} failed: {$response->getContent()}");
+            $response->assertJsonPath('success', true);
         }
     }
 }
