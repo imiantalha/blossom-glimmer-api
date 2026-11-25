@@ -745,32 +745,38 @@ class StorefrontController extends Controller
             'location' => 'nullable|string|max:180',
         ]);
         $existing = DB::table('shipments')->where('order_id', $orderId)->first();
+        // Normalize request timestamps before writing. SQL Server's datetime
+        // columns reject ISO-8601 strings with a trailing timezone designator.
         $values = [
             'carrier' => $data['carrier'] ?? null,
             'tracking_number' => $data['tracking_number'] ?? null,
             'tracking_url' => $data['tracking_url'] ?? null,
             'status' => $data['status'],
-            'estimated_delivery' => $data['estimated_delivery'] ?? null,
-            'shipped_at' => $data['shipped_at'] ?? null,
-            'delivered_at' => $data['delivered_at'] ?? null,
+            'estimated_delivery' => isset($data['estimated_delivery']) ? \Illuminate\Support\Carbon::parse($data['estimated_delivery'])->toDateString() : null,
+            'shipped_at' => isset($data['shipped_at']) ? \Illuminate\Support\Carbon::parse($data['shipped_at'])->toDateTimeString() : null,
+            'delivered_at' => isset($data['delivered_at']) ? \Illuminate\Support\Carbon::parse($data['delivered_at'])->toDateTimeString() : null,
             'updated_at' => now(),
         ];
-        if ($existing) {
-            DB::table('shipments')->where('id', $existing->id)->update($values);
-            $shipmentId = $existing->id;
-        } else {
-            $shipmentId = DB::table('shipments')->insertGetId(array_merge($values, ['order_id' => $orderId, 'created_at' => now()]));
-        }
-        DB::table('shipment_events')->insert([
-            'shipment_id' => $shipmentId, 'status' => $data['status'],
-            'description' => $data['description'] ?? null, 'location' => $data['location'] ?? null,
-            'occurred_at' => now(), 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        DB::table('customer_orders')->where('id', $orderId)->update([
-            'fulfillment_status' => $data['status'] === 'delivered' ? 'delivered' : ($data['status'] === 'pending' ? 'pending' : 'shipped'),
-            'status' => $data['status'] === 'delivered' ? 'delivered' : 'shipped',
-            'updated_at' => now(),
-        ]);
+
+        DB::transaction(function () use ($existing, $values, $orderId, $data, &$shipmentId) {
+            if ($existing) {
+                DB::table('shipments')->where('id', $existing->id)->update($values);
+                $shipmentId = $existing->id;
+            } else {
+                $shipmentId = DB::table('shipments')->insertGetId(array_merge($values, ['order_id' => $orderId, 'created_at' => now()]));
+            }
+            DB::table('shipment_events')->insert([
+                'shipment_id' => $shipmentId, 'status' => $data['status'],
+                'description' => $data['description'] ?? null, 'location' => $data['location'] ?? null,
+                'occurred_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('customer_orders')->where('id', $orderId)->update([
+                'fulfillment_status' => $data['status'] === 'delivered' ? 'delivered' : ($data['status'] === 'pending' ? 'pending' : 'shipped'),
+                'status' => $data['status'] === 'delivered' ? 'delivered' : 'shipped',
+                'updated_at' => now(),
+            ]);
+        });
+
         return ApiResponse::successResponse($this->shipmentPayload($orderId), 'Shipment tracking updated.');
     }
 
