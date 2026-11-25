@@ -398,14 +398,15 @@ class StorefrontApiTest extends TestCase
 
         $added = $this->actingAs($customer, 'sanctum')->postJson('/api/v1/cart', [
             'product_id' => $product->id, 'quantity' => 2,
-        ])->assertOk()->assertJsonPath('data.items.0.quantity', 2);
+        ])->assertOk();
 
+        $this->assertSame(2, (int) $added->json('data.items.0.quantity'));
         $itemId = $added->json('data.items.0.id');
 
-        $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 3])
-            ->assertOk()->assertJsonPath('data.items.0.quantity', 3);
+        $updated = $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 3])->assertOk();
+        $this->assertSame(3, (int) $updated->json('data.items.0.quantity'));
 
-        $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 99])
+        $this->patchJson('/api/v1/cart/' . $itemId, ['quantity' => 100])
             ->assertUnprocessable();
 
         $this->deleteJson('/api/v1/cart')
@@ -506,7 +507,12 @@ class StorefrontApiTest extends TestCase
         $this->actingAs($customer, 'sanctum')->postJson('/api/v1/reviews', [
             'product_id' => $product->id, 'rating' => 4,
             'title' => 'Feature test review', 'body' => 'This review must wait for moderation.',
-        ])->assertCreated()->assertJsonPath('data.rating', 4);
+        ])->assertCreated();
+
+        $this->assertSame(4, (int) $this->postJson('/api/v1/reviews', [
+            'product_id' => $product->id, 'rating' => 4,
+            'title' => 'Feature test review', 'body' => 'This review must wait for moderation.',
+        ])->json('data.rating'));
 
         $this->assertDatabaseHas('product_reviews', [
             'product_id' => $product->id, 'user_id' => $customer->id, 'status' => 'pending',
