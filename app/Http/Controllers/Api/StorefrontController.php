@@ -366,7 +366,7 @@ class StorefrontController extends Controller
                 $price = (float) ($i->variant_price ?? $i->base_price ?? 0);
                 $metadata = is_array($i->metadata) ? $i->metadata : (json_decode($i->metadata ?? '[]', true) ?: []);
                 $images = data_get($metadata, 'images', []);
-                $imageUrl = $i->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : (data_get($images, '0.url') ?: null);
+                $imageUrl = $i->image_path ? \Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : (data_get($images, '0.url') ?: null);
                 $inventory = DB::table('inventory_items')->where($i->variant_id ? 'variant_id' : 'product_id', $i->variant_id ?? $i->product_id)->first();
                 $available = $inventory && $inventory->manage_inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : null;
                 return [
@@ -525,8 +525,8 @@ class StorefrontController extends Controller
 
     public function wishlist(Request $request)
     {
-        $rows = DB::table('wishlists as w')->join('products as p', 'p.id', '=', 'w.product_id')->where('w.user_id', $request->user()->id)->where('p.status', 'active')->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')->select('w.id', 'w.created_at', 'p.id as product_id', 'p.name', 'p.slug', 'p.base_price', 'pm.disk as image_disk', 'pm.file_path as image_path')->paginate(min((int) $request->input('per_page', 24), 100));
-        $data = $rows->getCollection()->map(fn ($i) => ['id' => $i->id, 'createdAt' => $i->created_at, 'product' => ['id' => $i->product_id, 'name' => $i->name, 'slug' => $i->slug, 'imageUrl' => $i->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : null, 'price' => (float) $i->base_price, 'currency' => 'USD']]);
+        $rows = DB::table('wishlists as w')->join('products as p', 'p.id', '=', 'w.product_id')->where('w.user_id', $request->user()->id)->where('p.status', 'active')->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')->select('w.id', 'w.created_at', 'p.id as product_id', 'p.name', 'p.slug', 'p.base_price', 'p.metadata', 'pm.disk as image_disk', 'pm.file_path as image_path')->paginate(min((int) $request->input('per_page', 24), 100));
+        $data = $rows->getCollection()->map(fn ($i) => ['id' => $i->id, 'createdAt' => $i->created_at, 'product' => ['id' => $i->product_id, 'name' => $i->name, 'slug' => $i->slug, 'imageUrl' => $i->image_path ? \Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : null, 'price' => (float) $i->base_price, 'currency' => 'USD']]);
         return response()->json(['success' => true, 'message' => 'Wishlist retrieved.', 'data' => $data, 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
     }
 
@@ -549,7 +549,7 @@ class StorefrontController extends Controller
         $id = DB::table('wishlists')->where('user_id', $request->user()->id)->where('product_id', $data['product_id'])->value('id');
         if (!$id) $id = DB::table('wishlists')->insertGetId(['user_id' => $request->user()->id, 'product_id' => $data['product_id'], 'created_at' => now(), 'updated_at' => now()]);
         $row = DB::table('wishlists as w')->join('products as p', 'p.id', '=', 'w.product_id')->where('w.id', $id)->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')->select('w.id', 'p.id as product_id', 'p.name', 'p.slug', 'p.base_price', 'pm.disk as image_disk', 'pm.file_path as image_path')->first();
-        return ApiResponse::createdResponse(['id' => $row->id, 'product' => ['id' => $row->product_id, 'name' => $row->name, 'slug' => $row->slug, 'imageUrl' => $row->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($row->image_disk)->url($row->image_path) : null, 'price' => (float) $row->base_price, 'currency' => 'USD']], 'Wishlist item saved.');
+        return ApiResponse::createdResponse(['id' => $row->id, 'product' => ['id' => $row->product_id, 'name' => $row->name, 'slug' => $row->slug, 'imageUrl' => $row->image_path ? \Illuminate\\Support\\Facades\\Storage::disk($row->image_disk)->url($row->image_path) : null, 'price' => (float) $row->base_price, 'currency' => 'USD']], 'Wishlist item saved.');
     }
 
     public function deleteWishlist(Request $request, int $id)
