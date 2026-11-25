@@ -57,6 +57,7 @@ class EmailLogController extends Controller
         if ($emailLog->status !== 'failed') {
             return ApiResponse::errorResponse(
                 'Only failed emails can be retried.',
+                null,
                 422
             );
         }
