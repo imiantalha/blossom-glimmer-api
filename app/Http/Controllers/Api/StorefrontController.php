@@ -370,6 +370,11 @@ class StorefrontController extends Controller
         $cart = $this->currentCart($request);
         $item = DB::table('cart_items')->where('cart_id', $cart->id)->where('id', $id)->first();
         abort_unless($item, 404);
+        $inventory = DB::table('inventory_items')->where($item->variant_id ? 'variant_id' : 'product_id', $item->variant_id ?? $item->product_id)->first();
+        if (!$inventory) throw ValidationException::withMessages(['inventory' => ['Inventory is not configured for this product.']]);
+        if ($inventory->manage_inventory && ($inventory->stock_quantity - $inventory->reserved_quantity) < $data['quantity']) {
+            throw ValidationException::withMessages(['quantity' => ['The requested quantity is not available.']]);
+        }
         DB::table('cart_items')->where('id', $id)->update(['quantity' => $data['quantity'], 'updated_at' => now()]);
         return ApiResponse::successResponse($this->cartPayload($cart), 'Cart updated.');
     }
