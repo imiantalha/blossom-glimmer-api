@@ -14,6 +14,10 @@ class Product extends Model
 
     protected $fillable = [
         'brand_id',
+        'vendor_id',
+        'is_featured',
+        'is_new_arrival',
+        'sold_count',
         'name',
         'slug',
         'sku',
@@ -35,7 +39,15 @@ class Product extends Model
             'compare_at_price' => 'decimal:2',
             'cost_price' => 'decimal:2',
             'metadata' => 'array',
+            'is_featured' => 'boolean',
+            'is_new_arrival' => 'boolean',
+            'sold_count' => 'integer',
         ];
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'vendor_id');
     }
 
     public function brand(): BelongsTo
@@ -50,7 +62,7 @@ class Product extends Model
 
     public function categories(): BelongsToMany
     {
-        return $this->belongsToMany(Category::class);
+        return $this->belongsToMany(Category::class, 'product_category');
     }
 
     public function variants(): HasMany
@@ -70,7 +82,7 @@ class Product extends Model
 
     public function media(): BelongsToMany
     {
-        return $this->belongsToMany(Media::class)->withPivot('sort_order');
+        return $this->belongsToMany(Media::class, 'product_media', 'product_id', 'media_id')->withPivot('sort_order');
     }
 
     public function attributeValues(): BelongsToMany

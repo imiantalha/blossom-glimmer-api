@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\EmailLog;
+use App\Http\Resources\EmailLogResource;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use App\Jobs\SendEmailJob;
@@ -28,7 +29,7 @@ class EmailLogController extends Controller
             ->paginate($request->integer('per_page', 15));
 
         return ApiResponse::paginatedResponse(
-            $logs,
+            EmailLogResource::collection($logs),
             'Email logs retrieved successfully.'
         );
     }
@@ -36,7 +37,7 @@ class EmailLogController extends Controller
     public function show(EmailLog $emailLog)
     {
         return ApiResponse::successResponse(
-            $emailLog,
+            new EmailLogResource($emailLog),
             'Email log retrieved successfully.'
         );
     }
@@ -56,6 +57,7 @@ class EmailLogController extends Controller
         if ($emailLog->status !== 'failed') {
             return ApiResponse::errorResponse(
                 'Only failed emails can be retried.',
+                null,
                 422
             );
         }
@@ -69,7 +71,7 @@ class EmailLogController extends Controller
         SendEmailJob::dispatch($emailLog->id);
 
         return ApiResponse::successResponse(
-            $emailLog->fresh(),
+            new EmailLogResource($emailLog->fresh()),
             'Email queued for retry successfully.'
         );
     }

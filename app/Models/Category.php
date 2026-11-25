@@ -17,6 +17,7 @@ class Category extends Model
         'name',
         'slug',
         'description',
+        'image_url',
         'status',
         'sort_order',
     ];
@@ -33,6 +34,6 @@ class Category extends Model
 
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class);
+        return $this->belongsToMany(Product::class, 'product_category');
     }
 }

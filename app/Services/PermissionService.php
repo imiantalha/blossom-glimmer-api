@@ -36,6 +36,8 @@ class PermissionService
      */
     public function create(array $data): Permission
     {
+        $data['guard_name'] ??= 'web';
+
         return DB::transaction(function () use ($data) {
 
             return $this->permissionRepository->create($data);

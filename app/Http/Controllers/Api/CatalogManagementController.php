@@ -1,0 +1,178 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Brand;
+use App\Models\Category;
+use App\Support\ApiResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class CatalogManagementController extends Controller
+{
+    public function brands(Request $request)
+    {
+        $page = Brand::query()->orderByDesc('created_at')
+            ->paginate(min(max($request->integer('per_page', 100), 1), 200));
+        $data = $page->getCollection()->map(fn (Brand $brand) => $this->brandPayload($brand))->values();
+
+        return response()->json([
+            'success' => true, 'message' => 'Brands retrieved.', 'data' => $data,
+            'pagination' => [
+                'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(), 'total' => $page->total(), 'count' => $data->count(),
+                'from' => $page->firstItem(), 'to' => $page->lastItem(),
+                'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function brand(int $id)
+    {
+        $brand = Brand::findOrFail($id);
+        return ApiResponse::successResponse($this->brandPayload($brand), 'Brand retrieved.');
+    }
+
+    public function storeBrand(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|min:3|max:25',
+            'slug' => 'nullable|string|max:255|alpha_dash|unique:brands,slug',
+            'status' => 'required|in:ACTIVE,INACTIVE,active,inactive',
+            'logo' => 'nullable|url|max:500',
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if(Brand::where('slug', $slug)->exists(), 422, 'This brand URL is already taken.');
+
+        $brand = Brand::create([
+            'name' => $data['name'], 'slug' => $slug, 'image_url' => $data['logo'] ?? null,
+            'status' => strtolower($data['status']),
+        ]);
+
+        return ApiResponse::createdResponse($this->brandPayload($brand), 'Brand created.');
+    }
+
+    public function updateBrand(Request $request, int $id)
+    {
+        $brand = Brand::findOrFail($id);
+        $data = $request->validate([
+            'name' => 'required|string|min:3|max:25',
+            'slug' => 'required|string|max:255|alpha_dash|unique:brands,slug,' . $id,
+            'status' => 'required|in:ACTIVE,INACTIVE,active,inactive',
+            'logo' => 'sometimes|nullable|url|max:500',
+        ]);
+        $brand->update([
+            'name' => $data['name'], 'slug' => $data['slug'],
+            'status' => strtolower($data['status']),
+            'image_url' => array_key_exists('logo', $data) ? $data['logo'] : $brand->image_url,
+        ]);
+
+        return ApiResponse::successResponse($this->brandPayload($brand->fresh()), 'Brand updated.');
+    }
+
+    public function deleteBrand(int $id)
+    {
+        $brand = Brand::findOrFail($id);
+        DB::transaction(function () use ($brand) {
+            DB::table('products')->where('brand_id', $brand->id)->update(['brand_id' => null]);
+            $brand->delete();
+        });
+        return ApiResponse::successResponse(null, 'Brand deleted.');
+    }
+
+    public function categories(Request $request)
+    {
+        $categories = Category::with('parent')->orderBy('parent_id')->orderBy('name')->get();
+        $data = $categories->map(fn (Category $category) => $this->categoryPayload($category))->values();
+
+        return ApiResponse::successResponse($data, 'Categories retrieved.');
+    }
+
+    public function category(int $id)
+    {
+        $category = Category::with(['parent', 'children'])->findOrFail($id);
+        return ApiResponse::successResponse($this->categoryPayload($category, true), 'Category retrieved.');
+    }
+
+    public function storeCategory(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'nullable|string|max:255|alpha_dash|unique:categories,slug',
+            'status' => 'required|in:ACTIVE,INACTIVE,active,inactive',
+            'parent_id' => 'nullable|integer|exists:categories,id',
+            'image' => 'sometimes|nullable|url|max:500',
+        ]);
+        $parent = !empty($data['parent_id']) ? Category::findOrFail($data['parent_id']) : null;
+        abort_if($parent && $parent->parent_id !== null, 422, 'Only root categories can be selected as parents.');
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if(Category::where('slug', $slug)->exists(), 422, 'This category URL is already taken.');
+
+        $category = Category::create([
+            'name' => $data['name'], 'slug' => $slug, 'parent_id' => $parent?->id,
+            'image_url' => $data['image'] ?? null, 'status' => strtolower($data['status']),
+        ]);
+
+        return ApiResponse::createdResponse($this->categoryPayload($category->load('parent')), 'Category created.');
+    }
+
+    public function updateCategory(Request $request, int $id)
+    {
+        $category = Category::withCount('children')->findOrFail($id);
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|alpha_dash|unique:categories,slug,' . $id,
+            'status' => 'required|in:ACTIVE,INACTIVE,active,inactive',
+            'parent_id' => 'nullable|integer|exists:categories,id',
+            'image' => 'sometimes|nullable|url|max:500',
+        ]);
+        $parent = !empty($data['parent_id']) ? Category::findOrFail($data['parent_id']) : null;
+        abort_if($parent && $parent->parent_id !== null, 422, 'Only root categories can be selected as parents.');
+        abort_if($parent && $parent->id === $category->id, 422, 'A category cannot be its own parent.');
+        abort_if($category->children_count > 0 && $parent, 422, 'Categories with children must remain root categories.');
+
+        $category->update([
+            'name' => $data['name'], 'slug' => $data['slug'], 'parent_id' => $parent?->id,
+            'status' => strtolower($data['status']),
+            'image_url' => array_key_exists('image', $data) ? $data['image'] : $category->image_url,
+        ]);
+
+        return ApiResponse::successResponse($this->categoryPayload($category->fresh('parent')), 'Category updated.');
+    }
+
+    public function deleteCategory(int $id)
+    {
+        $category = Category::withCount('children')->findOrFail($id);
+        abort_if($category->children_count > 0, 422, 'Delete child categories before deleting this parent category.');
+        $category->delete();
+        return ApiResponse::successResponse(null, 'Category deleted.');
+    }
+
+    private function brandPayload(Brand $brand): array
+    {
+        return [
+            'id' => (string) $brand->id, 'name' => $brand->name, 'slug' => $brand->slug,
+            'logo' => $brand->image_url, 'status' => strtoupper($brand->status),
+            'createdById' => null, 'updatedById' => null,
+            'createdAt' => $brand->created_at?->toISOString(), 'updatedAt' => $brand->updated_at?->toISOString(),
+        ];
+    }
+
+    private function categoryPayload(Category $category, bool $includeChildren = false): array
+    {
+        $payload = [
+            'id' => (string) $category->id, 'parentId' => $category->parent_id ? (string) $category->parent_id : null,
+            'name' => $category->name, 'slug' => $category->slug, 'image' => $category->image_url,
+            'status' => strtoupper($category->status), 'createdById' => null, 'updatedById' => null,
+            'createdAt' => $category->created_at?->toISOString(), 'updatedAt' => $category->updated_at?->toISOString(),
+            'parent' => $category->parent ? ['id' => (string) $category->parent->id, 'name' => $category->parent->name, 'slug' => $category->parent->slug] : null,
+        ];
+        if ($includeChildren) {
+            $payload['children'] = $category->children->map(fn (Category $child) => $this->categoryPayload($child))->values();
+        }
+        return $payload;
+    }
+}

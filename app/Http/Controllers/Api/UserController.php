@@ -21,6 +21,32 @@ class UserController extends Controller
     }
 
     /**
+     * Return compact user records for administrative selectors.
+     */
+    public function options(): JsonResponse
+    {
+        $this->authorize('viewAny', User::class);
+
+        $users = User::query()
+            ->with('roles:id,name')
+            ->orderBy('name')
+            ->limit(100)
+            ->get(['id', 'name', 'email']);
+
+        return ApiResponse::successResponse(
+            $users->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->pluck('name')->values(),
+                'label' => $user->name . ' (' . $user->email . ')',
+                'value' => $user->id,
+            ]),
+            'User options retrieved successfully.'
+        );
+    }
+
+    /**
      * Display a paginated listing of users.
      */
     public function index(IndexUserRequest $request): JsonResponse

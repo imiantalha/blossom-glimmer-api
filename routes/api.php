@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Http\Request;
-use App\Http\Resources\UserResource;
 use Illuminate\Support\Facades\Route;
+use App\Http\Resources\UserResource;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
@@ -11,48 +11,126 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\EmailController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductVariantController;
+use App\Http\Controllers\Api\StorefrontController;
+use App\Http\Controllers\Api\VendorProductController;
+use App\Http\Controllers\Api\CatalogManagementController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 
-Route::get('/user', function (Request $request) {
-    return new UserResource($request->user());
-})->middleware('auth:sanctum');
+Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
+    Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
 
-Route::middleware('throttle:60,1')->group(function () {
-    Route::controller(AuthController::class)->group(function () {
-        Route::post('/register', 'register');
-        Route::post('/login', 'login');
+    // Public storefront catalog.
+    Route::get('products', [StorefrontController::class, 'products']);
+    Route::get('products/{slug}', [StorefrontController::class, 'product']);
+    Route::get('categories', [StorefrontController::class, 'categories']);
+    Route::get('categories/{slug}', [StorefrontController::class, 'category']);
+    Route::get('brands', [StorefrontController::class, 'brands']);
+    Route::get('brands/{slug}', [StorefrontController::class, 'brand']);
+    Route::get('brands/{slug}/products', [StorefrontController::class, 'brandProducts']);
+    Route::get('vendors', [StorefrontController::class, 'vendors']);
+    Route::get('vendors/{slug}', [StorefrontController::class, 'vendor']);
+    Route::get('vendors/{slug}/products', [StorefrontController::class, 'vendorProducts']);
+    Route::get('collections', [StorefrontController::class, 'collections']);
+    Route::get('collections/{slug}', [StorefrontController::class, 'collection']);
+    Route::get('collections/{slug}/products', [StorefrontController::class, 'collectionProducts']);
+    Route::get('reviews', [StorefrontController::class, 'reviews']);
+    Route::get('shipping/methods', [StorefrontController::class, 'shippingMethods']);
+    Route::get('payment/methods', [StorefrontController::class, 'paymentMethods']);
 
+    Route::prefix('auth')->controller(AuthController::class)->group(function () {
+        Route::post('register', 'register');
+        Route::post('register/vendor', 'registerVendor');
+        Route::post('forgot-password', 'forgotPassword');
+        Route::post('reset-password', 'resetPassword');
+        Route::post('login', 'login');
         Route::middleware('auth:sanctum')->group(function () {
-            Route::get('/me', 'me');
-            Route::post('/logout', 'logout');
+            Route::get('me', 'me');
+            Route::post('logout', 'logout');
         });
     });
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('user', fn (Request $request) => new UserResource($request->user()));
+        Route::get('users/me', [AuthController::class, 'me']);
+        Route::patch('users/me', [StorefrontController::class, 'updateProfile']);
+        Route::patch('users/me/password', [AuthController::class, 'changePassword']);
+        Route::get('users/me/addresses', [StorefrontController::class, 'addresses']);
+        Route::post('users/me/addresses', [StorefrontController::class, 'storeAddress']);
+        Route::patch('users/me/addresses/{id}', [StorefrontController::class, 'updateAddress']);
+        Route::delete('users/me/addresses/{id}', [StorefrontController::class, 'deleteAddress']);
 
-        Route::apiResource('users', UserController::class);
-        Route::get('users/options', [UserController::class, 'options']);
+        Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
+        Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
+        Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
+            Route::get('store/me', [StorefrontController::class, 'myStore']);
+            Route::post('store', [StorefrontController::class, 'createStore']);
+            Route::patch('store', [StorefrontController::class, 'updateMyStore']);
+            Route::get('products/options', [VendorProductController::class, 'options']);
+            Route::get('products', [VendorProductController::class, 'index']);
+            Route::post('products', [VendorProductController::class, 'store']);
+            Route::get('products/{id}', [VendorProductController::class, 'show']);
+            Route::patch('products/{id}', [VendorProductController::class, 'update']);
+            Route::delete('products/{id}', [VendorProductController::class, 'destroy']);
+            Route::patch('products/{id}/inventory', [VendorProductController::class, 'updateInventory']);
+        });
 
-        Route::get('roles/options', [RoleController::class, 'options']);
-        Route::apiResource('roles', RoleController::class);
+        Route::get('cart', [StorefrontController::class, 'cart']);
+        Route::post('cart/merge', [StorefrontController::class, 'mergeCart']);
+        Route::post('cart', [StorefrontController::class, 'addCartItem']);
+        Route::patch('cart/{id}', [StorefrontController::class, 'updateCartItem']);
+        Route::delete('cart/{id}', [StorefrontController::class, 'deleteCartItem']);
+        Route::delete('cart', [StorefrontController::class, 'clearCart']);
 
-        Route::get('permissions/options', [PermissionController::class, 'options']);
-        Route::apiResource('permissions', PermissionController::class);
+        Route::post('admin/orders/{orderId}/shipment', [StorefrontController::class, 'upsertShipment']);
+        Route::get('orders', [StorefrontController::class, 'orders']);
+        Route::post('orders', [StorefrontController::class, 'createOrder']);
+        Route::get('orders/{id}', [StorefrontController::class, 'order']);
 
-        Route::get('email-logs', [EmailLogController::class, 'index']);
-        Route::get('email-logs/{emailLog}', [EmailLogController::class, 'show']);
-        Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
-        Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
+        Route::get('wishlist', [StorefrontController::class, 'wishlist']);
+        Route::post('wishlist/merge', [StorefrontController::class, 'mergeWishlist']);
+        Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
+        Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
+        Route::post('reviews', [StorefrontController::class, 'createReview']);
 
-        Route::post('/emails/send', [EmailController::class, 'send']);
+        Route::middleware('role:Admin')->group(function () {
+            Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::get('admin/brands', [CatalogManagementController::class, 'brands']);
+            Route::post('admin/brands', [CatalogManagementController::class, 'storeBrand']);
+            Route::get('admin/brands/{id}', [CatalogManagementController::class, 'brand']);
+            Route::patch('admin/brands/{id}', [CatalogManagementController::class, 'updateBrand']);
+            Route::delete('admin/brands/{id}', [CatalogManagementController::class, 'deleteBrand']);
+            Route::get('admin/categories', [CatalogManagementController::class, 'categories']);
+            Route::post('admin/categories', [CatalogManagementController::class, 'storeCategory']);
+            Route::get('admin/categories/{id}', [CatalogManagementController::class, 'category']);
+            Route::patch('admin/categories/{id}', [CatalogManagementController::class, 'updateCategory']);
+            Route::delete('admin/categories/{id}', [CatalogManagementController::class, 'deleteCategory']);
+            Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
+            Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
+            Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
+            Route::patch('admin/stores/{id}/commission', [StorefrontController::class, 'updateStoreCommission']);
+            Route::get('admin/users/options', [UserController::class, 'options']);
+            Route::apiResource('admin/users', UserController::class);
+            Route::get('roles/options', [RoleController::class, 'options']);
+            Route::apiResource('roles', RoleController::class);
+            Route::get('permissions/options', [PermissionController::class, 'options']);
+            Route::apiResource('permissions', PermissionController::class);
+            Route::get('email-logs', [EmailLogController::class, 'index']);
+            Route::get('email-logs/{emailLog}', [EmailLogController::class, 'show']);
+            Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
+            Route::post('email-logs/{emailLog}/retry', [EmailLogController::class, 'retry']);
+            Route::post('emails/send', [EmailController::class, 'send']);
+            Route::get('admin/products/options', [VendorProductController::class, 'options']);
+            Route::get('admin/products', [VendorProductController::class, 'adminIndex']);
+            Route::get('admin/products/{id}', [VendorProductController::class, 'adminShow']);
+            Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
+            // Keep the storefront admin contract on VendorProductController; expose
+            // the lower-level product resource separately to avoid duplicate GET routes.
+            Route::apiResource('catalog/products', ProductController::class);
+            Route::apiResource('admin.products.variants', ProductVariantController::class);
+        });
 
-        Route::apiResource('products', ProductController::class);
-
-        Route::apiResource('products.variants', ProductVariantController::class);
-
-        Route::post('/ai/product-assistant', [ProductAssistantController::class, 'chat']);
-        Route::post('/ai/product-assistant/stream', [ProductAssistantController::class, 'stream']);
+        Route::post('ai/product-assistant', [ProductAssistantController::class, 'chat']);
+        Route::post('ai/product-assistant/stream', [ProductAssistantController::class, 'stream']);
     });
 });
