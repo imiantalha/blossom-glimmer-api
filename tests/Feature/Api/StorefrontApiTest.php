@@ -1014,4 +1014,31 @@ class StorefrontApiTest extends TestCase
             ->assertForbidden();
     }
 
+
+
+    public function test_admin_product_rejection_requires_and_persists_vendor_feedback(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id . '/approval', ['decision' => 'reject'])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/approval', [
+            'decision' => 'reject',
+            'reason' => 'Please provide clearer product images and complete the material details.',
+        ])->assertOk()
+            ->assertJsonPath('data.approvalStatus', 'REJECTED')
+            ->assertJsonPath('data.rejectionReason', 'Please provide clearer product images and complete the material details.');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
+
+        $vendor = User::findOrFail($product->vendor_id);
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/vendor/products/' . $product->id)
+            ->assertOk()
+            ->assertJsonPath('data.rejectionReason', 'Please provide clearer product images and complete the material details.');
+    }
+
 }
