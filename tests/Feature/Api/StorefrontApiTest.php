@@ -143,4 +143,56 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.items', [])
             ->assertJsonStructure(['data' => ['id', 'currency', 'items', 'subtotal', 'total']]);
     }
+    public function test_admin_can_create_brands_and_categories(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/brands', [
+                'name' => 'Integration Brand',
+                'slug' => 'integration-brand',
+                'status' => 'ACTIVE',
+                'logo' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.slug', 'integration-brand')
+            ->assertJsonPath('data.status', 'ACTIVE');
+
+        $root = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/categories', [
+                'name' => 'Integration Root',
+                'slug' => 'integration-root',
+                'status' => 'ACTIVE',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.parentId', null);
+
+        $rootId = $root->json('data.id');
+        $this->postJson('/api/v1/admin/categories', [
+            'name' => 'Integration Child',
+            'slug' => 'integration-child',
+            'status' => 'ACTIVE',
+            'parent_id' => $rootId,
+        ])->assertCreated()->assertJsonPath('data.parentId', (string) $rootId);
+
+        $this->getJson('/api/v1/admin/categories')->assertOk()
+            ->assertJsonFragment(['slug' => 'integration-root'])
+            ->assertJsonFragment(['slug' => 'integration-child']);
+    }
+
+    public function test_non_admin_cannot_manage_catalog_taxonomy(): void
+    {
+        $customer = User::factory()->create();
+        $customer->assignRole('Customer');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/admin/brands', ['name' => 'No Access', 'status' => 'ACTIVE'])
+            ->assertForbidden();
+
+        $this->actingAs($customer, 'sanctum')
+            ->getJson('/api/v1/admin/categories')
+            ->assertForbidden();
+    }
+
 }
