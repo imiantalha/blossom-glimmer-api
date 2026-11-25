@@ -223,3 +223,12 @@ Known areas requiring immediate verification:
 3. Complete frontend service integration and API-unavailable fallback behavior, ensuring mutations never claim remote success and local guest data is reconciled safely.
 4. Add frontend tests for fallback and API contract behavior; run TypeScript, ESLint, build, Laravel tests on SQLite and SQL Server.
 5. Update PRs and report exact results; do not merge without user approval.
+
+
+### Latest implementation checkpoint
+- Added vendor registration, store profile management and admin store moderation/commission endpoints.
+- Added vendor product options/list/create/detail/update/archive and stock adjustment endpoints; admin product list/detail/options and approval/rejection endpoints.
+- Frontend now uses Laravel product/store queries and mutations; guest cart and wishlist can merge by product slug and variant SKU.
+- Added demo scenarios and expanded feature tests for product listing, auth, vendor isolation, inventory, checkout idempotency and seeded data.
+- Added SQLite and SQL Server CI jobs. Latest SQL Server run is being rechecked after changing foreign-key delete behavior to SQL Server-compatible `NO ACTION`.
+- Frontend integration remains on `feat/laravel-api-integration`; run its lint/typecheck/build before opening its PR.
