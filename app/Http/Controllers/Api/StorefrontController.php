@@ -14,10 +14,36 @@ use Illuminate\Validation\ValidationException;
 
 class StorefrontController extends Controller
 {
+
+    private function paginatedPayload($items, Request $request, int $defaultPerPage = 24)
+    {
+        $perPage = min(max($request->integer('per_page', $defaultPerPage), 1), 100);
+        $page = max($request->integer('page', 1), 1);
+        $total = $items->count();
+        $data = $items->forPage($page, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Resources retrieved.',
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $page,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage,
+                'total' => $total,
+                'count' => $data->count(),
+                'from' => $data->isEmpty() ? null : (($page - 1) * $perPage) + 1,
+                'to' => $data->isEmpty() ? null : (($page - 1) * $perPage) + $data->count(),
+                'has_previous' => $page > 1,
+                'has_next' => $page * $perPage < $total,
+            ],
+        ]);
+    }
+
     private function productQuery()
     {
         return Product::query()->where('status', 'active')
-            ->with(['brand', 'categories', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
+            ->with(['brand', 'vendor', 'categories', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
     }
 
     private function productPayload(Product $p): array
@@ -54,21 +80,74 @@ class StorefrontController extends Controller
     public function products(Request $request)
     {
         $query = $this->productQuery();
+
         if ($search = $request->string('search')->trim()->toString()) {
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('description', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"));
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%"));
         }
-        if ($slug = $request->input('category')) $query->whereHas('categories', fn ($q) => $q->where('slug', $slug));
-        if ($slug = $request->input('brand')) $query->whereHas('brand', fn ($q) => $q->where('slug', $slug));
-        if ($request->filled('min_price')) $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id)) >= ?', [(float) $request->min_price]);
-        if ($request->filled('max_price')) $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id)) <= ?', [(float) $request->max_price]);
-        if ($request->boolean('in_stock')) $query->whereHas('inventoryItems', fn ($q) => $q->whereRaw('stock_quantity > reserved_quantity'));
-        match ($request->input('sort', 'featured')) {
+        if ($slug = $request->input('category')) {
+            $query->whereHas('categories', fn ($q) => $q->where('slug', $slug));
+        }
+        if ($slug = $request->input('subcategory')) {
+            $query->whereHas('categories', fn ($q) => $q->where('slug', $slug));
+        }
+        if ($slug = $request->input('brand')) {
+            $query->whereHas('brand', fn ($q) => $q->where('slug', $slug));
+        }
+        if ($slug = $request->input('vendor')) {
+            $query->whereHas('vendor', fn ($q) => $q->whereRaw('LOWER(name) = ?', [str_replace('-', ' ', strtolower($slug))]));
+        }
+        if ($request->filled('min_price')) {
+            $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) >= ?', ['active', (float) $request->min_price]);
+        }
+        if ($request->filled('max_price')) {
+            $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) <= ?', ['active', (float) $request->max_price]);
+        }
+        if ($request->boolean('discounted')) {
+            $query->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'base_price');
+        }
+        if ($request->boolean('in_stock')) {
+            $query->where(function ($q) {
+                $q->whereHas('inventoryItems', fn ($stock) => $stock->where('manage_inventory', false)->orWhereRaw('stock_quantity > reserved_quantity'))
+                    ->orWhereHas('variants.inventoryItems', fn ($stock) => $stock->where('manage_inventory', false)->orWhereRaw('stock_quantity > reserved_quantity'));
+            });
+        }
+        foreach (['season', 'occasion'] as $metadataFilter) {
+            if ($request->filled($metadataFilter)) {
+                $query->whereJsonContains('metadata->' . $metadataFilter, $request->input($metadataFilter));
+            }
+        }
+        if ($request->filled('collection')) {
+            $collection = DB::table('collections')->where('slug', $request->input('collection'))->where('is_active', true)->first();
+            if (!$collection) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
+                if ($categorySlugs) $query->whereHas('categories', fn ($q) => $q->whereIn('slug', $categorySlugs));
+            }
+        }
+        foreach ($request->query() as $key => $value) {
+            if (str_starts_with($key, 'attribute_') && is_scalar($value)) {
+                $attributeName = substr($key, 10);
+                $query->whereHas('variants.attributeValues', fn ($q) => $q->whereHas('attribute', fn ($a) => $a->where('slug', Str::slug($attributeName)))->where('value', (string) $value));
+            }
+        }
+        if ($request->filled('min_rating')) {
+            $query->whereRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) >= ?', ['approved', (float) $request->min_rating]);
+        }
+
+        $sort = $request->input('sort', 'featured');
+        match ($sort) {
             'newest' => $query->latest(),
-            'price_asc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id)) ASC'),
-            'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id)) DESC'),
-            default => $query->orderByDesc('created_at'),
+            'price_asc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) ASC', ['active']),
+            'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) DESC', ['active']),
+            'rating' => $query->orderByRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) DESC', ['approved']),
+            'best_selling' => $query->orderByDesc('created_at'),
+            default => $query->orderByRaw("CASE WHEN JSON_EXTRACT(metadata, '$.featured') = true THEN 1 ELSE 0 END DESC")->orderByDesc('created_at'),
         };
-        $page = $query->paginate(min(max((int) $request->input('per_page', 24), 1), 100));
+
+        $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
         $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
         return response()->json(['success' => true, 'message' => 'Products retrieved.', 'data' => $data, 'pagination' => [
             'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
