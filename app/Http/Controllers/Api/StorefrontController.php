@@ -45,14 +45,17 @@ class StorefrontController extends Controller
     private function productQuery()
     {
         return Product::query()->where('status', 'active')
-            ->with(['brand', 'vendor', 'categories.parent', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
+            ->with(['brand', 'vendor.vendorProfile', 'categories.parent', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
     }
 
     private function productPayload(Product $p): array
     {
-        $images = collect([$p->featureMedia])->merge($p->media)->filter()->unique('id')->values()->map(fn ($m) => [
-            'id' => $m->id, 'url' => $m->external_url ?: \Illuminate\Support\Facades\Storage::disk($m->disk)->url($m->file_path), 'alt' => $m->alt_text,
-        ]);
+        $metadataImages = collect(data_get($p->metadata, 'images', []));
+        $images = $metadataImages->isNotEmpty()
+            ? $metadataImages->values()
+            : collect([$p->featureMedia])->merge($p->media)->filter()->unique('id')->values()->map(fn ($m) => [
+                'id' => $m->id, 'url' => $m->external_url ?: \Illuminate\Support\Facades\Storage::disk($m->disk)->url($m->file_path), 'alt' => $m->alt_text,
+            ]);
         $stock = $p->variants->isNotEmpty()
             ? $p->variants->sum(fn ($v) => $v->inventoryItems->sum(fn ($i) => max(0, $i->stock_quantity - $i->reserved_quantity)))
             : $p->inventoryItems->sum(fn ($i) => max(0, $i->stock_quantity - $i->reserved_quantity));
@@ -69,15 +72,15 @@ class StorefrontController extends Controller
                 'id' => $v->id, 'sku' => $v->sku, 'name' => $v->name, 'price' => (float) $v->price,
                 'compareAtPrice' => $v->compare_at_price ? (float) $v->compare_at_price : null,
                 'stock' => $v->inventoryItems->sum(fn ($i) => max(0, $i->stock_quantity - $i->reserved_quantity)),
-                'attributes' => $v->attributeValues->mapWithKeys(fn ($a) => [$a->attribute->name => $a->value]),
+                'attributes' => data_get($v->metadata, 'attributes', $v->attributeValues->mapWithKeys(fn ($a) => [$a->attribute->name => $a->value])->all()),
             ])->values(),
             'tags' => $p->tags->pluck('slug')->values(),
             'category' => $category ? ['id' => $category->parent?->id ?? $category->id, 'name' => $category->parent?->name ?? $category->name, 'slug' => $category->parent?->slug ?? $category->slug] : null,
             'subcategory' => ($category && $category->parent) ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'brand' => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name, 'slug' => $p->brand->slug] : null,
-            'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => Str::slug($p->vendor->name)] : null,
-            'rating' => (float) DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating'),
-            'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count(),
+            'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => $p->vendor->vendorProfile?->slug ?? Str::slug($p->vendor->name), 'rating' => $p->vendor->vendorProfile?->rating, 'reviewCount' => $p->vendor->vendorProfile?->review_count ?? 0] : null,
+            'rating' => (float) (DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating') ?? data_get($p->metadata, 'rating', 0)),
+            'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count() ?: (int) data_get($p->metadata, 'review_count', 0),
             'soldCount' => (int) data_get($p->metadata, 'sold_count', 0),
             'badges' => data_get($p->metadata, 'badges', []),
             'season' => data_get($p->metadata, 'season', []), 'occasion' => data_get($p->metadata, 'occasion', []),
