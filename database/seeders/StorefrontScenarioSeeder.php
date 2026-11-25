@@ -29,9 +29,8 @@ class StorefrontScenarioSeeder extends Seeder
             }
 
             // Predictable development-only credentials for the seeded vendor stores.
-            $vendors = User::whereIn('email', DB::table('vendor_profiles')->pluck('user_id')->map(
-                fn ($id) => User::whereKey($id)->value('email')
-            )->filter()->all())->get();
+            $vendorIds = DB::table('vendor_profiles')->pluck('user_id')->all();
+            $vendors = User::whereIn('id', $vendorIds)->get();
             foreach ($vendors as $vendor) {
                 $vendor->forceFill(['password' => Hash::make('Password123!')])->save();
             }
