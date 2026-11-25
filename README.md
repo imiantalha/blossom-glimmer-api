@@ -25,7 +25,7 @@ The API base URL is `http://localhost:8000/api/v1`. Configure `NEXT_PUBLIC_API_U
 
 ### Development catalogue data
 
-The frontend's existing mock catalogue is copied into backend demo fixtures. It contains 132 products, 9 root categories plus child categories, 6 brands, 4 vendors, 4 collections and 192 reviews. These are **development/demo records**, not verified live stock or approved production vendor data.
+The frontend's existing mock catalogue is copied into backend demo fixtures. It contains 132 products, 9 root categories plus child categories, 6 brands, 4 vendors, 4 collections and 120 matching reviews (72 orphan review fixtures are skipped). These are **development/demo records**, not verified live stock or approved production vendor data.
 
 Demo seeding is enabled by default outside production. To control it explicitly:
 
