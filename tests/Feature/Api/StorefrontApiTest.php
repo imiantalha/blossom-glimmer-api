@@ -138,7 +138,7 @@ class StorefrontApiTest extends TestCase
             ->postJson('/api/v1/vendor/products', array_merge($productPayload, ['tags' => ['not-approved-by-admin']]))
             ->assertUnprocessable();
 
-        $response = $this->postJson('/api/v1/vendor/products', $productPayload)->assertCreated()>assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
+        $response = $this->postJson('/api/v1/vendor/products', $productPayload)->assertCreated()->assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
 
         $productId = $response->json('data.id');
 
