@@ -150,4 +150,53 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.items', [])
             ->assertJsonStructure(['data' => ['id', 'currency', 'items', 'subtotal', 'total']]);
     }
+    public function test_vendor_registration_assigns_vendor_role_and_returns_token(): void
+    {
+        $response = $this->postJson('/api/v1/auth/register/vendor', [
+            'firstName' => 'Demo',
+            'lastName' => 'Seller',
+            'email' => 'new-vendor@example.test',
+            'phone' => '+923001112233',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.role', 'vendor')
+            ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'role'], 'token', 'tokenType', 'expiresAt']]);
+
+        $this->assertDatabaseHas('users', ['email' => 'new-vendor@example.test']);
+    }
+
+    public function test_customer_cannot_register_as_vendor_through_customer_endpoint(): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'firstName' => 'Test',
+            'lastName' => 'Customer',
+            'email' => 'customer-only@example.test',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ])->assertCreated()->assertJsonPath('data.user.role', 'customer');
+    }
+
+    public function test_vendor_store_creation_is_pending_until_admin_approval(): void
+    {
+        $vendor = User::factory()->create();
+        $vendor->assignRole('Vendor');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/store', [
+                'name' => 'Integration Test Store',
+                'slug' => 'integration-test-store',
+                'description' => 'A store created by an API feature test.',
+                'email' => 'store@example.test',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.slug', 'integration-test-store');
+
+        $this->assertDatabaseHas('vendor_profiles', ['user_id' => $vendor->id, 'slug' => 'integration-test-store', 'status' => 'pending']);
+    }
+
 }
