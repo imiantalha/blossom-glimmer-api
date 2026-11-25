@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductVariantController;
 use App\Http\Controllers\Api\StorefrontController;
 use App\Http\Controllers\Api\VendorProductController;
+use App\Http\Controllers\Api\CatalogManagementController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 
@@ -94,6 +95,16 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Admin')->group(function () {
             Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::get('admin/brands', [CatalogManagementController::class, 'brands']);
+            Route::post('admin/brands', [CatalogManagementController::class, 'storeBrand']);
+            Route::get('admin/brands/{id}', [CatalogManagementController::class, 'brand']);
+            Route::patch('admin/brands/{id}', [CatalogManagementController::class, 'updateBrand']);
+            Route::delete('admin/brands/{id}', [CatalogManagementController::class, 'deleteBrand']);
+            Route::get('admin/categories', [CatalogManagementController::class, 'categories']);
+            Route::post('admin/categories', [CatalogManagementController::class, 'storeCategory']);
+            Route::get('admin/categories/{id}', [CatalogManagementController::class, 'category']);
+            Route::patch('admin/categories/{id}', [CatalogManagementController::class, 'updateCategory']);
+            Route::delete('admin/categories/{id}', [CatalogManagementController::class, 'deleteCategory']);
             Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
             Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
             Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
