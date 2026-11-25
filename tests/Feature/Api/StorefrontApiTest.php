@@ -959,7 +959,7 @@ class StorefrontApiTest extends TestCase
         $product->update(['metadata' => $metadata]);
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/v1/admin/products?approval_status=approved&status=active')
+            ->getJson('/api/v1/admin/products?' . http_build_query(['approval_status' => 'approved', 'status' => 'active', 'name' => $product->name]))
             ->assertOk()
             ->assertJsonFragment(['id' => (string) $product->id]);
 
@@ -1061,7 +1061,7 @@ class StorefrontApiTest extends TestCase
         $product->update(['metadata' => $metadata]);
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/v1/admin/products?status=active&approval_status=approved')
+            ->getJson('/api/v1/admin/products?' . http_build_query(['status' => 'active', 'approval_status' => 'approved', 'name' => $product->name]))
             ->assertOk()
             ->assertJsonFragment(['id' => (string) $product->id]);
 
