@@ -33,6 +33,15 @@ class RolePermissionSeeder extends Seeder
             'brands.manage',
             'categories.manage',
             'inventory.update',
+
+            'roles.view',
+            'roles.create',
+            'roles.update',
+            'roles.delete',
+            'permissions.view',
+            'permissions.create',
+            'permissions.update',
+            'permissions.delete',
         ];
 
         foreach ($permissions as $permission) {
