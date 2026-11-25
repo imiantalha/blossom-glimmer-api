@@ -430,7 +430,19 @@ class VendorProductController extends Controller
         if ($request->filled('brand_id')) $query->where('brand_id', $request->integer('brand_id'));
         if ($request->filled('category_id')) $query->whereHas('categories', fn ($q) => $q->where('categories.id', $request->integer('category_id')));
         if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
-        if ($request->filled('approval_status')) $query->where('metadata->approvalStatus', strtolower($request->input('approval_status')));
+        if ($request->filled('approval_status')) {
+            $approvalStatus = strtolower($request->input('approval_status'));
+            $query->where(function ($approval) use ($approvalStatus) {
+                $approval->where('metadata->approvalStatus', $approvalStatus);
+                if ($approvalStatus === 'approved') {
+                    if (DB::connection()->getDriverName() === 'sqlsrv') {
+                        $approval->orWhereRaw("JSON_VALUE([metadata], '$.approvalStatus') IS NULL AND [status] = ?", ['active']);
+                    } else {
+                        $approval->orWhereRaw("json_extract(metadata, '$.approvalStatus') IS NULL AND status = ?", ['active']);
+                    }
+                }
+            });
+        }
         if ($request->filled('sku')) $query->where(fn ($q) => $q->where('sku', 'like', '%' . $request->input('sku') . '%')->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', '%' . $request->input('sku') . '%')));
         $page = $query->latest()->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($product) => $this->adminPayload($product));
