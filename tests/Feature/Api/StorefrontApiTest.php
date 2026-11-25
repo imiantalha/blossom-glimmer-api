@@ -570,4 +570,66 @@ class StorefrontApiTest extends TestCase
         $this->withToken($otherToken)->getJson('/api/v1/auth/me')->assertUnauthorized();
         $this->assertTrue(Hash::check('NewPassword123!', $customer->fresh()->password));
     }
+
+    public function test_public_catalog_and_storefront_read_endpoints_return_success(): void
+    {
+        $productSlug = DB::table('products')->where('status', 'active')->value('slug');
+        $categorySlug = DB::table('categories')->where('status', 'active')->value('slug');
+        $brandSlug = DB::table('brands')->where('status', 'active')->value('slug');
+        $vendorSlug = DB::table('vendor_profiles')->where('status', 'active')->value('slug');
+        $collectionSlug = DB::table('collections')->where('is_active', true)->value('slug');
+
+        $paths = [
+            '/api/v1/products',
+            '/api/v1/products/' . $productSlug,
+            '/api/v1/categories',
+            '/api/v1/categories/' . $categorySlug,
+            '/api/v1/brands',
+            '/api/v1/brands/' . $brandSlug,
+            '/api/v1/brands/' . $brandSlug . '/products',
+            '/api/v1/vendors',
+            '/api/v1/vendors/' . $vendorSlug,
+            '/api/v1/vendors/' . $vendorSlug . '/products',
+            '/api/v1/collections',
+            '/api/v1/collections/' . $collectionSlug,
+            '/api/v1/collections/' . $collectionSlug . '/products',
+            '/api/v1/reviews',
+            '/api/v1/shipping/methods',
+            '/api/v1/payment/methods',
+        ];
+
+        foreach ($paths as $path) {
+            $this->getJson($path)
+                ->assertOk()
+                ->assertJsonPath('success', true);
+        }
+    }
+
+    public function test_admin_read_endpoints_are_available_to_admin_accounts(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $paths = [
+            '/api/v1/dashboard',
+            '/api/v1/admin/brands',
+            '/api/v1/admin/categories',
+            '/api/v1/admin/stores',
+            '/api/v1/admin/users/options',
+            '/api/v1/admin/users',
+            '/api/v1/roles/options',
+            '/api/v1/roles',
+            '/api/v1/permissions/options',
+            '/api/v1/permissions',
+            '/api/v1/email-logs',
+            '/api/v1/admin/products/options',
+            '/api/v1/admin/products',
+        ];
+
+        foreach ($paths as $path) {
+            $this->actingAs($admin, 'sanctum')
+                ->getJson($path)
+                ->assertOk()
+                ->assertJsonPath('success', true);
+        }
+    }
 }
