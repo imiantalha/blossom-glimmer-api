@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Brand;
+use App\Constants\Role;
 use App\Http\Resources\UserResource;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -216,7 +217,7 @@ class StorefrontController extends Controller
 
     public function vendors(Request $request)
     {
-        $query = \App\Models\User::role('vendor')->with('vendorProfile')->orderBy('name');
+        $query = \App\Models\User::role(Role::VENDOR)->with('vendorProfile')->orderBy('name');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
         $items = $query->get()->map(function ($v) {
             $profile = $v->vendorProfile;
@@ -579,7 +580,7 @@ class StorefrontController extends Controller
 
     public function upsertShipment(Request $request, int $orderId)
     {
-        abort_unless($request->user()->hasAnyRole(['admin', 'super-admin']), 403);
+        abort_unless($request->user()->hasRole(Role::ADMIN), 403);
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
         abort_unless($order, 404);
         $data = $request->validate([
