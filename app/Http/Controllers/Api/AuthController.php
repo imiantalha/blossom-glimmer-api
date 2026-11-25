@@ -65,6 +65,35 @@ class AuthController extends Controller
         ], 'Registration successful.');
     }
 
+
+    public function registerVendor(Request $request)
+    {
+        $data = $request->validate([
+            'firstName' => ['required', 'string', 'max:100'],
+            'lastName' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = User::create([
+            'name' => trim($data['firstName'] . ' ' . $data['lastName']),
+            'email' => strtolower($data['email']),
+            'phone' => $data['phone'] ?? null,
+            'password' => $data['password'],
+        ]);
+        $user->assignRole(Role::VENDOR);
+
+        $token = $user->createToken('storefront-vendor', ['*'], now()->addMinutes((int) config('sanctum.expiration', 10080)))->plainTextToken;
+
+        return ApiResponse::createdResponse([
+            'user' => new UserResource($user),
+            'token' => $token,
+            'tokenType' => 'Bearer',
+            'expiresAt' => now()->addMinutes((int) config('sanctum.expiration', 10080))->toISOString(),
+        ], 'Vendor account created successfully. Create your store to start selling.');
+    }
+
     public function me(Request $request)
     {
         return ApiResponse::successResponse(new UserResource($request->user()), 'User details retrieved.');
