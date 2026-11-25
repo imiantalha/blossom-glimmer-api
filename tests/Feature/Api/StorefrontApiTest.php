@@ -115,7 +115,7 @@ class StorefrontApiTest extends TestCase
 
         DB::table('tags')->updateOrInsert(['slug' => 'api-test'], ['name' => 'api-test', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
 
-        $response = $this->actingAs($vendor, 'sanctum')->postJson('/api/v1/vendor/products', [
+        $productPayload = [
             'name' => 'API Test Simple Product',
             'slug' => 'api-test-simple-product',
             'brandId' => $brandId,
@@ -133,7 +133,12 @@ class StorefrontApiTest extends TestCase
                 'images' => [], 'attributeValues' => [],
             ]],
             'specifications' => [], 'faqs' => [], 'intent' => 'submit',
-        ])->assertCreated()->assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
+        ];
+        $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/products', array_merge($productPayload, ['tags' => ['not-approved-by-admin']]))
+            ->assertUnprocessable();
+
+        $response = $this->postJson('/api/v1/vendor/products', $productPayload)->assertCreated()>assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
 
         $productId = $response->json('data.id');
 
