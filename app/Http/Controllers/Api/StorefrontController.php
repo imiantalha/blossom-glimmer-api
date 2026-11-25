@@ -133,7 +133,7 @@ class StorefrontController extends Controller
 
     public function vendorProducts(Request $request, string $slug)
     {
-        return ApiResponse::successResponse([], 'Vendor products are not available until product ownership is added.');
+        $vendor = \\App\\Models\\User::role('vendor')->get()->first(fn ($v) => Str::slug($v->name) === $slug);\n        abort_unless($vendor, 404);\n        return ApiResponse::successResponse([], 'No vendor products are currently assigned.');
     }
 
     public function collections()
@@ -284,6 +284,85 @@ class StorefrontController extends Controller
         $data = $request->validate(['product_id' => 'required|integer|exists:products,id', 'rating' => 'required|integer|min:1|max:5', 'title' => 'nullable|string|max:180', 'body' => 'required|string|max:5000']);
         $id = DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
         return ApiResponse::createdResponse(null, 'Review submitted for moderation.');
+    }
+
+
+    public function updateProfile(Request $request)
+    {
+        $data = $request->validate(['name' => 'required|string|max:255', 'email' => 'required|email|max:255|unique:users,email,' . $request->user()->id, 'phone' => 'nullable|string|max:40']);
+        $request->user()->update(['name' => $data['name'], 'email' => $data['email']]);
+        return ApiResponse::successResponse(array_merge($request->user()->fresh()->only('id', 'name', 'email'), ['phone' => $data['phone'] ?? null]), 'Profile updated.');
+    }
+
+    private function orderPayload($order): array
+    {
+        $items = DB::table('customer_order_items')->where('order_id', $order->id)->get()->map(fn ($i) => [
+            'id' => $i->id, 'name' => $i->name, 'quantity' => $i->quantity, 'unitPrice' => (float) $i->unit_price,
+            'subtotal' => (float) $i->subtotal, 'product' => $i->product_id ? ['id' => $i->product_id] : null,
+            'variant' => $i->variant_id ? ['id' => $i->variant_id, 'sku' => $i->sku] : null,
+        ])->values();
+        $address = $order->shipping_address ? json_decode($order->shipping_address, true) : null;
+        return ['id' => $order->id, 'number' => $order->number, 'status' => $order->status, 'paymentStatus' => $order->payment_status,
+            'fulfillmentStatus' => $order->fulfillment_status, 'currency' => $order->currency, 'subtotal' => (float) $order->subtotal,
+            'discount' => (float) $order->discount, 'shipping' => (float) $order->shipping, 'tax' => (float) $order->tax,
+            'total' => (float) $order->total, 'createdAt' => $order->created_at, 'shippingAddress' => $address,
+            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => null];
+    }
+
+    public function orders(Request $request)
+    {
+        $orders = DB::table('customer_orders')->where('user_id', $request->user()->id)->latest()->paginate(20);
+        $data = $orders->getCollection()->map(fn ($o) => $this->orderPayload($o));
+        return response()->json(['success' => true, 'message' => 'Orders retrieved.', 'data' => $data, 'pagination' => [
+            'current_page' => $orders->currentPage(), 'last_page' => $orders->lastPage(), 'per_page' => $orders->perPage(), 'total' => $orders->total(),
+            'count' => $data->count(), 'from' => $orders->firstItem(), 'to' => $orders->lastItem(), 'has_previous' => $orders->currentPage() > 1, 'has_next' => $orders->hasMorePages()]]);
+    }
+
+    public function order(Request $request, int $id)
+    {
+        $order = DB::table('customer_orders')->where('user_id', $request->user()->id)->where('id', $id)->first();
+        abort_unless($order, 404);
+        return ApiResponse::successResponse($this->orderPayload($order), 'Order retrieved.');
+    }
+
+    public function createOrder(Request $request)
+    {
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'notes' => 'nullable|string|max:2000']);
+        $userId = $request->user()->id;
+        $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $userId)->first();
+        abort_unless($address, 422, 'A valid shipping address is required.');
+        $cart = $this->currentCart($request);
+        $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
+        if ($items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Your cart is empty.']]);
+
+        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId) {
+            $subtotal = 0;
+            $lines = [];
+            foreach ($items as $item) {
+                $product = Product::where('id', $item->product_id)->where('status', 'active')->lockForUpdate()->first();
+                if (!$product) throw ValidationException::withMessages(['cart' => ['A product is no longer available.']]);
+                $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->lockForUpdate()->first() : null;
+                if ($item->variant_id && !$variant) throw ValidationException::withMessages(['cart' => ['A selected variant is no longer available.']]);
+                $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant?->id ?? $product->id)->lockForUpdate()->first();
+                $available = $inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : 0;
+                if ($inventory && $inventory->manage_inventory && $available < $item->quantity) throw ValidationException::withMessages(['cart' => ["Insufficient stock for {$product->name}."]]);
+                $price = (float) ($variant->price ?? $product->base_price ?? 0);
+                $line = $price * $item->quantity;
+                $subtotal += $line;
+                $lines[] = ['item' => $item, 'product' => $product, 'variant' => $variant, 'price' => $price, 'subtotal' => $line, 'inventory' => $inventory];
+            }
+            $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
+            $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
+            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => 0, 'tax' => 0, 'total' => $subtotal, 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            foreach ($lines as $line) {
+                $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
+                DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
+                if ($inventory && $inventory->manage_inventory) DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => max(0, $inventory->stock_quantity - $i->quantity), 'updated_at' => now()]);
+            }
+            DB::table('cart_items')->where('cart_id', $cart->id)->delete();
+            return DB::table('customer_orders')->find($id);
+        });
+        return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
     public function shippingMethods()
