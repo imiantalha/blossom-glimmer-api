@@ -13,7 +13,7 @@ class VendorProfile extends Model
         'description',
         'image_url',
         'rating',
-        'review_count',
+        'review_count', 'name', 'banner_url', 'email', 'phone', 'status', 'commission_type', 'commission_value', 'approved_at', 'deleted_at',
     ];
 
     protected function casts(): array
@@ -21,6 +21,9 @@ class VendorProfile extends Model
         return [
             'rating' => 'decimal:2',
             'review_count' => 'integer',
+            'commission_value' => 'decimal:2',
+            'approved_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 
