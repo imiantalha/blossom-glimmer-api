@@ -968,7 +968,7 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
 
         $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
-            ->assertOk()->assertJsonPath('data.status', 'active');
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
 
         $this->patchJson('/api/v1/admin/products/' . $product->id . '/featured', ['is_featured' => true])
             ->assertOk()->assertJsonPath('data.isFeatured', true);
@@ -1006,7 +1006,7 @@ class StorefrontApiTest extends TestCase
 
         $this->actingAs($admin, 'sanctum')
             ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'active'])
-            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+            ->assertOk()->assertJsonPath('data.status', 'active');
     }
 
     public function test_non_admin_cannot_change_product_or_store_moderation_state(): void
