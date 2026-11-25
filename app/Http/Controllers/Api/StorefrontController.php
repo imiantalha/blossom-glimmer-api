@@ -96,7 +96,8 @@ class StorefrontController extends Controller
                 ->orWhere('sku', 'like', "%{$search}%"));
         }
         if ($slug = $request->input('category')) {
-            $query->whereHas('categories', fn ($q) => $q->where('slug', $slug));
+            $query->where(fn ($q) => $q->whereHas('categories', fn ($category) => $category->where('slug', $slug))
+                ->orWhereHas('categories.parent', fn ($parent) => $parent->where('slug', $slug)));
         }
         if ($slug = $request->input('subcategory')) {
             $query->whereHas('categories', fn ($q) => $q->where('slug', $slug));
@@ -152,8 +153,8 @@ class StorefrontController extends Controller
             'price_asc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) ASC', ['active']),
             'price_desc' => $query->orderByRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) DESC', ['active']),
             'rating' => $query->orderByRaw('(SELECT AVG(rating) FROM product_reviews WHERE product_reviews.product_id = products.id AND product_reviews.status = ?) DESC', ['approved']),
-            'best_selling' => $query->orderByDesc('created_at'),
-            default => $query->orderByDesc('created_at'),
+            'best_selling' => $query->orderByRaw("(SELECT COALESCE(SUM(oi.quantity), 0) FROM customer_order_items oi INNER JOIN customer_orders o ON o.id = oi.order_id WHERE oi.product_id = products.id AND o.status NOT IN ('cancelled', 'failed')) DESC"),
+            default => $query->orderByRaw("CASE WHEN metadata LIKE '%\\\"featured\\\":true%' THEN 1 ELSE 0 END DESC")->orderByDesc('created_at'),
         };
 
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
