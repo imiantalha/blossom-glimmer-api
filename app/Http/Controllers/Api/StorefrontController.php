@@ -308,13 +308,6 @@ class StorefrontController extends Controller
         ]]);
     }
 
-    public function collection(string $slug)
-    {
-        $c = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
-        abort_unless($c, 404);
-        return ApiResponse::successResponse(['id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url, 'categories' => json_decode($c->category_slugs, true) ?: []], 'Collection retrieved.');
-    }
-
     public function addresses(Request $request)
     {
         $rows = DB::table('customer_addresses')->where('user_id', $request->user()->id)->orderByDesc('is_default')->orderByDesc('id')->get();
@@ -375,6 +368,47 @@ class StorefrontController extends Controller
     {
         return DB::table('carts')->where('user_id', $request->user()->id)->first()
             ?? (function () use ($request) { $id = DB::table('carts')->insertGetId(['user_id' => $request->user()->id, 'currency' => 'USD', 'created_at' => now(), 'updated_at' => now()]); return DB::table('carts')->find($id); })();
+    }
+
+    public function validateInventory(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'required|array|min:1|max:100',
+            'items.*.product_id' => 'required|integer|exists:products,id',
+            'items.*.variant_id' => 'nullable|integer|exists:product_variants,id',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+        ]);
+
+        $issues = [];
+        foreach ($data['items'] as $index => $item) {
+            $product = Product::where('id', $item['product_id'])->where('status', 'active')->first();
+            if (!$product) {
+                $issues[] = ['index' => $index, 'productId' => $item['product_id'], 'reason' => 'unavailable', 'message' => 'This product is unavailable.'];
+                continue;
+            }
+            $variant = null;
+            if (!empty($item['variant_id'])) {
+                $variant = DB::table('product_variants')->where('id', $item['variant_id'])->where('product_id', $product->id)->where('status', 'active')->first();
+                if (!$variant) {
+                    $issues[] = ['index' => $index, 'productId' => $product->id, 'variantId' => $item['variant_id'], 'reason' => 'unavailable', 'message' => 'This product option is unavailable.'];
+                    continue;
+                }
+            } elseif ($product->type === 'variable') {
+                $issues[] = ['index' => $index, 'productId' => $product->id, 'reason' => 'variant_required', 'message' => 'Select a product option.'];
+                continue;
+            }
+            $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant->id ?? $product->id)->first();
+            if (!$inventory) {
+                $issues[] = ['index' => $index, 'productId' => $product->id, 'reason' => 'unavailable', 'message' => 'Inventory is not configured.'];
+                continue;
+            }
+            $available = $inventory->manage_inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : null;
+            if ($available === 0 || ($available !== null && $item['quantity'] > $available)) {
+                $issues[] = ['index' => $index, 'productId' => $product->id, 'variantId' => $variant->id ?? null, 'requested' => $item['quantity'], 'available' => $available, 'reason' => $available === 0 ? 'out_of_stock' : 'insufficient_stock', 'message' => $available === 0 ? 'This item is out of stock.' : "Only {$available} available."];
+            }
+        }
+
+        return ApiResponse::successResponse(['valid' => empty($issues), 'issues' => $issues, 'authoritative' => true, 'source' => 'server'], 'Inventory validated.');
     }
 
     public function cart(Request $request)
