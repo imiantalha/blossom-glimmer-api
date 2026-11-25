@@ -61,6 +61,11 @@ class StorefrontApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', $genericMessage);
 
+        // A throttled request for a real account must not have a different response.
+        $this->postJson('/api/v1/auth/forgot-password', ['email' => $user->email])
+            ->assertOk()
+            ->assertJsonPath('message', $genericMessage);
+
         $this->postJson('/api/v1/auth/forgot-password', ['email' => 'unknown-customer@example.test'])
             ->assertOk()
             ->assertJsonPath('message', $genericMessage);
