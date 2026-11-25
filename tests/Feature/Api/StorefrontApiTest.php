@@ -639,6 +639,12 @@ class StorefrontApiTest extends TestCase
             $this->assertSame(200, $response->status(), "GET {$path} failed: {$response->getContent()}");
             $response->assertJsonPath('success', true);
         }
+
+        $product = Product::firstOrFail();
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products/' . $product->id)
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['store' => ['owner' => ['id', 'firstName', 'lastName', 'email']]]]);
     }
 
     public function test_guest_cart_and_wishlist_merge_into_authenticated_customer_account(): void
