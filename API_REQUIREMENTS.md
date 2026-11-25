@@ -79,3 +79,33 @@
 - Smoke-test public catalog, auth, ownership boundaries, cart stock checks, checkout idempotency, shipping quote and shipment tracking.
 - Verify CORS, mail delivery, Sanctum expiration, role guards, media URL behavior and SQL portability.
 - GitHub Actions now runs SQLite and SQL Server 2022 suites. The first run exposed duplicate catalog migration, test logging's MongoDB dependency and a missing ODBC driver; fixes were committed and the next CI run must be checked.
+
+
+## Additional management and guest-session APIs
+
+| Method + endpoint | Auth | Purpose |
+|---|---:|---|
+| POST `/auth/register/vendor` | No | Register vendor account with Vendor role |
+| GET/POST/PATCH `/vendor/store/me`, `/vendor/store` | Vendor | Read/create/update own store profile |
+| GET `/admin/stores`, GET `/admin/stores/{id}` | Admin | Store moderation and detail |
+| PATCH `/admin/stores/{id}/status` | Admin | Approve, suspend or set pending |
+| PATCH `/admin/stores/{id}/commission` | Admin | Configure percentage/fixed commission |
+| GET `/vendor/products/options` | Vendor | Brands, categories, shipping methods and attributes |
+| GET/POST `/vendor/products` | Vendor | Own product list and product submission |
+| GET/PATCH/DELETE `/vendor/products/{id}` | Vendor | Own product detail, edit and archive |
+| PATCH `/vendor/products/{id}/inventory` | Vendor | Update stock for simple product or variant |
+| GET `/admin/products/options` | Admin | Product creation options |
+| GET `/admin/products`, GET `/admin/products/{id}` | Admin | Product moderation list/detail |
+| PATCH `/admin/products/{id}/approval` | Admin | Approve/reject vendor product |
+| POST `/cart/merge`, POST `/wishlist/merge` | Customer | Merge guest cart/wishlist by product slug and variant SKU |
+
+## Demo scenario seed
+
+`php artisan db:seed` now creates:
+- 132 catalogue products (7 simple and 125 variable in the imported mock catalogue), with Unsplash product images, stock, variants, brands and category hierarchy.
+- 4 vendor accounts/stores, 1 demo admin and 1 demo customer.
+- Customer address, populated cart and wishlist, 1 sample order with shipment/tracking event.
+- 2 active shipping methods (standard and express) and review records.
+- Vendor products are submitted as inactive/pending until an admin approves them.
+
+Demo credentials (local/testing only): `admin@demo.blossomglimmer.local`, `customer@demo.blossomglimmer.local`, and `vendor+<store-slug>@demo.blossomglimmer.local`; password for all is `Password123!`. Never enable demo seeding in production.
