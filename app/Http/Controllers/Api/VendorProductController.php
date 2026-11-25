@@ -35,7 +35,7 @@ class VendorProductController extends Controller
             $inventory = $variant->inventoryItems->sum(fn ($item) => max(0, $item->stock_quantity - $item->reserved_quantity));
             $attributes = data_get($variant->metadata, 'attributes', []);
             return [
-                'id' => (string) $variant->id, 'sku' => $variant->sku, 'price' => (string) $variant->price,
+                'id' => (string) $variant->id, 'sku' => $variant->sku, 'price' => (string) ($variant->compare_at_price ?? $variant->price),
                 'salePrice' => $variant->compare_at_price ? (string) $variant->price : null,
                 'inventory' => $inventory, 'stockQuantity' => $inventory, 'weight' => (float) data_get($variant->metadata, 'weight', 1),
                 'length' => (float) data_get($variant->metadata, 'length', 1), 'width' => (float) data_get($variant->metadata, 'width', 1),
@@ -45,6 +45,17 @@ class VendorProductController extends Controller
                 'attributeValues' => collect($attributes)->map(fn ($value, $key) => ['id' => (string) $variant->id . '-' . Str::slug($key), 'attributeId' => Str::slug($key), 'attributeName' => $key, 'attributeValue' => $value])->values(),
             ];
         })->values();
+        if ($product->type === 'simple') {
+            $inventory = $product->inventoryItems()->whereNull('variant_id')->first();
+            $variants = collect([[
+                'id' => 'simple-' . $product->id, 'sku' => $product->sku,
+                'price' => (string) ($product->compare_at_price ?? $product->base_price),
+                'salePrice' => $product->compare_at_price ? (string) $product->base_price : null,
+                'inventory' => (int) ($inventory?->stock_quantity ?? 0), 'stockQuantity' => (int) ($inventory?->stock_quantity ?? 0),
+                'weight' => 1, 'length' => 1, 'width' => 1, 'height' => 1, 'label' => 'Default',
+                'images' => [], 'attributeValues' => [],
+            ]]);
+        }
         $productAttributes = collect(data_get($product->metadata, 'attributes', []))->map(fn ($attribute, $index) => [
             'id' => (string) ($index + 1), 'attributeId' => Str::slug($attribute['name'] ?? 'attribute'),
             'attributeName' => $attribute['name'] ?? 'Attribute', 'values' => collect($attribute['values'] ?? [])->map(fn ($value, $valueIndex) => ['id' => (string) ($valueIndex + 1), 'value' => is_array($value) ? ($value['value'] ?? '') : $value])->values(),
@@ -67,8 +78,8 @@ class VendorProductController extends Controller
             'shippingProfile' => ['id' => (string) data_get($product->metadata, 'shippingProfileId', ''), 'name' => (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
             'images' => $images, 'variants' => $variants, 'attributes' => $productAttributes,
             'tags' => collect(data_get($product->metadata, 'tags', []))->map(fn ($tag, $index) => ['id' => (string) ($index + 1), 'name' => $tag])->values(),
-            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values(),
-            'faqs' => collect(data_get($product->metadata, 'faqs', []))->values(), 'variantCount' => $variants->count(),
+            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? '', 'value' => $item['value'] ?? '']),
+            'faqs' => collect(data_get($product->metadata, 'faqs', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'question' => $item['question'] ?? '', 'answer' => $item['answer'] ?? '']), 'variantCount' => $variants->count(),
         ];
     }
 
@@ -239,6 +250,16 @@ class VendorProductController extends Controller
         $product = $this->ownedProduct($request, $id);
         $product->update(['status' => 'archived']);
         return ApiResponse::deletedResponse('Product archived.');
+    }
+
+    public function updateApproval(Request $request, int $id)
+    {
+        $data = $request->validate(['decision' => 'required|in:approve,reject']);
+        $product = Product::findOrFail($id);
+        $metadata = $product->metadata ?? [];
+        $metadata['approvalStatus'] = $data['decision'] === 'approve' ? 'approved' : 'rejected';
+        $product->update(['status' => $data['decision'] === 'approve' ? 'active' : 'inactive', 'metadata' => $metadata]);
+        return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product approval updated.');
     }
 
     public function updateInventory(Request $request, int $id)
