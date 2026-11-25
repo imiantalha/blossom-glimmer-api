@@ -504,15 +504,12 @@ class StorefrontApiTest extends TestCase
         $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
         $product = Product::where('status', 'active')->where('type', 'simple')->orderByDesc('id')->firstOrFail();
 
-        $this->actingAs($customer, 'sanctum')->postJson('/api/v1/reviews', [
+        $review = $this->actingAs($customer, 'sanctum')->postJson('/api/v1/reviews', [
             'product_id' => $product->id, 'rating' => 4,
             'title' => 'Feature test review', 'body' => 'This review must wait for moderation.',
         ])->assertCreated();
 
-        $this->assertSame(4, (int) $this->postJson('/api/v1/reviews', [
-            'product_id' => $product->id, 'rating' => 4,
-            'title' => 'Feature test review', 'body' => 'This review must wait for moderation.',
-        ])->json('data.rating'));
+        $this->assertSame(4, (int) $review->json('data.rating'));
 
         $this->assertDatabaseHas('product_reviews', [
             'product_id' => $product->id, 'user_id' => $customer->id, 'status' => 'pending',
