@@ -110,7 +110,9 @@ class StorefrontController extends Controller
             $query->whereHas('brand', fn ($q) => $q->where('slug', $slug));
         }
         if ($slug = $request->input('vendor')) {
-            $query->whereHas('vendor', fn ($q) => $q->whereRaw('LOWER(name) = ?', [str_replace('-', ' ', strtolower($slug))]));
+            $vendorId = DB::table('vendor_profiles')->where('slug', $slug)->value('user_id');
+            if ($vendorId) $query->where('vendor_id', $vendorId);
+            else $query->whereHas('vendor', fn ($q) => $q->whereRaw('LOWER(REPLACE(name, ?, ?)) = ?', [' ', '-', $slug]));
         }
         if ($request->filled('min_price')) {
             $query->whereRaw('COALESCE(base_price, (SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id AND product_variants.status = ?)) >= ?', ['active', (float) $request->min_price]);
@@ -138,7 +140,7 @@ class StorefrontController extends Controller
                 $query->whereRaw('1 = 0');
             } else {
                 $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
-                if ($categorySlugs) $query->whereHas('categories', fn ($q) => $q->whereIn('slug', $categorySlugs));
+                if ($categorySlugs) $query->where(fn ($q) => $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs)));
             }
         }
         foreach ($request->query() as $key => $value) {
