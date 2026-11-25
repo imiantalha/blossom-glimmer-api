@@ -114,21 +114,20 @@ class AuthController extends Controller
     {
         $data = $request->validate(['email' => ['required', 'email']]);
         $data['email'] = strtolower(trim($data['email']));
-        $status = Password::sendResetLink($data);
-
-        // Do not disclose whether the email belongs to an account.
-        if (in_array($status, [Password::RESET_LINK_SENT, Password::INVALID_USER], true)) {
-            return ApiResponse::successResponse(
-                null,
-                'If an account exists for this email, password reset instructions will be sent.'
-            );
+        // The broker can return different statuses for unknown, throttled, and
+        // deliverable accounts. Keep the public response identical in every case.
+        try {
+            Password::sendResetLink($data);
+        } catch (Throwable $exception) {
+            Log::error('Password reset notification delivery failed.', [
+                'exception' => $exception::class,
+            ]);
         }
 
-        if ($status === Password::RESET_THROTTLED) {
-            return ApiResponse::errorResponse('Please wait before requesting another password reset.', null, 429);
-        }
-
-        throw ValidationException::withMessages(['email' => [__($status)]]);
+        return ApiResponse::successResponse(
+            null,
+            'If an account exists for this email, password reset instructions will be sent.'
+        );
     }
 
     public function resetPassword(Request $request)
