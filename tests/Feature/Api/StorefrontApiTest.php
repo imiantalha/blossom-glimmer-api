@@ -244,6 +244,39 @@ class StorefrontApiTest extends TestCase
             ->assertJsonFragment(['slug' => 'integration-child']);
     }
 
+    public function test_demo_seeders_preserve_non_demo_catalog_and_vendor_credentials(): void
+    {
+        $categoryId = DB::table('categories')->insertGetId([
+            'name' => 'Manually Managed Category', 'slug' => 'manual-managed-category',
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $brandId = DB::table('brands')->insertGetId([
+            'name' => 'Manually Managed Brand', 'slug' => 'manual-managed-brand',
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $productId = DB::table('products')->insertGetId([
+            'name' => 'Manually Managed Product', 'slug' => 'manual-managed-product',
+            'type' => 'simple', 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $customVendor = User::factory()->create(['email' => 'independent-vendor@example.test']);
+        $customVendor->assignRole('Vendor');
+        DB::table('vendor_profiles')->insert([
+            'user_id' => $customVendor->id, 'slug' => 'independent-vendor',
+            'name' => 'Independent Vendor', 'status' => 'active',
+            'commission_type' => 'percentage', 'commission_value' => 10,
+            'review_count' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $originalPassword = $customVendor->password;
+
+        $this->seed(StorefrontDemoSeeder::class);
+        $this->seed(StorefrontScenarioSeeder::class);
+
+        $this->assertDatabaseHas('categories', ['id' => $categoryId, 'status' => 'active']);
+        $this->assertDatabaseHas('brands', ['id' => $brandId, 'status' => 'active']);
+        $this->assertDatabaseHas('products', ['id' => $productId, 'status' => 'active']);
+        $this->assertSame($originalPassword, $customVendor->fresh()->password);
+    }
+
     public function test_non_admin_cannot_manage_catalog_taxonomy(): void
     {
         $customer = User::factory()->create();
