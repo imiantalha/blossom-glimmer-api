@@ -822,4 +822,39 @@ class StorefrontApiTest extends TestCase
         ]);
     }
 
+
+    public function test_vendor_inventory_updates_preserve_reserved_stock(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('vendor_id', $vendor->id)->where('type', 'simple')->firstOrFail();
+        $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->first();
+
+        $this->assertNotNull($inventory);
+        DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => 8, 'reserved_quantity' => 3]);
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $product->id . '/inventory', ['stock_quantity' => 10])
+            ->assertOk()
+            ->assertJsonPath('data.reservedQuantity', 3)
+            ->assertJsonPath('data.availableQuantity', 7);
+
+        $this->assertDatabaseHas('inventory_items', ['id' => $inventory->id, 'stock_quantity' => 10, 'reserved_quantity' => 3]);
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $product->id . '/inventory', ['stock_quantity' => 2])
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('inventory_items', ['id' => $inventory->id, 'stock_quantity' => 10, 'reserved_quantity' => 3]);
+    }
+
+    public function test_vendor_cannot_update_another_vendors_inventory(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $otherProduct = Product::where('vendor_id', '<>', $vendor->id)->where('type', 'simple')->firstOrFail();
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $otherProduct->id . '/inventory', ['stock_quantity' => 99])
+            ->assertNotFound();
+    }
+
 }
