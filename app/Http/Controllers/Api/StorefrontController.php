@@ -79,7 +79,7 @@ class StorefrontController extends Controller
             'category' => $category ? ['id' => $category->parent?->id ?? $category->id, 'name' => $category->parent?->name ?? $category->name, 'slug' => $category->parent?->slug ?? $category->slug] : null,
             'subcategory' => ($category && $category->parent) ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'brand' => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name, 'slug' => $p->brand->slug] : null,
-            'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => $p->vendor->vendorProfile?->slug ?? Str::slug($p->vendor->name), 'rating' => $p->vendor->vendorProfile?->rating, 'reviewCount' => $p->vendor->vendorProfile?->review_count ?? 0] : null,
+            'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => $p->vendor->vendorProfile?->slug ?? Str::slug($p->vendor->name), 'rating' => $p->vendor->vendorProfile?->rating !== null ? (float) $p->vendor->vendorProfile->rating : null, 'reviewCount' => (int) ($p->vendor->vendorProfile?->review_count ?? 0)] : null,
             'rating' => (float) (DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating') ?? data_get($p->metadata, 'rating', 0)),
             'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count() ?: (int) data_get($p->metadata, 'review_count', 0),
             'soldCount' => (int) $p->sold_count,
