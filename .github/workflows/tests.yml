@@ -44,3 +44,63 @@ jobs:
           SESSION_DRIVER: array
           QUEUE_CONNECTION: sync
           MAIL_MAILER: array
+
+  sql-server-tests:
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: "Test_password_2026!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Test_password_2026!' -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP with SQL Server drivers
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, dom, fileinfo, openssl, pdo_sqlsrv, sqlsrv, bcmath, curl, xml, mongodb
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Create test database
+        run: /opt/mssql-tools18/bin/sqlcmd -C -S 127.0.0.1 -U sa -P "Test_password_2026!" -Q "CREATE DATABASE blossom_glimmer_test;"
+
+      - name: Prepare application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+        env:
+          DB_CONNECTION: sqlsrv
+          DB_HOST: 127.0.0.1
+          DB_PORT: 1433
+          DB_DATABASE: blossom_glimmer_test
+          DB_USERNAME: sa
+          DB_PASSWORD: "Test_password_2026!"
+
+      - name: Run migrations and feature tests on SQL Server
+        run: php artisan test
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlsrv
+          DB_HOST: 127.0.0.1
+          DB_PORT: 1433
+          DB_DATABASE: blossom_glimmer_test
+          DB_USERNAME: sa
+          DB_PASSWORD: "Test_password_2026!"
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
