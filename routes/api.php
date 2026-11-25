@@ -58,6 +58,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('users/me/addresses/{id}', [StorefrontController::class, 'deleteAddress']);
 
         Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
+        Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
 
         Route::get('cart', [StorefrontController::class, 'cart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
