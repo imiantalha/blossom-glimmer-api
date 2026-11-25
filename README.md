@@ -1,107 +1,106 @@
 # Blossom Glimmer API
 
-Laravel 12 application for **Blossom Glimmer**: a Sanctum-authenticated REST API with role-based access control, queued email, and a service/repository architecture.
-
-This is an original application repository, not a stock Laravel skeleton README.
+Laravel 12 backend for the Blossom Glimmer marketplace. Provides a versioned JSON API, Sanctum authentication, role-based administration, product catalogue, customer commerce and AI product assistance.
 
 ## Stack
 
 - PHP 8.2+ / Laravel 12
-- Laravel Sanctum
-- Spatie Laravel Permission
-- Queued email (`SendEmailJob`)
-- MongoDB driver (`mongodb/laravel-mongodb`)
-- Vite frontend (`resources` + catch-all `app` view)
+- Laravel Sanctum and Spatie Laravel Permission
+- MySQL or SQLite (local/testing)
 - PHPUnit
-
-## What it does
-
-- Registration, login, current user, and logout
-- Authenticated dashboard endpoint
-- User, role, and permission management
-- Email sending with attachment/log models and retry
-- Request logging
-- Service, repository, policy, and job layers
-
-API routes are rate-limited and protected with Sanctum where authentication is required.
-
-## Architecture
-
-```text
-HTTP Request
-    → FormRequest / middleware (Sanctum, throttle)
-    → Controller
-    → Service
-    → Repository / Model
-    → JSON API resource  or  queued job (email)
-```
-
-## Requirements
-
-- PHP 8.2+
-- Composer 2+
-- Node.js and npm
-- SQLite for local default, or another Laravel-supported database
+- Existing Laravel AI product assistant
 
 ## Local setup
 
-```bash
-git clone https://github.com/imiantalha/blossom-glimmer-api.git
-cd blossom-glimmer-api
-
+\`\`\`bash
 composer install
 cp .env.example .env
 php artisan key:generate
-
 php artisan migrate
-npm install
-npm run build
-
+php artisan db:seed
 php artisan serve
-```
+\`\`\`
 
-Configure mail, queue, and database values in `.env` before using email or background jobs.
+The API base URL is \`http://localhost:8000/api/v1\`. Configure \`NEXT_PUBLIC_API_URL\` in the frontend to point to this base URL.
 
-```bash
-php artisan queue:listen
-```
+### Development catalogue data
+
+The frontend's existing mock catalogue is copied into backend demo fixtures. It contains 132 products, 9 root categories plus child categories, 6 brands, 4 vendors, 4 collections and 192 reviews. These are **development/demo records**, not verified live stock or approved production vendor data.
+
+Demo seeding is enabled by default outside production. To control it explicitly:
+
+\`\`\`env
+STOREFRONT_SEED_DEMO_CATALOG=true
+STOREFRONT_COD_ENABLED=true
+SANCTUM_EXPIRATION=10080
+\`\`\`
+
+Do not enable demo seeding in production. Production catalogues must be populated with approved products, vendors, images, prices and inventory.
+
+## API conventions
+
+- Prefix: \`/api/v1\`
+- Success envelope: \`success\`, \`message\`, \`data\`, optional \`pagination\`
+- Error envelope: \`success=false\`, \`message\`, \`errors\`
+- Sanctum bearer tokens for authenticated customer and admin endpoints
+- Admin management routes require the \`Admin\` role
+- Customer resources are scoped to the authenticated user
 
 ## API surface
 
-Unauthenticated (throttled):
+### Public catalogue
+- \`GET /products\` — search, filters, sorting and pagination
+- \`GET /products/{slug}\`
+- \`GET /categories\`, \`GET /categories/{slug}\`
+- \`GET /brands\`, \`GET /brands/{slug}\`, \`GET /brands/{slug}/products\`
+- \`GET /vendors\`, \`GET /vendors/{slug}\`, \`GET /vendors/{slug}/products\`
+- \`GET /collections\`, \`GET /collections/{slug}\`, \`GET /collections/{slug}/products\`
+- \`GET /reviews?product_id={id}\`
+- \`GET /shipping/methods\`, \`GET /payment/methods\`
 
-```text
-POST /api/register
-POST /api/login
-```
+### Authentication and customer commerce
+- \`POST /auth/register\`, \`POST /auth/login\`, \`POST /auth/logout\`, \`GET /auth/me\`
+- \`POST /auth/forgot-password\`, \`POST /auth/reset-password\`
+- \`PATCH /users/me\`, \`PATCH /users/me/password\`
+- \`GET|POST /users/me/addresses\`, \`PATCH|DELETE /users/me/addresses/{id}\`
+- \`GET|POST /cart\`, \`PATCH|DELETE /cart/{id}\`, \`DELETE /cart\`
+- \`GET|POST /wishlist\`, \`DELETE /wishlist/{id}\`
+- \`POST /reviews\`
+- \`GET|POST /orders\`, \`GET /orders/{id}\`
+- \`POST /shipping/quote\`
 
-Authenticated (`auth:sanctum`):
+Order creation recalculates prices and validates stock on the server. Send an \`Idempotency-Key\` header for safe checkout retries. Cart endpoints currently require authentication; guest-cart merge is not implemented.
 
-```text
-GET    /api/me
-POST   /api/logout
-GET    /api/dashboard
+### Administration and tracking
+- Admin user, product, variant, role, permission, dashboard and email-log routes require the \`Admin\` role.
+- \`POST /admin/orders/{id}/shipment\` updates carrier/tracking data and order fulfillment status.
 
-GET|POST|PUT|PATCH|DELETE /api/users
-GET|POST|PUT|PATCH|DELETE /api/roles
-GET|POST|PUT|PATCH|DELETE /api/permissions
+### AI
+- \`POST /ai/product-assistant\`
+- \`POST /ai/product-assistant/stream\`
 
-GET    /api/email-logs
-GET    /api/email-logs/{emailLog}
-DELETE /api/email-logs/{emailLog}
-POST   /api/email-logs/{emailLog}/retry
-POST   /api/emails/send
-```
+The AI assistant foundation is preserved; recommendations should be verified against live catalogue and inventory data.
+
+## Configuration notes
+
+- Shipping methods are configured in the \`shipping_methods\` table. The API returns a service-unavailable response when no methods are active; it does not invent rates.
+- Cash on delivery is controlled by \`STOREFRONT_COD_ENABLED\`.
+- Card payment processing, provider webhooks, refunds, carrier integrations and guest-cart merge are not implemented yet.
+- Password reset requires working mail configuration.
+- Product images can be stored as external URLs in catalogue metadata or uploaded media records.
 
 ## Testing
 
-```bash
+\`\`\`bash
 php artisan test
-```
+php artisan route:list --path=api/v1
+\`\`\`
 
-## Notes
+A GitHub Actions workflow runs the Laravel test suite on pushes and pull requests.
 
-Secrets belong in `.env`, never in source control. The default Laravel framework README was replaced so this repository describes the actual Blossom Glimmer application.
+## Agent handoff
+
+Read [AGENT_HANDOFF.md](AGENT_HANDOFF.md) before continuing implementation. The endpoint matrix and frontend integration gaps are tracked in [API_REQUIREMENTS.md](API_REQUIREMENTS.md).
 
 ## License
 
