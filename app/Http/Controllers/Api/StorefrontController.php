@@ -653,7 +653,7 @@ class StorefrontController extends Controller
 
     public function createOrder(Request $request)
     {
-        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'nullable|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:2000']);
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:2000']);
         $userId = $request->user()->id;
         abort_unless(config('storefront.cash_on_delivery'), 422, 'Cash on delivery is not enabled.');
         $idempotencyKey = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
@@ -664,22 +664,16 @@ class StorefrontController extends Controller
         $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $userId)->first();
         abort_unless($address, 422, 'A valid shipping address is required.');
         $cart = $this->currentCart($request);
-        $shippingConfigured = DB::table('shipping_methods')->where('is_active', true)->exists();
-        if ($shippingConfigured && empty($data['shipping_method_id'])) {
-            throw ValidationException::withMessages(['shipping_method_id' => ['Select an available shipping method.']]);
-        }
-        $shippingMethod = null;
-        if (!empty($data['shipping_method_id'])) {
-            $shippingMethod = DB::table('shipping_methods')->where('code', $data['shipping_method_id'])->where('is_active', true)->first();
-            abort_unless($shippingMethod, 422, 'The selected shipping method is unavailable.');
-            $allowedCountries = $shippingMethod->countries ? (json_decode($shippingMethod->countries, true) ?: []) : [];
-            abort_if($allowedCountries && !in_array(strtoupper($address->country), $allowedCountries, true), 422, 'The selected shipping method is not available for this country.');
-            abort_unless(strtoupper($shippingMethod->currency) === strtoupper($cart->currency), 422, 'The selected shipping method currency does not match the cart currency.');
-        }
+        $shippingMethod = DB::table('shipping_methods')->where('code', $data['shipping_method_id'])->where('is_active', true)->first();
+        abort_unless($shippingMethod, 422, 'The selected shipping method is unavailable.');
+        $allowedCountries = $shippingMethod->countries ? (json_decode($shippingMethod->countries, true) ?: []) : [];
+        abort_if($allowedCountries && !in_array(strtoupper($address->country), $allowedCountries, true), 422, 'The selected shipping method is not available for this country.');
+        abort_unless(strtoupper($shippingMethod->currency) === strtoupper($cart->currency), 422, 'The selected shipping method currency does not match the cart currency.');
         $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
         if ($items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Your cart is empty.']]);
 
-        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId, $shippingMethod, $idempotencyKey) {
+        try {
+            $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId, $shippingMethod, $idempotencyKey) {
             $subtotal = 0;
             $lines = [];
             foreach ($items as $item) {
@@ -706,8 +700,15 @@ class StorefrontController extends Controller
                 DB::table('products')->where('id', $p->id)->increment('sold_count', $i->quantity);
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
-            return DB::table('customer_orders')->find($id);
-        });
+                return DB::table('customer_orders')->find($id);
+            });
+        } catch (QueryException $exception) {
+            if ($idempotencyKey) {
+                $existingOrder = DB::table('customer_orders')->where('user_id', $userId)->where('idempotency_key', $idempotencyKey)->first();
+                if ($existingOrder) return ApiResponse::successResponse($this->orderPayload($existingOrder), 'Order already placed.');
+            }
+            throw $exception;
+        }
         return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
