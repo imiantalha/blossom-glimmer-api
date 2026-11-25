@@ -325,8 +325,9 @@ class StorefrontController extends Controller
     public function storeAddress(Request $request)
     {
         $data = $request->validate(['firstName' => 'required|string|max:100', 'lastName' => 'required|string|max:100', 'address1' => 'required|string|max:255', 'address2' => 'nullable|string|max:255', 'city' => 'required|string|max:120', 'state' => 'nullable|string|max:120', 'postalCode' => 'required|string|max:30', 'country' => 'required|string|size:2', 'phone' => 'nullable|string|max:40', 'isDefault' => 'sometimes|boolean']);
-        $row = DB::table('customer_addresses')->insertGetId(['user_id' => $request->user()->id, 'first_name' => $data['firstName'], 'last_name' => $data['lastName'], 'address1' => $data['address1'], 'address2' => $data['address2'] ?? null, 'city' => $data['city'], 'state' => $data['state'] ?? null, 'postal_code' => $data['postalCode'], 'country' => strtoupper($data['country']), 'phone' => $data['phone'] ?? null, 'is_default' => $data['isDefault'] ?? false, 'created_at' => now(), 'updated_at' => now()]);
-        if (($data['isDefault'] ?? false)) DB::table('customer_addresses')->where('user_id', $request->user()->id)->where('id', '<>', $row)->update(['is_default' => false]);
+        $isDefault = ($data['isDefault'] ?? false) || !DB::table('customer_addresses')->where('user_id', $request->user()->id)->exists();
+        $row = DB::table('customer_addresses')->insertGetId(['user_id' => $request->user()->id, 'first_name' => $data['firstName'], 'last_name' => $data['lastName'], 'address1' => $data['address1'], 'address2' => $data['address2'] ?? null, 'city' => $data['city'], 'state' => $data['state'] ?? null, 'postal_code' => $data['postalCode'], 'country' => strtoupper($data['country']), 'phone' => $data['phone'] ?? null, 'is_default' => $isDefault, 'created_at' => now(), 'updated_at' => now()]);
+        if ($isDefault) DB::table('customer_addresses')->where('user_id', $request->user()->id)->where('id', '<>', $row)->update(['is_default' => false]);
         return ApiResponse::createdResponse($this->addressPayload(DB::table('customer_addresses')->find($row)), 'Address created.');
     }
 
@@ -477,8 +478,9 @@ class StorefrontController extends Controller
     public function updateProfile(Request $request)
     {
         $data = $request->validate(['name' => 'required|string|max:255', 'email' => 'required|email|max:255|unique:users,email,' . $request->user()->id, 'phone' => 'nullable|string|max:40']);
-        $request->user()->update(['name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null]);
-        return ApiResponse::successResponse(new UserResource($request->user()->fresh()), 'Profile updated.');
+        $user = $request->user();
+        $user->update(['name' => $data['name'], 'email' => $data['email'], 'phone' => array_key_exists('phone', $data) ? $data['phone'] : $user->phone]);
+        return ApiResponse::successResponse(new UserResource($user->fresh()), 'Profile updated.');
     }
 
     private function orderPayload($order): array
