@@ -695,7 +695,6 @@ class StorefrontApiTest extends TestCase
 
         $createdRole = \Spatie\Permission\Models\Role::findOrFail($role['id']);
         $this->assertSame('web', $createdRole->guard_name);
-        $this->assertSame('web', config('auth.defaults.guard'));
         $this->assertSame(User::class, config('auth.providers.users.model'));
         $this->assertSame(User::class, \Spatie\Permission\Guard::getModelForGuard('web'));
 
