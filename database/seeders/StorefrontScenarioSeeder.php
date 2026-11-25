@@ -57,7 +57,9 @@ class StorefrontScenarioSeeder extends Seeder
             $cartId = DB::table('carts')->where('user_id', $customer->id)->value('id');
             if (!$cartId) $cartId = DB::table('carts')->insertGetId(['user_id' => $customer->id, 'currency' => 'USD', 'created_at' => now(), 'updated_at' => now()]);
 
-            $simple = DB::table('products')->where('status', 'active')->where('type', 'simple')->orderBy('id')->first();
+            $simple = DB::table('products as p')->join('inventory_items as i', 'i.product_id', '=', 'p.id')
+                ->where('p.status', 'active')->where('p.type', 'simple')->whereRaw('i.stock_quantity > i.reserved_quantity')
+                ->orderBy('p.id')->select('p.*')->first();
             $variable = DB::table('products')->where('status', 'active')->where('type', 'variable')->orderBy('id')->first();
             if ($simple) {
                 DB::table('cart_items')->updateOrInsert(
@@ -97,9 +99,11 @@ class StorefrontScenarioSeeder extends Seeder
                         'shipping_address' => json_encode(['firstName' => 'Demo', 'lastName' => 'Customer', 'address1' => '123 Demo Market Road', 'address2' => 'Suite 4', 'city' => 'Lahore', 'state' => 'Punjab', 'postalCode' => '54000', 'country' => 'PK', 'phone' => '+923001234567']),
                         'created_at' => now()->subDays(2), 'updated_at' => now()->subDay(),
                     ]);
+                    $productMetadata = is_array($simple->metadata) ? $simple->metadata : (json_decode($simple->metadata ?? '[]', true) ?: []);
                     DB::table('customer_order_items')->insert([
                         'order_id' => $orderId, 'product_id' => $simple->id, 'name' => $simple->name,
-                        'product_slug' => $simple->slug, 'sku' => $simple->sku, 'quantity' => 1,
+                        'product_slug' => $simple->slug, 'image_url' => data_get($productMetadata, 'images.0.url'),
+                        'sku' => $simple->sku, 'quantity' => 1,
                         'unit_price' => $price, 'subtotal' => $price, 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
