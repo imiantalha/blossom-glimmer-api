@@ -71,6 +71,8 @@ class ProductService
             $variantIds = $product->variants()->pluck('id');
             if ($variantIds->isNotEmpty()) {
                 DB::table('inventory_items')->whereIn('variant_id', $variantIds)->delete();
+                DB::table('cart_items')->whereIn('variant_id', $variantIds)->delete();
+                DB::table('customer_order_items')->whereIn('variant_id', $variantIds)->update(['variant_id' => null]);
                 DB::table('variant_option_values')->whereIn('variant_id', $variantIds)->delete();
             }
             DB::table('inventory_items')->where('product_id', $product->id)->delete();
