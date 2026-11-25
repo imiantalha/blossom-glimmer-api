@@ -857,4 +857,86 @@ class StorefrontApiTest extends TestCase
             ->assertNotFound();
     }
 
+
+    public function test_vendor_product_edits_preserve_existing_variant_ids_and_reserved_inventory(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('vendor_id', $vendor->id)
+            ->where('type', 'variable')
+            ->with(['variants.inventoryItems'])
+            ->firstOrFail();
+        $categoryId = $product->categories()->value('categories.id');
+        $variant = $product->variants->first();
+        $this->assertNotNull($variant);
+        $inventory = $variant->inventoryItems->first();
+        $this->assertNotNull($inventory);
+
+        DB::table('inventory_items')->where('id', $inventory->id)->update([
+            'stock_quantity' => max(8, (int) $inventory->stock_quantity),
+            'reserved_quantity' => 2,
+        ]);
+
+        $images = data_get($product->metadata, 'images', []);
+        $featuredImage = $images[0] ?? [
+            'url' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30',
+            'altText' => 'Product image',
+        ];
+        $variants = $product->variants->map(function ($item) {
+            $itemInventory = $item->inventoryItems->first();
+            $attributes = data_get($item->metadata, 'attributes', []);
+
+            return [
+                'sku' => $item->sku,
+                'price' => (float) ($item->compare_at_price ?? $item->price),
+                'salePrice' => $item->compare_at_price ? (float) $item->price : null,
+                'stockQuantity' => max(8, (int) ($itemInventory?->stock_quantity ?? 8)),
+                'weight' => (float) data_get($item->metadata, 'weight', 1),
+                'length' => (float) data_get($item->metadata, 'length', 1),
+                'width' => (float) data_get($item->metadata, 'width', 1),
+                'height' => (float) data_get($item->metadata, 'height', 1),
+                'label' => $item->name,
+                'images' => data_get($item->metadata, 'images', []),
+                'attributeValues' => collect($attributes)->map(
+                    fn ($value, $name) => ['attributeName' => $name, 'value' => $value]
+                )->values()->all(),
+            ];
+        })->values()->all();
+
+        $payload = [
+            'name' => $product->name . ' Updated',
+            'slug' => $product->slug,
+            'brandId' => $product->brand_id,
+            'categoryId' => $categoryId,
+            'productType' => 'Variable',
+            'shippingProfileId' => 'standard',
+            'shortDescription' => $product->short_description,
+            'fullDescription' => $product->description,
+            'tags' => data_get($product->metadata, 'tags', []),
+            'media' => [
+                'featuredImage' => $featuredImage,
+                'galleryImages' => array_slice($images, 1),
+            ],
+            'attributes' => data_get($product->metadata, 'attributes', []),
+            'variants' => $variants,
+            'specifications' => data_get($product->metadata, 'specifications', []),
+            'faqs' => data_get($product->metadata, 'faqs', []),
+            'intent' => 'submit',
+        ];
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $product->id, $payload)
+            ->assertOk();
+
+        $this->assertDatabaseHas('product_variants', [
+            'id' => $variant->id,
+            'product_id' => $product->id,
+            'sku' => $variant->sku,
+        ]);
+        $this->assertDatabaseHas('inventory_items', [
+            'id' => $inventory->id,
+            'variant_id' => $variant->id,
+            'reserved_quantity' => 2,
+        ]);
+    }
+
 }
