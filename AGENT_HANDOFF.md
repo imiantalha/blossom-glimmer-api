@@ -238,3 +238,27 @@ Known areas requiring immediate verification:
 - Added demo scenarios and expanded feature tests for product listing, auth, vendor isolation, inventory, checkout idempotency and seeded data.
 - Added SQLite and SQL Server CI jobs. Latest SQL Server run is being rechecked after changing foreign-key delete behavior to SQL Server-compatible `NO ACTION`.
 - Frontend integration remains on `feat/laravel-api-integration`; run its lint/typecheck/build before opening its PR.
+
+
+## Continuation update — 2026-11-25 (integration review)
+
+### Validation confirmed
+- Backend PR #46 head `7f00433f812e818d0653e89cec78c2b0d4d83c9c`: GitHub Actions run #215 completed successfully. Both `laravel-tests` (SQLite) and `sql-server-tests` (SQL Server 2022 with ODBC Driver 18) passed, including migration and feature-test steps.
+- Frontend PR #56 previously passed its CI suite. After this continuation's fixes and documentation update, a new CI run is in progress; re-check its final result before calling the branch validated.
+
+### Frontend contract defects fixed on `feat/laravel-api-integration`
+- Corrected the order-status label word-boundary regex in `types/checkout.ts`; it had been double-escaped and did not capitalize words as intended.
+- Corrected the numeric address-ID validation regex in `lib/services/order.service.ts`; the old double-escaped pattern rejected valid numeric Laravel address IDs and blocked checkout.
+- Expanded `docs/API-CONTRACT.md` to document address ID expectations, guest cart/wishlist merge, inventory validation, shipping quote, COD-only checkout, and idempotency header/body behavior.
+
+### Current PRs
+- Backend: https://github.com/imiantalha/blossom-glimmer-api/pull/46 — open draft, not merged.
+- Frontend: https://github.com/imiantalha/blossom-glimmer/pull/56 — open draft, not merged.
+- No changes were made to either `main` branch. No PR was merged.
+
+### Remaining integration work
+1. Re-check the latest frontend CI after the regex fixes and API contract documentation update.
+2. Deploy both feature branches to a disposable staging environment and configure Laravel CORS, database, Sanctum token settings, mail transport, and demo seeders; verify browser-level auth, catalog, cart/wishlist merge, addresses, inventory, shipping quote, COD checkout, order details, vendor workflows, admin workflows, and shipment updates.
+3. Confirm shipping methods are seeded/configured in staging; the backend intentionally returns a configuration error rather than inventing live shipping rates.
+4. Keep card payments, refunds, and external carrier sync explicitly out of scope until provider contracts/credentials and business rules are supplied.
+5. Keep both PRs draft until staging validation and review are complete. Do not merge without user approval.
