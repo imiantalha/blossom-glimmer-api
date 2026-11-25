@@ -181,7 +181,7 @@ Known areas requiring immediate verification:
 3. Verify the seeded demo catalogue against frontend mock shapes and run the seed idempotently.
 4. Complete frontend page/component audit for locations and any hidden API dependencies.
 5. Integrate frontend API clients with real endpoints and mock fallback on failures.
-6. Run end-to-end checks; then open/review PR. Do not merge without user approval.
+6. Run end-to-end checks and update the existing draft PR #46. Do not merge without user approval.
 
 
 ### Pull request checkpoint
