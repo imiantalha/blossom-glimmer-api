@@ -22,6 +22,10 @@ Complete the Laravel backend required by the existing Blossom Glimmer frontend. 
 - [x] Added initial storefront controller for catalog, customer address, cart, wishlist, reviews, profile and order workflows.
 - [x] Added versioned `/api/v1` route group and exposed initial storefront routes.
 - [x] Added product vendor ownership migration and started model relationship.
+- [x] Added admin brand/category CRUD endpoints and authorization coverage.
+- [x] Added storefront category hierarchy details and aligned frontend brand/category adapters.
+- [x] Added SQL Server-safe order/address FK handling and explicit unlink-on-address-delete behavior; re-running SQL Server CI.
+- [x] Resolved duplicate `/admin/products` GET route by moving the lower-level ProductController resource to `/catalog/products`.
 - [ ] Complete and validate the current backend implementation.
 - [ ] Finish full frontend-to-backend endpoint inventory.
 - [ ] Implement remaining backend domains and align every response exactly with frontend types.
@@ -39,6 +43,7 @@ Latest known branch work includes:
 - `c1ffe47` — profile update route adjustment.
 - `620c426` — product vendor ownership migration.
 - `d302abd` — product vendor relationship.
+- Latest follow-up commits: catalog management controller/routes/tests, public category hierarchy, SQL Server order/address FK correction, and admin product route collision fix. Check the branch history for exact SHAs.
 
 These are incremental commits, **not a validated or production-ready feature**. Inspect the branch's actual latest tree before relying on any description here.
 
@@ -110,8 +115,8 @@ Known areas requiring immediate verification:
 |---|---|---|
 | Auth | Register/login/logout/me/token handling | Existing auth; contract verification pending |
 | Products | List/detail/search/filter/sort/pagination | Partial implementation on feature branch; verify |
-| Categories | Tree/list/detail | Initial implementation; verify relationships |
-| Brands | List/detail/products | Initial implementation; verify |
+| Categories | Tree/list/detail + admin CRUD | Implemented on feature branch; SQL Server CI pending |
+| Brands | List/detail/products + admin CRUD | Implemented on feature branch; SQL Server CI pending |
 | Vendors | List/detail/products and ownership | Incomplete; verify/fix |
 | Collections | List/detail and collection products | Schema/list/detail started; product resolution pending |
 | Locations | Countries/regions/cities | Not audited fully |
@@ -122,11 +127,11 @@ Known areas requiring immediate verification:
 | Reviews | List/create/moderation/aggregates | Initial implementation; verify |
 | Inventory | Availability and reservation | Existing schema; checkout integration needs review |
 | Checkout | Server-side totals/order creation | Initial COD workflow only; not validated |
-| Shipping | Methods/rates/quotes | Not implemented; no fabricated rates |
+| Shipping | Methods/rates/quotes | Config-backed methods and address/currency quote implemented; validate end-to-end |
 | Payments | Methods/provider lifecycle/webhooks | Not implemented beyond initial method listing |
 | Orders | List/detail/status/cancel | Initial list/detail/create; remaining lifecycle pending |
-| Shipments | Carrier/tracking events | Not implemented |
-| Admin/vendor | Role-scoped management | Existing admin APIs; vendor authorization pending |
+| Shipments | Carrier/tracking events | Demo shipment seed and order-embedded tracking; lifecycle/admin integration still needs audit |
+| Admin/vendor | Role-scoped management | Store/product handlers and brand/category management implemented; continue route/authorization audit |
 | AI assistant | Search/recommendation grounded in live data | Existing foundation; verify after catalog completion |
 
 ## Engineering rules for all agents
