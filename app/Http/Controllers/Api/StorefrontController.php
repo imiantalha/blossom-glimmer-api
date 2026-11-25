@@ -702,6 +702,131 @@ class StorefrontController extends Controller
         ], 'Shipping quote retrieved.');
     }
 
+    private function storePayload($profile, $user): array
+    {
+        return [
+            'id' => $profile->id,
+            'ownerId' => $user->id,
+            'name' => $profile->name ?: $user->name,
+            'slug' => $profile->slug,
+            'description' => $profile->description,
+            'logo' => $profile->image_url,
+            'banner' => $profile->banner_url,
+            'email' => $profile->email ?: $user->email,
+            'phone' => $profile->phone ?: $user->phone,
+            'status' => $profile->status,
+            'commissionType' => $profile->commission_type,
+            'commissionValue' => (float) $profile->commission_value,
+            'rating' => $profile->rating ? (float) $profile->rating : null,
+            'reviewCount' => (int) $profile->review_count,
+            'productCount' => DB::table('products')->where('vendor_id', $user->id)->where('status', 'active')->count(),
+            'createdAt' => $profile->created_at,
+        ];
+    }
+
+    public function myStore(Request $request)
+    {
+        $profile = DB::table('vendor_profiles')->where('user_id', $request->user()->id)->whereNull('deleted_at')->first();
+        if (!$profile) return ApiResponse::successResponse(null, 'No store has been created yet.');
+        return ApiResponse::successResponse($this->storePayload($profile, $request->user()), 'Store retrieved.');
+    }
+
+    public function createStore(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'nullable|string|max:255|alpha_dash|unique:vendor_profiles,slug',
+            'description' => 'nullable|string|max:5000',
+            'logo' => 'nullable|url|max:500',
+            'banner' => 'nullable|url|max:500',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+        ]);
+        $user = $request->user();
+        abort_if(DB::table('vendor_profiles')->where('user_id', $user->id)->whereNull('deleted_at')->exists(), 409, 'You already have a store.');
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if(DB::table('vendor_profiles')->where('slug', $slug)->exists(), 422, 'This store URL is already taken.');
+        $id = DB::table('vendor_profiles')->insertGetId([
+            'user_id' => $user->id, 'name' => $data['name'], 'slug' => $slug,
+            'description' => $data['description'] ?? null, 'image_url' => $data['logo'] ?? null,
+            'banner_url' => $data['banner'] ?? null, 'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null, 'status' => 'pending',
+            'commission_type' => 'percentage', 'commission_value' => 10,
+            'review_count' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        return ApiResponse::createdResponse($this->storePayload(DB::table('vendor_profiles')->find($id), $user), 'Store created and submitted for approval.');
+    }
+
+    public function updateMyStore(Request $request)
+    {
+        $profile = DB::table('vendor_profiles')->where('user_id', $request->user()->id)->whereNull('deleted_at')->first();
+        abort_unless($profile, 404, 'Store not found.');
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|alpha_dash|unique:vendor_profiles,slug,' . $profile->id,
+            'description' => 'nullable|string|max:5000',
+            'logo' => 'nullable|url|max:500',
+            'banner' => 'nullable|url|max:500',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+        ]);
+        DB::table('vendor_profiles')->where('id', $profile->id)->update([
+            'name' => $data['name'], 'slug' => $data['slug'], 'description' => $data['description'] ?? null,
+            'image_url' => $data['logo'] ?? null, 'banner_url' => $data['banner'] ?? null,
+            'email' => $data['email'] ?? null, 'phone' => $data['phone'] ?? null, 'updated_at' => now(),
+        ]);
+        return ApiResponse::successResponse($this->storePayload(DB::table('vendor_profiles')->find($profile->id), $request->user()), 'Store updated.');
+    }
+
+    public function adminStores(Request $request)
+    {
+        $query = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->whereNull('vp.deleted_at');
+        if ($request->filled('status')) $query->where('vp.status', $request->input('status'));
+        if ($request->filled('search')) $query->where(fn ($q) => $q->where('vp.name', 'like', '%' . $request->input('search') . '%')->orWhere('vp.slug', 'like', '%' . $request->input('search') . '%')->orWhere('u.email', 'like', '%' . $request->input('search') . '%'));
+        $page = $query->orderByDesc('vp.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        $data = $page->getCollection()->map(fn ($row) => $this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->name ?: $row->name, 'email' => $row->email, 'phone' => $row->phone]));
+        return response()->json(['success' => true, 'message' => 'Stores retrieved.', 'data' => $data, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $data->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(), 'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
+    }
+
+    public function adminStore(int $id)
+    {
+        $row = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->where('vp.id', $id)->whereNull('vp.deleted_at')
+            ->select('vp.*', 'u.name as owner_name', 'u.email as owner_email', 'u.phone as owner_phone')->first();
+        abort_unless($row, 404);
+        return ApiResponse::successResponse($this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]), 'Store retrieved.');
+    }
+
+    public function updateStoreStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['status' => 'required|in:active,suspended,pending']);
+        $profile = DB::table('vendor_profiles')->where('id', $id)->whereNull('deleted_at')->first();
+        abort_unless($profile, 404);
+        DB::table('vendor_profiles')->where('id', $id)->update([
+            'status' => $data['status'],
+            'approved_at' => $data['status'] === 'active' ? ($profile->approved_at ?: now()) : $profile->approved_at,
+            'updated_at' => now(),
+        ]);
+        return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store status updated.');
+    }
+
+    public function updateStoreCommission(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'commission_type' => 'required|in:percentage,fixed',
+            'commission_value' => 'required|numeric|min:0|max:100000',
+        ]);
+        abort_if($data['commission_type'] === 'percentage' && $data['commission_value'] > 100, 422, 'Percentage commission cannot exceed 100.');
+        $profile = DB::table('vendor_profiles')->where('id', $id)->whereNull('deleted_at')->first();
+        abort_unless($profile, 404);
+        DB::table('vendor_profiles')->where('id', $id)->update([
+            'commission_type' => $data['commission_type'], 'commission_value' => $data['commission_value'], 'updated_at' => now(),
+        ]);
+        return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store commission updated.');
+    }
+
     public function paymentMethods()
     {
         $methods = [];
