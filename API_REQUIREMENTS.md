@@ -8,7 +8,7 @@
 
 | Domain | Method + endpoint | Auth | Backend status |
 |---|---|---:|---|
-| Auth | POST `/auth/register` | No | Implemented; Sanctum token response |
+| Auth | POST `/auth/register`, POST `/auth/register/vendor` | No | Implemented; customer/vendor Sanctum token responses |
 | Auth | POST `/auth/login` | No | Implemented; stateless token response |
 | Auth | POST `/auth/logout` | Yes | Implemented |
 | Auth | GET `/auth/me` | Yes | Implemented |
@@ -47,6 +47,15 @@
 | Shipments | POST `/admin/orders/{id}/shipment` | Admin | Implemented; order response includes tracking snapshot |
 | AI assistant | POST `/ai/product-assistant`, POST `/ai/product-assistant/stream` | Yes | Existing implementation preserved |
 
+## Additional vendor/admin contracts
+
+- Vendor registration: POST `/auth/register/vendor`.
+- Vendor store: GET/POST/PATCH `/vendor/store/me`, `/vendor/store`.
+- Vendor products: GET/POST `/vendor/products`, GET/PATCH/DELETE `/vendor/products/{id}`, PATCH `/vendor/products/{id}/inventory`, GET `/vendor/products/options`.
+- Admin stores: GET `/admin/stores`, GET `/admin/stores/{id}`, PATCH status/commission.
+- Admin products: GET `/admin/products`, GET `/admin/products/{id}`, GET `/admin/products/options`, PATCH approval.
+- Guest cart/wishlist merge endpoints: POST `/cart/merge`, POST `/wishlist/merge`.
+
 ## Frontend behavior that still needs integration
 
 - `authService` still uses temporary in-memory credentials; connect it to Sanctum and persist the bearer token through `setApiAuthToken`.
@@ -69,4 +78,4 @@
 - Run `php artisan test`, `php artisan route:list --path=api/v1`, and PHP lint on changed files.
 - Smoke-test public catalog, auth, ownership boundaries, cart stock checks, checkout idempotency, shipping quote and shipment tracking.
 - Verify CORS, mail delivery, Sanctum expiration, role guards, media URL behavior and SQL portability.
-- No backend runtime tests have been executed in this coding session; GitHub writes alone do not prove runtime correctness.
+- GitHub Actions now runs SQLite and SQL Server 2022 suites. The first run exposed duplicate catalog migration, test logging's MongoDB dependency and a missing ODBC driver; fixes were committed and the next CI run must be checked.
