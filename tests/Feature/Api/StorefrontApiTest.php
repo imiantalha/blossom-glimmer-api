@@ -631,4 +631,40 @@ class StorefrontApiTest extends TestCase
             $response->assertJsonPath('success', true);
         }
     }
+
+    public function test_guest_cart_and_wishlist_merge_into_authenticated_customer_account(): void
+    {
+        $customer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
+        $product = DB::table('products as p')
+            ->join('inventory_items as i', 'i.product_id', '=', 'p.id')
+            ->whereNull('i.variant_id')
+            ->where('p.type', 'simple')
+            ->where('p.status', 'active')
+            ->where('i.manage_inventory', false)
+            ->select('p.id', 'p.slug')
+            ->first();
+
+        $this->assertNotNull($product);
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/cart/merge', [
+                'items' => [['product_slug' => $product->slug, 'quantity' => 2]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('cart_items', [
+            'product_id' => $product->id,
+            'quantity' => 2,
+        ]);
+
+        $this->postJson('/api/v1/wishlist/merge', [
+            'product_slugs' => [$product->slug],
+        ])->assertOk()->assertJsonPath('data.merged', 1);
+
+        $this->assertDatabaseHas('wishlists', [
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+        ]);
+    }
 }
