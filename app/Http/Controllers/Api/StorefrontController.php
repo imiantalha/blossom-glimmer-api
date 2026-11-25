@@ -707,6 +707,7 @@ class StorefrontController extends Controller
         return [
             'id' => $profile->id,
             'ownerId' => $user->id,
+            'ownerUserId' => $user->id,
             'name' => $profile->name ?: $user->name,
             'slug' => $profile->slug,
             'description' => $profile->description,
@@ -721,6 +722,7 @@ class StorefrontController extends Controller
             'reviewCount' => (int) $profile->review_count,
             'productCount' => DB::table('products')->where('vendor_id', $user->id)->where('status', 'active')->count(),
             'createdAt' => $profile->created_at,
+            'updatedAt' => $profile->updated_at,
             'owner' => ['id' => $user->id, 'firstName' => preg_split('/\\s+/', trim($user->name), 2)[0] ?? '', 'lastName' => preg_split('/\\s+/', trim($user->name), 2)[1] ?? '', 'email' => $user->email],
         ];
     }
