@@ -89,8 +89,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
             Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
             Route::patch('admin/stores/{id}/commission', [StorefrontController::class, 'updateStoreCommission']);
-            Route::apiResource('admin/users', UserController::class);
             Route::get('admin/users/options', [UserController::class, 'options']);
+            Route::apiResource('admin/users', UserController::class);
             Route::get('roles/options', [RoleController::class, 'options']);
             Route::apiResource('roles', RoleController::class);
             Route::get('permissions/options', [PermissionController::class, 'options']);
