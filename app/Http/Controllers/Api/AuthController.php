@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -24,12 +23,10 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (!Auth::attempt($credentials)) {
+        $user = User::where('email', $credentials['email'])->first();
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return ApiResponse::unauthorizedResponse('Invalid email or password.');
         }
-
-        /** @var \App\Models\User $user */
-        $user = $request->user();
         $token = $user->createToken('storefront', ['*'], now()->addMinutes((int) config('sanctum.expiration', 10080)))->plainTextToken;
 
         return ApiResponse::successResponse([
