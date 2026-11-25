@@ -12,6 +12,7 @@ class Media extends Model
 
     protected $fillable = [
         'file_path',
+        'external_url',
         'disk',
         'mime_type',
         'alt_text',
