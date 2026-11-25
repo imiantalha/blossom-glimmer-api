@@ -432,7 +432,20 @@ class StorefrontController extends Controller
             'fulfillmentStatus' => $order->fulfillment_status, 'currency' => $order->currency, 'subtotal' => (float) $order->subtotal,
             'discount' => (float) $order->discount, 'shipping' => (float) $order->shipping, 'tax' => (float) $order->tax,
             'total' => (float) $order->total, 'createdAt' => $order->created_at, 'shippingAddress' => $address,
-            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => null];
+            'shippingMethod' => $order->shipping_method_code ? ['id' => $order->shipping_method_code, 'name' => $order->shipping_method_name, 'price' => (float) $order->shipping, 'estimatedDelivery' => $order->shipping_estimated_delivery] : null,
+            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $this->shipmentPayload($order->id)];
+    }
+
+    private function shipmentPayload(int $orderId): ?array
+    {
+        $shipment = DB::table('shipments')->where('order_id', $orderId)->first();
+        if (!$shipment) return null;
+        return [
+            'id' => $shipment->id, 'carrier' => $shipment->carrier, 'trackingNumber' => $shipment->tracking_number,
+            'trackingUrl' => $shipment->tracking_url, 'status' => $shipment->status,
+            'estimatedDelivery' => $shipment->estimated_delivery, 'shippedAt' => $shipment->shipped_at,
+            'deliveredAt' => $shipment->delivered_at,
+        ];
     }
 
     public function orders(Request $request)
@@ -453,15 +466,22 @@ class StorefrontController extends Controller
 
     public function createOrder(Request $request)
     {
-        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'notes' => 'nullable|string|max:2000']);
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'nullable|string|max:60', 'notes' => 'nullable|string|max:2000']);
         $userId = $request->user()->id;
         $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $userId)->first();
         abort_unless($address, 422, 'A valid shipping address is required.');
+        $shippingMethod = null;
+        if (!empty($data['shipping_method_id'])) {
+            $shippingMethod = DB::table('shipping_methods')->where('code', $data['shipping_method_id'])->where('is_active', true)->first();
+            abort_unless($shippingMethod, 422, 'The selected shipping method is unavailable.');
+            $allowedCountries = $shippingMethod->countries ? (json_decode($shippingMethod->countries, true) ?: []) : [];
+            abort_if($allowedCountries && !in_array(strtoupper($address->country), $allowedCountries, true), 422, 'The selected shipping method is not available for this country.');
+        }
         $cart = $this->currentCart($request);
         $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
         if ($items->isEmpty()) throw ValidationException::withMessages(['cart' => ['Your cart is empty.']]);
 
-        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId) {
+        $order = DB::transaction(function () use ($items, $cart, $address, $data, $userId, $shippingMethod) {
             $subtotal = 0;
             $lines = [];
             foreach ($items as $item) {
@@ -479,7 +499,7 @@ class StorefrontController extends Controller
             }
             $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
             $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
-            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => 0, 'tax' => 0, 'total' => $subtotal, 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
                 DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
@@ -491,13 +511,41 @@ class StorefrontController extends Controller
         return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
-    public function shippingMethods()
+    public function shippingMethods(Request $request)
     {
-        return ApiResponse::successResponse([], 'No shipping methods are configured yet.');
+        $methods = DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->get();
+        if ($methods->isEmpty()) return ApiResponse::errorResponse('Shipping is not configured yet.', null, 503);
+        return ApiResponse::successResponse($methods->map(fn ($m) => [
+            'id' => $m->code, 'name' => $m->name, 'description' => $m->description,
+            'price' => (float) $m->price, 'estimatedDelivery' => $m->estimated_delivery,
+        ])->values(), 'Shipping methods retrieved.');
+    }
+
+    public function shippingQuote(Request $request)
+    {
+        $data = $request->validate(['address_id' => 'required|integer', 'currency' => 'nullable|string|size:3']);
+        $address = DB::table('customer_addresses')->where('id', $data['address_id'])->where('user_id', $request->user()->id)->first();
+        abort_unless($address, 404);
+        $methods = DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->get()->filter(function ($method) use ($address) {
+            $countries = $method->countries ? (json_decode($method->countries, true) ?: []) : [];
+            return !$countries || in_array(strtoupper($address->country), $countries, true);
+        })->values();
+        if ($methods->isEmpty()) return ApiResponse::errorResponse('No shipping methods are available for this address.', null, 503);
+        $currency = strtoupper($data['currency'] ?? 'USD');
+        return ApiResponse::successResponse([
+            'addressId' => $address->id,
+            'methods' => $methods->map(fn ($m) => ['id' => $m->code, 'name' => $m->name, 'description' => $m->description, 'price' => (float) $m->price, 'estimatedDelivery' => $m->estimated_delivery])->values(),
+            'rates' => $methods->map(fn ($m) => ['id' => 'rate-' . $m->code, 'methodId' => $m->code, 'amount' => (float) $m->price, 'currency' => $currency, 'source' => 'live', 'estimatedDelivery' => $m->estimated_delivery])->values(),
+            'source' => 'live',
+        ], 'Shipping quote retrieved.');
     }
 
     public function paymentMethods()
     {
-        return ApiResponse::successResponse([['id' => 'cod', 'name' => 'Cash on delivery', 'description' => 'Pay when your order arrives.', 'available' => true, 'requiresProvider' => false]], 'Payment methods retrieved.');
+        $methods = [];
+        if (config('storefront.cash_on_delivery')) {
+            $methods[] = ['id' => 'cod', 'name' => 'Cash on delivery', 'description' => 'Pay when your order arrives.', 'available' => true, 'requiresProvider' => false];
+        }
+        return ApiResponse::successResponse($methods, 'Payment methods retrieved.');
     }
 }
