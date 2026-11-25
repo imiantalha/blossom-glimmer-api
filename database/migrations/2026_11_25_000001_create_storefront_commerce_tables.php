@@ -94,6 +94,8 @@ return new class extends Migration
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
             $table->string('name');
+            $table->string('product_slug')->nullable();
+            $table->text('image_url')->nullable();
             $table->string('sku')->nullable();
             $table->unsignedInteger('quantity');
             $table->decimal('unit_price', 12, 2);
