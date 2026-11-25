@@ -356,10 +356,25 @@ class StorefrontController extends Controller
 
     private function cartPayload($cart): array
     {
-        $items = DB::table('cart_items as ci')->join('products as p', 'p.id', '=', 'ci.product_id')->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')->leftJoin('product_variants as v', 'v.id', '=', 'ci.variant_id')->where('ci.cart_id', $cart->id)->select('ci.*', 'p.name as product_name', 'p.slug', 'p.base_price', 'pm.disk as image_disk', 'pm.file_path as image_path', 'v.name as variant_name', 'v.sku as variant_sku', 'v.price as variant_price')->get()->map(function ($i) {
-            $price = (float) ($i->variant_price ?? $i->base_price ?? 0);
-            return ['id' => $i->id, 'quantity' => $i->quantity, 'unitPrice' => $price, 'subtotal' => $price * $i->quantity, 'product' => ['id' => $i->product_id, 'name' => $i->product_name, 'slug' => $i->slug, 'imageUrl' => $i->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : null], 'variant' => $i->variant_id ? ['id' => $i->variant_id, 'name' => $i->variant_name, 'sku' => $i->variant_sku] : null];
-        })->values();
+        $items = DB::table('cart_items as ci')->join('products as p', 'p.id', '=', 'ci.product_id')
+            ->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')
+            ->leftJoin('product_variants as v', 'v.id', '=', 'ci.variant_id')
+            ->where('ci.cart_id', $cart->id)
+            ->select('ci.*', 'p.name as product_name', 'p.slug', 'p.base_price', 'p.metadata',
+                'pm.disk as image_disk', 'pm.file_path as image_path', 'v.name as variant_name',
+                'v.sku as variant_sku', 'v.price as variant_price')->get()->map(function ($i) {
+                $price = (float) ($i->variant_price ?? $i->base_price ?? 0);
+                $metadata = is_array($i->metadata) ? $i->metadata : (json_decode($i->metadata ?? '[]', true) ?: []);
+                $images = data_get($metadata, 'images', []);
+                $imageUrl = $i->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : (data_get($images, '0.url') ?: null);
+                $inventory = DB::table('inventory_items')->where($i->variant_id ? 'variant_id' : 'product_id', $i->variant_id ?? $i->product_id)->first();
+                $available = $inventory && $inventory->manage_inventory ? max(0, $inventory->stock_quantity - $inventory->reserved_quantity) : null;
+                return [
+                    'id' => $i->id, 'quantity' => $i->quantity, 'unitPrice' => $price, 'subtotal' => $price * $i->quantity,
+                    'product' => ['id' => $i->product_id, 'name' => $i->product_name, 'slug' => $i->slug, 'imageUrl' => $imageUrl, 'stock' => $available, 'inStock' => $available === null ? true : $available > 0],
+                    'variant' => $i->variant_id ? ['id' => $i->variant_id, 'name' => $i->variant_name, 'sku' => $i->variant_sku, 'stock' => $available] : null,
+                ];
+            })->values();
         $subtotal = $items->sum('subtotal');
         return ['id' => $cart->id, 'currency' => $cart->currency, 'items' => $items, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => 0, 'tax' => 0, 'total' => $subtotal];
     }
@@ -414,6 +429,41 @@ class StorefrontController extends Controller
     public function cart(Request $request)
     {
         return ApiResponse::successResponse($this->cartPayload($this->currentCart($request)), 'Cart retrieved.');
+    }
+
+    public function mergeCart(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'required|array|max:100',
+            'items.*.product_slug' => 'required|string|max:255',
+            'items.*.variant_sku' => 'nullable|string|max:100',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+        ]);
+        $cart = $this->currentCart($request);
+        DB::transaction(function () use ($data, $cart) {
+            foreach ($data['items'] as $item) {
+                $product = Product::where('slug', $item['product_slug'])->where('status', 'active')->first();
+                if (!$product) continue;
+                $variant = null;
+                if (!empty($item['variant_sku'])) {
+                    $variant = DB::table('product_variants')->where('product_id', $product->id)->where('sku', $item['variant_sku'])->where('status', 'active')->first();
+                    if (!$variant) continue;
+                } elseif ($product->type === 'variable') {
+                    continue;
+                }
+                $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant->id ?? $product->id)->first();
+                if (!$inventory) continue;
+                $existingQuery = DB::table('cart_items')->where('cart_id', $cart->id)->where('product_id', $product->id);
+                $variant ? $existingQuery->where('variant_id', $variant->id) : $existingQuery->whereNull('variant_id');
+                $existing = $existingQuery->lockForUpdate()->first();
+                $quantity = min(99, (int) $item['quantity'] + (int) ($existing->quantity ?? 0));
+                if ($inventory->manage_inventory) $quantity = min($quantity, max(0, $inventory->stock_quantity - $inventory->reserved_quantity));
+                if ($quantity < 1) continue;
+                if ($existing) DB::table('cart_items')->where('id', $existing->id)->update(['quantity' => $quantity, 'updated_at' => now()]);
+                else DB::table('cart_items')->insert(['cart_id' => $cart->id, 'product_id' => $product->id, 'variant_id' => $variant->id ?? null, 'quantity' => $quantity, 'created_at' => now(), 'updated_at' => now()]);
+            }
+        });
+        return ApiResponse::successResponse($this->cartPayload($cart), 'Guest cart merged with your account.');
     }
 
     public function addCartItem(Request $request)
@@ -478,6 +528,19 @@ class StorefrontController extends Controller
         $rows = DB::table('wishlists as w')->join('products as p', 'p.id', '=', 'w.product_id')->where('w.user_id', $request->user()->id)->where('p.status', 'active')->leftJoin('media as pm', 'pm.id', '=', 'p.feature_media_id')->select('w.id', 'w.created_at', 'p.id as product_id', 'p.name', 'p.slug', 'p.base_price', 'pm.disk as image_disk', 'pm.file_path as image_path')->paginate(min((int) $request->input('per_page', 24), 100));
         $data = $rows->getCollection()->map(fn ($i) => ['id' => $i->id, 'createdAt' => $i->created_at, 'product' => ['id' => $i->product_id, 'name' => $i->name, 'slug' => $i->slug, 'imageUrl' => $i->image_path ? \\Illuminate\\Support\\Facades\\Storage::disk($i->image_disk)->url($i->image_path) : null, 'price' => (float) $i->base_price, 'currency' => 'USD']]);
         return response()->json(['success' => true, 'message' => 'Wishlist retrieved.', 'data' => $data, 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
+    }
+
+    public function mergeWishlist(Request $request)
+    {
+        $data = $request->validate(['product_slugs' => 'required|array|max:200', 'product_slugs.*' => 'required|string|max:255']);
+        $products = Product::whereIn('slug', array_unique($data['product_slugs']))->where('status', 'active')->pluck('id');
+        foreach ($products as $productId) {
+            DB::table('wishlists')->updateOrInsert(
+                ['user_id' => $request->user()->id, 'product_id' => $productId],
+                ['created_at' => now(), 'updated_at' => now()]
+            );
+        }
+        return ApiResponse::successResponse(['merged' => $products->count()], 'Guest wishlist merged with your account.');
     }
 
     public function addWishlist(Request $request)
