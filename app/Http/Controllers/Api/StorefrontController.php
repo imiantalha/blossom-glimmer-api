@@ -414,8 +414,8 @@ class StorefrontController extends Controller
     public function updateProfile(Request $request)
     {
         $data = $request->validate(['name' => 'required|string|max:255', 'email' => 'required|email|max:255|unique:users,email,' . $request->user()->id, 'phone' => 'nullable|string|max:40']);
-        $request->user()->update(['name' => $data['name'], 'email' => $data['email']]);
-        return ApiResponse::successResponse(array_merge($request->user()->fresh()->only('id', 'name', 'email'), ['phone' => $data['phone'] ?? null]), 'Profile updated.');
+        $request->user()->update(['name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null]);
+        return ApiResponse::successResponse(new UserResource($request->user()->fresh()), 'Profile updated.');
     }
 
     private function orderPayload($order): array
