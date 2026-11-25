@@ -134,7 +134,11 @@ class VendorProductController extends Controller
             $query->where(function ($approval) use ($approvalStatus) {
                 $approval->where('metadata->approvalStatus', $approvalStatus);
                 if ($approvalStatus === 'approved') {
-                    $approval->orWhere(fn ($legacy) => $legacy->where('status', 'active')->whereNull('metadata->approvalStatus'));
+                    if (DB::connection()->getDriverName() === 'sqlsrv') {
+                        $approval->orWhereRaw("JSON_VALUE([metadata], '$.approvalStatus') IS NULL AND [status] = ?", ['active']);
+                    } else {
+                        $approval->orWhereRaw("json_extract(metadata, '$.approvalStatus') IS NULL AND status = ?", ['active']);
+                    }
                 }
             });
         }
