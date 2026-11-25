@@ -68,7 +68,7 @@ class VendorProductController extends Controller
             'categoryId' => $category ? (string) $category->id : null,
             'productTypeId' => $product->type, 'shippingProfileId' => (string) data_get($product->metadata, 'shippingProfileId', ''),
             'name' => $product->name, 'slug' => $product->slug, 'shortDescription' => $product->short_description,
-            'description' => $product->description, 'status' => strtoupper($product->status),
+            'description' => $product->description, 'status' => strtoupper($product->status), 'isFeatured' => (bool) $product->is_featured,
             'approvalStatus' => strtoupper(data_get($product->metadata, 'approvalStatus', $product->status === 'active' ? 'approved' : 'pending')),
             'createdById' => (string) $product->vendor_id, 'updatedById' => (string) $product->vendor_id,
             'createdAt' => $product->created_at?->toISOString(), 'updatedAt' => $product->updated_at?->toISOString(),
