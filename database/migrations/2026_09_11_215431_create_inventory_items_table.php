@@ -18,9 +18,18 @@ return new class extends Migration
             $table->unsignedInteger('low_stock_threshold')->default(0);
             $table->timestamps();
 
-            $table->unique('product_id');
-            $table->unique('variant_id');
+
         });
+
+        if (DB::getDriverName() === 'sqlsrv') {
+            DB::statement('CREATE UNIQUE INDEX inventory_items_product_unique ON inventory_items (product_id) WHERE product_id IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX inventory_items_variant_unique ON inventory_items (variant_id) WHERE variant_id IS NOT NULL');
+        } else {
+            Schema::table('inventory_items', function (Blueprint $table) {
+                $table->unique('product_id');
+                $table->unique('variant_id');
+            });
+        }
     }
 
     public function down(): void
