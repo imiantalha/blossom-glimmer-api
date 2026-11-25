@@ -182,3 +182,12 @@ Known areas requiring immediate verification:
 4. Complete frontend page/component audit for locations and any hidden API dependencies.
 5. Integrate frontend API clients with real endpoints and mock fallback on failures.
 6. Run end-to-end checks; then open/review PR. Do not merge without user approval.
+
+
+### Pull request checkpoint
+- Draft PR: https://github.com/imiantalha/blossom-glimmer-api/pull/46
+- Head branch: `feat/storefront-api-integration`
+- Latest confirmed branch head at this checkpoint: `133de708dbea4f8b004a1450f5c6d4d0cad56e58`
+- PR is open, draft, and GitHub reports it mergeable. It is **not merged**.
+- GitHub Actions status is not visible yet; no passing CI result has been confirmed.
+- The latest migration review caught and corrected a malformed block in migration `000005`; re-review all migration and PHP files before marking validation complete.
