@@ -6,7 +6,7 @@ Laravel 12 backend for the Blossom Glimmer marketplace. Provides a versioned JSO
 
 - PHP 8.2+ / Laravel 12
 - Laravel Sanctum and Spatie Laravel Permission
-- MySQL or SQLite (local/testing)
+- SQLite, MySQL, or Microsoft SQL Server 2022 (local/CI testing)
 - PHPUnit
 - Existing Laravel AI product assistant
 
@@ -69,7 +69,14 @@ Do not enable demo seeding in production. Production catalogues must be populate
 - `GET|POST /orders`, `GET /orders/{id}`
 - `POST /shipping/quote`
 
-Order creation recalculates prices and validates stock on the server. Send an `Idempotency-Key` header for safe checkout retries. Cart endpoints currently require authentication; guest-cart merge is not implemented.
+Order creation recalculates prices and validates stock on the server. Send an `Idempotency-Key` header for safe checkout retries. Cart endpoints require authentication; the guest cart and wishlist can be merged after sign-in.
+
+### Vendor and administration
+- `POST /auth/register/vendor` creates a vendor-role account.
+- `GET|POST|PATCH /vendor/store` supports store setup and profile updates.
+- `GET|POST|PATCH|DELETE /vendor/products` and `/vendor/products/{id}` support vendor product management.
+- `PATCH /vendor/products/{id}/inventory` updates vendor-owned stock.
+- Admin store review, approval/suspension, commission and product approval endpoints are role-protected.
 
 ### Administration and tracking
 - Admin user, product, variant, role, permission, dashboard and email-log routes require the `Admin` role.
@@ -80,6 +87,46 @@ Order creation recalculates prices and validates stock on the server. Send an `I
 - `POST /ai/product-assistant/stream`
 
 The AI assistant foundation is preserved; recommendations should be verified against live catalogue and inventory data.
+
+## Demo data and test accounts
+
+`php artisan db:seed` creates 132 catalogue products (simple and variable), 9 root categories with child categories, 6 brands, 4 image-backed vendor stores, 4 collections, and 120 valid product reviews. Product, category, brand, vendor and collection images use the curated image URLs already included in the frontend fixtures. The scenario seeder also creates customer addresses, a populated cart, wishlist entries, a review, a sample order, shipment and tracking event.
+
+Development-only accounts use `Password123!`:
+- Customer: `customer@demo.blossomglimmer.local`
+- Second customer: `customer2@demo.blossomglimmer.local`
+- Admin: `admin@demo.blossomglimmer.local`
+- Vendors: `vendor+atelier-lane@demo.blossomglimmer.local`, `vendor+glow-collective@demo.blossomglimmer.local`, `vendor+nord-living-co@demo.blossomglimmer.local`, `vendor+arc-marketplace@demo.blossomglimmer.local`
+
+Never use these accounts or fixtures in production. Demo seeding is disabled by default in production.
+
+## Microsoft SQL Server 2022
+
+A Docker-based SQL Server instance is available without XAMPP:
+
+```bash
+# Set a strong local-only SA password in your shell first.
+export MSSQL_SA_PASSWORD='LocalOnly_StrongPassword_2026!'
+docker compose -f docker-compose.sqlserver.yml up -d
+
+# Create the development database.
+docker exec blossom-glimmer-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "CREATE DATABASE blossom_glimmer;"
+```
+
+Configure Laravel `.env` (PHP must have `pdo_sqlsrv` and Microsoft ODBC Driver 18):
+
+```env
+DB_CONNECTION=sqlsrv
+DB_HOST=127.0.0.1
+DB_PORT=1433
+DB_DATABASE=blossom_glimmer
+DB_USERNAME=sa
+DB_PASSWORD=LocalOnly_StrongPassword_2026!
+DB_ENCRYPT=yes
+DB_TRUST_SERVER_CERTIFICATE=true
+```
+
+Then run `php artisan migrate:fresh --seed` only against this disposable development database. Windows users can use an installed SQL Server instance with the same Laravel settings. GitHub Actions also runs the feature suite against SQL Server 2022.
 
 ## Configuration notes
 
