@@ -212,6 +212,9 @@ class StorefrontDemoSeeder extends Seeder
                 [
                     'brand_id' => $brandId,
                     'vendor_id' => $vendorId,
+                    'is_featured' => (bool) ($product['featured'] ?? false),
+                    'is_new_arrival' => (bool) ($product['newArrival'] ?? false),
+                    'sold_count' => (int) ($product['soldCount'] ?? 0),
                     'name' => $product['name'],
                     'sku' => $product['sku'] ?? null,
                     'type' => count($variants) ? 'variable' : 'simple',
