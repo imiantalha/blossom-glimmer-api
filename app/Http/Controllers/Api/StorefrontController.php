@@ -46,6 +46,7 @@ class StorefrontController extends Controller
     private function productQuery()
     {
         return Product::query()->where('status', 'active')
+            ->whereHas('vendor.vendorProfile', fn ($vendor) => $vendor->where('status', 'active')->whereNull('deleted_at'))
             ->with(['brand', 'vendor.vendorProfile', 'categories.parent', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
     }
 
@@ -893,7 +894,7 @@ class StorefrontController extends Controller
     public function adminStores(Request $request)
     {
         $query = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->whereNull('vp.deleted_at')->select('vp.*', 'u.name as owner_name', 'u.email as owner_email', 'u.phone as owner_phone');
-        if ($request->filled('status')) $query->where('vp.status', $request->input('status'));
+        if ($request->filled('status')) $query->where('vp.status', strtolower($request->input('status')));
         if ($request->filled('search')) $query->where(fn ($q) => $q->where('vp.name', 'like', '%' . $request->input('search') . '%')->orWhere('vp.slug', 'like', '%' . $request->input('search') . '%')->orWhere('u.email', 'like', '%' . $request->input('search') . '%'));
         $page = $query->orderByDesc('vp.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($row) => $this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]));
