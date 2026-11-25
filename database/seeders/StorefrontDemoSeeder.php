@@ -78,7 +78,6 @@ class StorefrontDemoSeeder extends Seeder
 
     private function seedCategories(array $categories): void
     {
-        DB::table('categories')->update(['status' => 'inactive']);
         foreach ($categories as $category) {
             DB::table('categories')->updateOrInsert(
                 ['slug' => $category['slug']],
@@ -118,7 +117,6 @@ class StorefrontDemoSeeder extends Seeder
 
     private function seedBrands(array $brands): void
     {
-        DB::table('brands')->update(['status' => 'inactive']);
         foreach ($brands as $brand) {
             DB::table('brands')->updateOrInsert(
                 ['slug' => $brand['slug']],
@@ -190,7 +188,6 @@ class StorefrontDemoSeeder extends Seeder
 
     private function seedProducts(array $products): void
     {
-        DB::table('products')->update(['status' => 'inactive']);
         foreach ($products as $product) {
             $brandId = $this->brandIds[$product['brand']['slug'] ?? ''] ?? null;
             $vendorId = $this->vendorIds[$product['vendor']['slug'] ?? ''] ?? null;
