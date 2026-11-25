@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolePermissionSeeder::class,
             StorefrontDemoSeeder::class,
+            StorefrontScenarioSeeder::class,
         ]);
 
         User::firstOrCreate(
