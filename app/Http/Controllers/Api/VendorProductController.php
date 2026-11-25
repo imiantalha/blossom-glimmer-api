@@ -17,6 +17,12 @@ use Illuminate\Validation\ValidationException;
 
 class VendorProductController extends Controller
 {
+    private function ensureVendorStoreCanSell(Request $request): void
+    {
+        $profile = $request->user()->vendorProfile()->first();
+        abort_if(!$profile || $profile->status === 'suspended' || $profile->deleted_at, 403, 'Your store is disabled. Contact an administrator for assistance.');
+    }
+
     private function ownedProduct(Request $request, int $id): Product
     {
         return Product::where('id', $id)->where('vendor_id', $request->user()->id)->firstOrFail();
@@ -127,6 +133,7 @@ class VendorProductController extends Controller
 
     public function store(Request $request)
     {
+        $this->ensureVendorStoreCanSell($request);
         $data = $this->validateProduct($request);
         $userId = $request->user()->id;
         $slug = $data['slug'] ?: Str::slug($data['name']);
@@ -151,6 +158,7 @@ class VendorProductController extends Controller
 
     public function update(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $data = $this->validateProduct($request, $product->id);
         $slug = $data['slug'] ?: Str::slug($data['name']);
@@ -384,6 +392,7 @@ class VendorProductController extends Controller
 
     public function destroy(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $product->update(['status' => 'archived']);
         return ApiResponse::deletedResponse('Product archived.');
@@ -448,6 +457,7 @@ class VendorProductController extends Controller
 
     public function updateInventory(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $data = $request->validate([
             'variant_id' => 'nullable|integer', 'stock_quantity' => 'required|integer|min:0',
