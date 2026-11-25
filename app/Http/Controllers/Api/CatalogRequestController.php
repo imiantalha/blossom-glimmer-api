@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\CatalogRequest;
 use App\Models\Category;
+use App\Models\Tag;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ class CatalogRequestController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|in:brand,category',
+            'type' => 'required|in:brand,category,tag',
             'name' => 'required|string|min:2|max:255',
             'slug' => 'nullable|string|max:255|alpha_dash',
             'description' => 'nullable|string|max:5000',
@@ -26,8 +27,8 @@ class CatalogRequestController extends Controller
             'parent_id' => 'nullable|integer|exists:categories,id',
         ]);
 
-        if ($data['type'] === 'brand' && !empty($data['parent_id'])) {
-            throw ValidationException::withMessages(['parent_id' => ['Brands cannot have a parent category.']]);
+        if ($data['type'] !== 'category' && !empty($data['parent_id'])) {
+            throw ValidationException::withMessages(['parent_id' => ['Only category requests can have a parent category.']]);
         }
 
         if ($data['type'] === 'category' && !empty($data['parent_id'])) {
@@ -38,7 +39,7 @@ class CatalogRequestController extends Controller
         }
 
         $slug = $data['slug'] ?? Str::slug($data['name']);
-        $table = $data['type'] === 'brand' ? 'brands' : 'categories';
+        $table = match ($data['type']) { 'brand' => 'brands', 'category' => 'categories', default => 'tags' };
         if (DB::table($table)->where('slug', $slug)->exists()) {
             throw ValidationException::withMessages(['slug' => ['This catalog URL is already in use.']]);
         }
@@ -155,7 +156,7 @@ class CatalogRequestController extends Controller
                         'image_url' => $details['logo'] ?? null,
                         'status' => 'active',
                     ]);
-                } else {
+                } elseif ($catalogRequest->type === 'category') {
                     $parentId = $details['parent_id'] ?? null;
                     if ($parentId) {
                         $parent = Category::findOrFail($parentId);
@@ -169,6 +170,12 @@ class CatalogRequestController extends Controller
                         'parent_id' => $parentId,
                         'description' => $details['description'] ?? null,
                         'image_url' => $details['image'] ?? null,
+                        'status' => 'active',
+                    ]);
+                } else {
+                    $entity = Tag::create([
+                        'name' => $catalogRequest->name,
+                        'slug' => $catalogRequest->slug,
                         'status' => 'active',
                     ]);
                 }

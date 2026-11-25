@@ -1101,10 +1101,18 @@ class StorefrontApiTest extends TestCase
 
         $categoryRequestId = $categoryRequest->json('data.id');
 
+        $tagRequest = $this->postJson('/api/v1/vendor/catalog-requests', [
+            'type' => 'tag',
+            'name' => 'Vendor Requested Tag',
+            'slug' => 'vendor-requested-tag',
+        ])->assertCreated()->assertJsonPath('data.status', 'pending');
+        $tagRequestId = $tagRequest->json('data.id');
+
         $this->getJson('/api/v1/vendor/catalog-requests')
             ->assertOk()
             ->assertJsonFragment(['id' => (string) $brandRequestId])
-            ->assertJsonFragment(['id' => (string) $categoryRequestId]);
+            ->assertJsonFragment(['id' => (string) $categoryRequestId])
+            ->assertJsonFragment(['id' => (string) $tagRequestId]);
 
         $this->actingAs($admin, 'sanctum')
             ->getJson('/api/v1/admin/catalog-requests?status=pending')
@@ -1123,8 +1131,15 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.status', 'approved')
             ->assertJsonPath('data.entity.type', 'category');
 
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $tagRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'tag');
+
         $this->assertDatabaseHas('brands', ['slug' => 'vendor-requested-brand', 'status' => 'active']);
         $this->assertDatabaseHas('categories', ['slug' => 'vendor-requested-category', 'status' => 'active']);
+        $this->assertDatabaseHas('tags', ['slug' => 'vendor-requested-tag', 'status' => 'active']);
 
         $this->getJson('/api/v1/brands')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-brand']);
         $this->getJson('/api/v1/categories')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-category']);
