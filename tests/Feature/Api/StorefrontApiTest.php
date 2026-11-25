@@ -173,7 +173,7 @@ class StorefrontApiTest extends TestCase
 
         $this->actingAs($customer, 'sanctum')
             ->postJson('/api/v1/inventory/validate', ['items' => [[
-                'cart_item_id' => (string) $item->id,
+                'cart_item_id' => $item->id,
                 'product_id' => $item->product_id,
                 'variant_id' => $item->variant_id,
                 'quantity' => $item->quantity,
