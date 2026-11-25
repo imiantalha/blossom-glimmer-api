@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -69,7 +70,6 @@ return new class extends Migration
             $table->string('number')->unique();
             $table->string('idempotency_key', 100)->nullable();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->index(['user_id', 'idempotency_key']);
             $table->foreignId('address_id')->nullable()->constrained('customer_addresses')->nullOnDelete();
             $table->string('status')->default('pending');
             $table->string('payment_status')->default('pending');
@@ -88,6 +88,12 @@ return new class extends Migration
             $table->json('shipping_address')->nullable();
             $table->timestamps();
         });
+
+        if (DB::getDriverName() === 'sqlsrv') {
+            DB::statement('CREATE UNIQUE INDEX customer_orders_user_idempotency_unique ON customer_orders (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL');
+        } else {
+            Schema::table('customer_orders', fn (Blueprint $table) => $table->unique(['user_id', 'idempotency_key']));
+        }
 
         Schema::create('customer_order_items', function (Blueprint $table) {
             $table->id();
