@@ -483,7 +483,7 @@ class StorefrontController extends Controller
     {
         $items = DB::table('customer_order_items')->where('order_id', $order->id)->get()->map(fn ($i) => [
             'id' => $i->id, 'name' => $i->name, 'quantity' => $i->quantity, 'unitPrice' => (float) $i->unit_price,
-            'subtotal' => (float) $i->subtotal, 'product' => $i->product_id ? ['id' => $i->product_id] : null,
+            'subtotal' => (float) $i->subtotal, 'imageUrl' => $i->image_url, 'product' => $i->product_id ? ['id' => $i->product_id, 'slug' => $i->product_slug] : null,
             'variant' => $i->variant_id ? ['id' => $i->variant_id, 'sku' => $i->sku] : null,
         ])->values();
         $address = $order->shipping_address ? json_decode($order->shipping_address, true) : null;
@@ -572,7 +572,7 @@ class StorefrontController extends Controller
             $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
-                DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
+                DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug, 'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
                 if ($inventory && $inventory->manage_inventory) DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => max(0, $inventory->stock_quantity - $i->quantity), 'updated_at' => now()]);
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
