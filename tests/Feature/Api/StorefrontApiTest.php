@@ -1627,6 +1627,11 @@ class StorefrontApiTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['vendorId' => $vendor->id, 'status' => 'processing']);
 
+        // Administrators must also use strictly sequential fulfilment transitions.
+        $this->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+            'status' => 'processing',
+        ])->assertUnprocessable();
+
         $this->actingAs($vendor, 'sanctum')
             ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
                 'status' => 'ready_to_ship',
