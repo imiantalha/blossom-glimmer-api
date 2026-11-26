@@ -662,6 +662,59 @@ class StorefrontController extends Controller
             'count' => $data->count(), 'from' => $orders->firstItem(), 'to' => $orders->lastItem(), 'has_previous' => $orders->currentPage() > 1, 'has_next' => $orders->hasMorePages()]]);
     }
 
+    public function cancelOrder(Request $request, int $id)
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:1000']]);
+
+        return DB::transaction(function () use ($request, $id, $data) {
+            $order = DB::table('customer_orders')
+                ->where('id', $id)
+                ->where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($order, 404, 'Order not found.');
+            abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 409, 'This order has already been cancelled or refunded.');
+            abort_unless(in_array($order->status, ['pending', 'confirmed', 'payment_failed'], true), 422, 'This order can no longer be cancelled. Contact support to request a return or refund.');
+            abort_unless(in_array($order->payment_status, ['pending', 'failed', 'unpaid'], true) || $order->payment_method === 'cod', 422, 'Paid orders must go through the refund process instead of cancellation.');
+            abort_unless($order->fulfillment_status === 'pending', 422, 'Cancellation is no longer available after fulfilment has started.');
+
+            $items = DB::table('customer_order_items')->where('order_id', $id)->get();
+            foreach ($items as $item) {
+                $inventoryQuery = DB::table('inventory_items');
+                if ($item->variant_id) {
+                    $inventoryQuery->where('variant_id', $item->variant_id);
+                } else {
+                    $inventoryQuery->where('product_id', $item->product_id)->whereNull('variant_id');
+                }
+                $inventory = $inventoryQuery->lockForUpdate()->first();
+                if ($inventory && $inventory->manage_inventory) {
+                    DB::table('inventory_items')->where('id', $inventory->id)->increment('stock_quantity', (int) $item->quantity);
+                }
+            }
+
+            DB::table('vendor_order_fulfillments')->where('order_id', $id)->whereIn('status', ['pending'])->update([
+                'status' => 'cancelled', 'updated_at' => now(),
+            ]);
+            DB::table('payment_transactions')->where('order_id', $id)->where('status', 'pending')->update([
+                'status' => 'cancelled', 'updated_at' => now(),
+            ]);
+            DB::table('customer_orders')->where('id', $id)->update([
+                'status' => 'cancelled', 'fulfillment_status' => 'cancelled',
+                'notes' => trim((string) ($order->notes ?? '')) . "\nCancellation reason: " . trim($data['reason']),
+                'updated_at' => now(),
+            ]);
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $request->user()->id, 'type' => 'order.cancelled',
+                'title' => 'Your order was cancelled',
+                'message' => 'Order ' . $order->number . ' has been cancelled.',
+                'action_url' => '/account/orders/' . $id, 'data' => json_encode(['order_id' => $id]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return ApiResponse::successResponse($this->orderPayload(DB::table('customer_orders')->where('id', $id)->first()), 'Order cancelled and inventory restored.');
+        });
+    }
+
     public function order(Request $request, int $id)
     {
         $order = DB::table('customer_orders')->where('user_id', $request->user()->id)->where('id', $id)->first();
