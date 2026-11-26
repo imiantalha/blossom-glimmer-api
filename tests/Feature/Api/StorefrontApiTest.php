@@ -1444,4 +1444,43 @@ class StorefrontApiTest extends TestCase
         ]);
     }
 
+
+    public function test_vendor_api_enforces_granular_permissions_even_when_role_is_valid(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \\Spatie\\Permission\\Models\\Role::findByName('Vendor');
+        $vendorRole->revokePermissionTo('products.create');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/products', [])
+            ->assertForbidden();
+
+        // Read access remains available because products.view is still granted.
+        $this->getJson('/api/v1/vendor/products')
+            ->assertOk();
+    }
+
+    public function test_vendor_cannot_use_customer_or_admin_order_management_as_an_admin(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/admin/stores')
+            ->assertForbidden();
+
+        $this->getJson('/api/v1/admin/products')
+            ->assertForbidden();
+    }
+
+    public function test_vendor_store_and_product_routes_require_their_specific_permissions(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \\Spatie\\Permission\\Models\\Role::findByName('Vendor');
+        $vendorRole->revokePermissionTo('stores.manage');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/vendor/store/me')
+            ->assertForbidden();
+    }
+
 }
