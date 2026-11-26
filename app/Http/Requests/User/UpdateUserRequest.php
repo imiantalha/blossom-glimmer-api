@@ -4,7 +4,8 @@ namespace App\Http\Requests\User;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rules\Password; 
+use Illuminate\Validation\Rules\Password;
+use App\Constants\Role; 
 
 class UpdateUserRequest extends FormRequest
 {
@@ -13,7 +14,15 @@ class UpdateUserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->can('update', $this->route('user'));
+        $actor = $this->user();
+        $target = $this->route('user');
+
+        if (!$actor || !$actor->can('update', $target)) return false;
+
+        $privilegedTarget = $target && ($target->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]));
+        $assigningPrivilegedRole = in_array($this->input('role'), [Role::ADMIN, Role::SUPER_ADMIN], true);
+
+        return !($privilegedTarget || $assigningPrivilegedRole) || $actor->hasRole(Role::SUPER_ADMIN);
     }
 
     /**
