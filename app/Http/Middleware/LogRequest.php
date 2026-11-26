@@ -34,7 +34,7 @@ class LogRequest
 
     private function record(Request $request, int $status, float $startedAt): void
     {
-        if (!$request->is('api/*') || $request->is('api/v1/health') || app()->runningInConsole()) {
+        if (!$request->is('api/*') || $request->is('api/v1/health')) {
             return;
         }
 
