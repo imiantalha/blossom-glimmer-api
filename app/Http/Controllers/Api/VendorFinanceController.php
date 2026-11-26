@@ -24,6 +24,7 @@ class VendorFinanceController extends Controller
         $balances = $currencies->map(function ($currency) use ($vendorId) {
             $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('net_amount');
             $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'payout_debit')->sum('net_amount'));
+            $refundDebits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'refund_debit')->sum('net_amount'));
             $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->where('currency', $currency)->whereIn('status', ['pending', 'approved'])->sum('amount');
             $gross = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('gross_amount');
             $commission = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('commission_amount');
@@ -33,8 +34,10 @@ class VendorFinanceController extends Controller
                 'commissionDeducted' => $commission,
                 'netEarned' => $credits,
                 'paidOut' => $debits,
+                'refundedToCustomers' => $refundDebits,
                 'reserved' => $reserved,
-                'availableBalance' => max(0, $credits - $debits - $reserved),
+                'availableBalance' => max(0, $credits - $debits - $refundDebits - $reserved),
+                'balanceDue' => max(0, $debits + $refundDebits - $credits),
             ];
         })->values();
         $defaultCurrency = $balances->firstWhere('currency', 'USD') ?? $balances->first();
@@ -73,8 +76,9 @@ class VendorFinanceController extends Controller
             $this->syncEarnedLedger($vendorId);
             $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('net_amount');
             $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'payout_debit')->sum('net_amount'));
+            $refundDebits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'refund_debit')->sum('net_amount'));
             $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->where('currency', $currency)->whereIn('status', ['pending', 'approved'])->sum('amount');
-            $available = max(0, $credits - $debits - $reserved);
+            $available = max(0, $credits - $debits - $refundDebits - $reserved);
             if ((float) $data['amount'] > $available) {
                 throw ValidationException::withMessages(['amount' => ['The requested payout exceeds your available balance.']]);
             }
@@ -199,9 +203,9 @@ class VendorFinanceController extends Controller
             ->join('products as p', 'p.id', '=', 'oi.product_id')
             ->join('customer_orders as o', 'o.id', '=', 'oi.order_id')
             ->where('p.vendor_id', $vendorId)
-            ->where('o.status', 'delivered')
+            ->whereIn('o.status', ['delivered', 'refunded'])
             ->where(function ($query) {
-                $query->where('o.payment_status', 'paid')
+                $query->whereIn('o.payment_status', ['paid', 'partially_refunded', 'refunded'])
                     ->orWhere('o.payment_method', 'cod');
             })
             ->select('oi.id', 'oi.order_id', 'oi.subtotal', 'o.currency')
