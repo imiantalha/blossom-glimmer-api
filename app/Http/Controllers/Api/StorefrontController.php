@@ -1131,6 +1131,7 @@ class StorefrontController extends Controller
         $current = $sequence[$fulfillment->status] ?? -1;
         $next = $sequence[$data['status']] ?? -1;
         abort_if($next < $current, 422, 'Fulfilment status cannot move backwards.');
+        abort_if($next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
         abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
 
         DB::transaction(function () use ($data, $fulfillment, $orderId) {
