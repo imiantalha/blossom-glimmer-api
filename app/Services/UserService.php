@@ -89,6 +89,16 @@ class UserService
                 }
             }
 
+            // Never demote or deactivate the last active administrator.
+            if ($user->hasRole('Admin') && $user->is_active && !is_null($roles) && !in_array('Admin', (array) $roles, true)) {
+                $activeAdmins = User::role('Admin')->where('is_active', true)->count();
+                if ($activeAdmins <= 1) {
+                    throw ValidationException::withMessages([
+                        'role' => 'The last active administrator cannot be demoted.',
+                    ]);
+                }
+            }
+
             // Never allow the marketplace to be left without an active administrator.
             if (array_key_exists('is_active', $data) && !$data['is_active'] && $user->hasRole('Admin')) {
                 $activeAdmins = User::role('Admin')->where('is_active', true)->count();
