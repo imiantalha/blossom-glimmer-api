@@ -1516,7 +1516,12 @@ class StorefrontApiTest extends TestCase
 
         $vendorAResponse = $this->actingAs($vendorA, 'sanctum')
             ->getJson('/api/v1/vendor/orders/' . $order->id)->assertOk();
-        $vendorAItems = collect($vendorAResponse->json('data.items'));
+        $vendorAData = $vendorAResponse->json('data');
+        $this->assertArrayNotHasKey('total', $vendorAData);
+        $this->assertArrayNotHasKey('paymentStatus', $vendorAData);
+        $this->assertArrayNotHasKey('customer', $vendorAData);
+        $this->assertArrayNotHasKey('vendorFulfillments', $vendorAData);
+        $vendorAItems = collect($vendorAData['items']);
         $this->assertTrue($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productA->id));
         $this->assertFalse($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
 
