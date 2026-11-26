@@ -124,11 +124,20 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
             );
 
             if ($vendor) {
-                DB::table('vendor_payout_requests')->updateOrInsert(
-                    ['vendor_id' => $vendor->id, 'vendor_note' => 'Seeded payout request for admin approval testing.'],
-                    ['amount' => 1, 'currency' => 'USD', 'status' => 'pending', 'payout_method' => 'manual_simulation',
-                        'created_at' => now(), 'updated_at' => now()]
-                );
+                $hasSeededPayout = DB::table('vendor_payout_requests')
+                    ->where('vendor_id', $vendor->id)
+                    ->where('amount', 1)
+                    ->where('status', 'pending')
+                    ->where('payout_method', 'manual_simulation')
+                    ->exists();
+                if (!$hasSeededPayout) {
+                    DB::table('vendor_payout_requests')->insert([
+                        'vendor_id' => $vendor->id, 'amount' => 1, 'currency' => 'USD',
+                        'status' => 'pending', 'payout_method' => 'manual_simulation',
+                        'vendor_note' => 'Seeded payout request for admin approval testing.',
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
             }
         });
 
