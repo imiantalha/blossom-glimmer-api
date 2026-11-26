@@ -225,7 +225,7 @@ class VendorProductController extends Controller
             'media.featuredImage.url' => 'required|url|max:500', 'media.featuredImage.altText' => 'nullable|string|max:255',
             'media.galleryImages' => 'array|max:10', 'media.galleryImages.*.url' => 'required|url|max:500',
             'attributes' => 'array|max:3', 'attributes.*.name' => 'required|string|max:100', 'attributes.*.values' => 'array|max:12',
-            'variants' => 'required|array|min:1', 'variants.*.sku' => 'required|string|max:100',
+            'variants' => 'required|array|min:1', 'variants.*.sku' => 'required|string|max:100|distinct',
             'variants.*.price' => 'required|numeric|min:0.01', 'variants.*.salePrice' => 'nullable|numeric|min:0.01',
             'variants.*.stockQuantity' => 'required|integer|min:0', 'variants.*.weight' => 'required|numeric|min:0',
             'variants.*.length' => 'required|numeric|min:0', 'variants.*.width' => 'required|numeric|min:0', 'variants.*.height' => 'required|numeric|min:0',
@@ -235,6 +235,22 @@ class VendorProductController extends Controller
         ]);
         Brand::where('id', $data['brandId'])->where('status', 'active')->firstOrFail();
         Category::where('id', $data['categoryId'])->where('status', 'active')->firstOrFail();
+
+        $submittedSkus = collect($data['variants'])->pluck('sku')->values();
+        $duplicateProductSku = Product::whereIn('sku', $submittedSkus)
+            ->when($ignoreId, fn ($query) => $query->where('id', '<>', $ignoreId))
+            ->exists();
+        $duplicateVariantSku = ProductVariant::whereIn('sku', $submittedSkus)
+            ->when($ignoreId, fn ($query) => $query->where('product_id', '<>', $ignoreId))
+            ->exists();
+        if ($duplicateProductSku || $duplicateVariantSku) {
+            throw ValidationException::withMessages(['variants' => ['One or more SKUs are already used by another product.']]);
+        }
+        foreach ($data['variants'] as $index => $variant) {
+            if (!empty($variant['salePrice']) && (float) $variant['salePrice'] >= (float) $variant['price']) {
+                throw ValidationException::withMessages(["variants.{$index}.salePrice" => ['Sale price must be lower than the regular price.']]);
+            }
+        }
 
         foreach ($data['tags'] ?? [] as $tagName) {
             if (!DB::table('tags')->where('slug', Str::slug($tagName))->where('status', 'active')->exists()) {
