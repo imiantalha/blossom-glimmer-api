@@ -27,7 +27,7 @@ class AuthController extends Controller
         $credentials['email'] = strtolower(trim($credentials['email']));
 
         $user = User::where('email', $credentials['email'])->first();
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (!$user || !Hash::check($credentials['password'], $user->password) || !$user->is_active) {
             return ApiResponse::unauthorizedResponse('Invalid email or password.');
         }
         $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
