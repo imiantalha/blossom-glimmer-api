@@ -336,6 +336,15 @@ class PaymentSimulationController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $vendorId,
+                    'type' => 'refund.debit',
+                    'title' => 'Customer refund recorded against store earnings',
+                    'message' => 'A simulated refund allocated ' . number_format($netReversal, 2) . ' ' . $order->currency . ' against your earnings for order ' . $order->number . '.',
+                    'action_url' => '/vendor/finance',
+                    'data' => json_encode(['refund_id' => $refund->id, 'order_id' => $refund->order_id, 'order_item_id' => $orderItem->order_item_id]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
             }
 
             DB::table('marketplace_notifications')->insert([
