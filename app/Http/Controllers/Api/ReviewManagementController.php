@@ -80,6 +80,17 @@ class ReviewManagementController extends Controller
                 ->first();
         });
 
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $review->user_id,
+            'type' => 'review.' . $review->status,
+            'title' => $review->status === 'approved' ? 'Your product review was published' : 'Your product review was not approved',
+            'message' => $review->status === 'approved'
+                ? 'Your review of "' . $review->product_name . '" is now visible.'
+                : 'Your review of "' . $review->product_name . '" was not approved. ' . ($review->rejection_reason ?? ''),
+            'action_url' => '/product/' . $review->product_slug,
+            'data' => json_encode(['review_id' => $review->id, 'product_id' => $review->product_id]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse($this->payload($review), 'Product review ' . $review->status . '.');
     }
 
