@@ -1658,6 +1658,13 @@ class StorefrontApiTest extends TestCase
             ])
             ->assertForbidden();
 
+        // The legacy parent shipment endpoint must not bypass vendor-level state.
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/orders/' . $order->id . '/shipment', [
+                'status' => 'delivered',
+            ])
+            ->assertStatus(409);
+
         $this->assertDatabaseHas('vendor_order_fulfillments', [
             'id' => $fulfillmentId,
             'vendor_id' => $vendor->id,
