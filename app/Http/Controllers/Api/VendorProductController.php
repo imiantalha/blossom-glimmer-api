@@ -32,6 +32,11 @@ class VendorProductController extends Controller
     {
         $product->load(['vendor.vendorProfile', 'brand', 'categories.parent', 'variants.inventoryItems']);
         $profile = $product->vendor?->vendorProfile;
+        $shippingProfileId = (string) data_get($product->metadata, 'shippingProfileId', '');
+        if ($shippingProfileId === '') {
+            $shippingProfileId = (string) DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->value('code');
+        }
+        $shippingProfile = DB::table('shipping_methods')->where('code', $shippingProfileId)->first(['code', 'name']);
         $images = collect(data_get($product->metadata, 'images', []))->values()->map(fn ($image, $index) => [
             'id' => (string) ($image['id'] ?? 'image-' . $index), 'url' => $image['url'] ?? '',
             'altText' => $image['altText'] ?? $image['alt'] ?? null, 'sortOrder' => (int) ($image['sortOrder'] ?? $index),
@@ -74,7 +79,7 @@ class VendorProductController extends Controller
             'id' => (string) $product->id, 'storeId' => (string) ($profile?->id ?? $product->vendor_id),
             'brandId' => $product->brand_id ? (string) $product->brand_id : null,
             'categoryId' => $category ? (string) $category->id : null,
-            'productTypeId' => $product->type, 'shippingProfileId' => (string) data_get($product->metadata, 'shippingProfileId', ''),
+            'productTypeId' => $product->type, 'shippingProfileId' => $shippingProfileId,
             'name' => $product->name, 'slug' => $product->slug, 'shortDescription' => $product->short_description,
             'description' => $product->description, 'status' => strtoupper($product->status), 'isFeatured' => (bool) $product->is_featured,
             'approvalStatus' => strtoupper(data_get($product->metadata, 'approvalStatus', $product->status === 'active' ? 'approved' : 'pending')),
@@ -95,7 +100,7 @@ class VendorProductController extends Controller
             'brand' => $product->brand ? ['id' => (string) $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug, 'logo' => $product->brand->image_url] : null,
             'category' => $category ? ['id' => (string) $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'productType' => ['id' => $product->type, 'name' => ucfirst($product->type)],
-            'shippingProfile' => ['id' => (string) data_get($product->metadata, 'shippingProfileId', ''), 'name' => (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
+            'shippingProfile' => ['id' => $shippingProfileId, 'name' => $shippingProfile?->name ?? (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
             'images' => $images, 'variants' => $variants, 'attributes' => $productAttributes,
             'tags' => collect(data_get($product->metadata, 'tags', []))->map(fn ($tag, $index) => ['id' => (string) ($index + 1), 'name' => $tag])->values(),
             'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? '', 'value' => $item['value'] ?? '']),
