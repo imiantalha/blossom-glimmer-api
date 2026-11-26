@@ -30,6 +30,14 @@ class PaymentSimulationController extends Controller
         abort_unless($order, 404, 'Order not found.');
         abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order cannot be paid.');\n        abort_unless($order->payment_method === $data['method'], 422, 'The payment method does not match the selected checkout method.');
 
+        $activeAttempt = DB::table('payment_transactions')
+            ->where('order_id', $order->id)
+            ->where('user_id', $request->user()->id)
+            ->whereIn('status', ['pending', 'succeeded'])
+            ->orderByDesc('id')
+            ->first();
+        if ($activeAttempt) return ApiResponse::successResponse($this->transactionPayload($activeAttempt), 'An active simulated payment attempt already exists.');
+
         $key = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
         if ($key) {
             $existing = DB::table('payment_transactions')
@@ -146,6 +154,7 @@ class PaymentSimulationController extends Controller
                 ->first();
             abort_unless($order, 404, 'Order not found.');
             abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order is not eligible for a refund request.');
+            abort_unless(in_array($order->payment_status, ['paid', 'partially_refunded'], true) || ($order->payment_method === 'cod' && $order->status === 'delivered'), 422, 'Only paid orders or delivered cash-on-delivery orders can be refunded.');
 
             $alreadyRequested = (float) DB::table('refund_requests')
                 ->where('order_id', $order->id)
