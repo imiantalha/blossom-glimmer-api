@@ -213,3 +213,19 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Complete customer order tracking and return/cancellation/refund lifecycle UX, including notifications from payment, shipment, refund and fulfilment changes.
 - Inspect the frontend for other incomplete flows and reconcile all API contracts and fallback behavior.
 - Complete demo data seeding and then run the single comprehensive test phase after implementation is complete.
+
+### Implementation progress — customer tracking and lifecycle notifications
+
+- Customer order payloads now include vendor-specific fulfilment records, carrier, tracking number/URL, estimated delivery and the items in each store shipment.
+- Customer order detail shipping UI now displays tracking separately for each vendor shipment, while retaining support for legacy single-shipment orders.
+- Public approved product reviews now expose vendor replies; storefront review cards render the store response and reply date.
+- Added customer notifications for simulated payment success/failure, refund request submission, refund approval/rejection/processing, and vendor/admin fulfilment status changes.
+- Fixed a refund accounting defect discovered during implementation: the processing code previously counted the current refund twice when calculating cumulative refunded amount. It now sums processed requests once.
+- Customer order cancellation now releases coupon usage and is blocked once any vendor fulfilment has moved beyond pending.
+- These changes still require runtime/database verification; no tests are claimed as passed.
+
+### Remaining implementation work
+
+- Vendor store profile editor, customer return workflow for delivered orders, order lifecycle consistency and support follow-up.
+- Complete notifications for store/product approvals and other administrative actions; check duplicate/noisy notification behavior.
+- Seed demo data, reconcile all front-end API contracts, and then run full role, lifecycle, API and browser verification.
