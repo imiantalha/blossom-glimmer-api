@@ -16,6 +16,9 @@ const Sidebar = () => {
             <ul className="nav flex-column">
                 {isVendor ? (
                     <li className="nav-item"><NavLink to="/vendor" end className={linkClass}>Vendor Dashboard</NavLink></li>
+                    <li className="nav-item"><NavLink to="/vendor/products" className={linkClass}>My Products</NavLink></li>
+                    <li className="nav-item"><NavLink to="/vendor/orders" className={linkClass}>My Orders</NavLink></li>
+                    <li className="nav-item"><NavLink to="/vendor/store" className={linkClass}>Store Profile</NavLink></li>
                 ) : null}
                 {isAdmin ? (
                     <>
