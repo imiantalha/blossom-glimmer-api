@@ -1782,4 +1782,30 @@ class StorefrontApiTest extends TestCase
         ])->assertUnprocessable();
     }
 
+
+    public function test_vendor_cannot_read_update_or_delete_another_vendors_product(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/products/' . $productB->id)
+            ->assertNotFound();
+
+        $this->patchJson('/api/v1/vendor/products/' . $productB->id, [
+            'name' => 'Attempted cross-store modification',
+        ])->assertNotFound();
+
+        $this->deleteJson('/api/v1/vendor/products/' . $productB->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('products', [
+            'id' => $productB->id,
+            'vendor_id' => $vendorB->id,
+            'name' => $productB->name,
+        ]);
+    }
+
 }
