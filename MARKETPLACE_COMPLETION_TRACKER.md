@@ -287,3 +287,5 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Added Next.js portal workspaces and routes for vendor finance, reviews, support and notifications; Admin/Super Admin finance, coupons, support and notifications; Customer support, refunds and notifications.
 - Added action links in notification workspaces so users can navigate to the related order, refund, finance or support area.
 - Role-management navigation and page access are now Super Admin-only, matching API route middleware.
+
+- Extended the lifecycle demo seed data with a pending mock-card order (pending payment + pending vendor fulfilment) for cancellation/payment-retry scenarios, and a high-priority vendor support ticket so both Customer and Vendor support queues are populated.
