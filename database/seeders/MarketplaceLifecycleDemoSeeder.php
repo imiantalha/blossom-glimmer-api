@@ -147,6 +147,7 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                 $pendingOrderId = DB::table('customer_orders')->where('number', 'BG-DEMO-1003')->value('id');
                 if (!$pendingOrderId && $pendingAddressId) {
                     $pendingPrice = (float) ($product->base_price ?? 25);
+                    $pendingMetadata = is_array($product->metadata) ? $product->metadata : (json_decode($product->metadata ?? '[]', true) ?: []);
                     $pendingAddress = DB::table('customer_addresses')->where('id', $pendingAddressId)->first();
                     $pendingOrderId = DB::table('customer_orders')->insertGetId([
                         'number' => 'BG-DEMO-1003', 'user_id' => $pendingCustomer->id, 'address_id' => $pendingAddressId,
@@ -166,7 +167,7 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                     ]);
                     $pendingItemId = DB::table('customer_order_items')->insertGetId([
                         'order_id' => $pendingOrderId, 'product_id' => $product->id, 'name' => $product->name,
-                        'product_slug' => $product->slug, 'sku' => $product->sku, 'quantity' => 1,
+                        'product_slug' => $product->slug, 'image_url' => data_get($pendingMetadata, 'images.0.url'), 'sku' => $product->sku, 'quantity' => 1,
                         'unit_price' => $pendingPrice, 'subtotal' => $pendingPrice,
                         'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
                     ]);
