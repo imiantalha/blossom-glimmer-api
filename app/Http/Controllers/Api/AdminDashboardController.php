@@ -56,6 +56,7 @@ class AdminDashboardController extends Controller
             ],
             'finance' => [
                 'pendingRefunds' => DB::table('refund_requests')->where('status', 'pending')->count(),
+                'pendingReturns' => DB::table('return_requests')->where('status', 'pending')->count(),
                 'pendingPayouts' => DB::table('vendor_payout_requests')->where('status', 'pending')->count(),
             ],
             'support' => [
