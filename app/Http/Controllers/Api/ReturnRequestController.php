@@ -163,7 +163,11 @@ class ReturnRequestController extends Controller
             if ($data['status'] === 'completed') {
                 $order = DB::table('customer_orders')->where('id', $return->order_id)->lockForUpdate()->first();
                 $item = DB::table('customer_order_items')->where('id', $return->order_item_id)->first();
-                $refundAmount = round((float) $item->unit_price * (int) $return->quantity, 2);
+                $orderSubtotal = max(0, (float) $order->subtotal);
+                $discountRatio = $orderSubtotal > 0 ? max(0, $orderSubtotal - (float) $order->discount) / $orderSubtotal : 0;
+                $returnedRatio = (int) $return->quantity / max(1, (int) $item->quantity);
+                $refundAmount = round((float) $item->subtotal * $discountRatio * $returnedRatio, 2);
+                abort_if($refundAmount <= 0, 422, 'The returned item has no refundable value after discounts.');
                 $alreadyRequested = (float) DB::table('refund_requests')->where('order_id', $order->id)
                     ->whereIn('status', ['pending', 'approved', 'processed'])->sum('amount');
                 abort_if($refundAmount > max(0, (float) $order->total - $alreadyRequested), 422, 'The remaining refundable order balance is lower than the value of this return.');
