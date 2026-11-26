@@ -633,12 +633,35 @@ class StorefrontController extends Controller
             'variant' => $i->variant_id ? ['id' => $i->variant_id, 'sku' => $i->sku] : null,
         ])->values();
         $address = $order->shipping_address ? json_decode($order->shipping_address, true) : null;
+        $vendorFulfillments = DB::table('vendor_order_fulfillments as f')
+            ->join('users as u', 'u.id', '=', 'f.vendor_id')
+            ->where('f.order_id', $order->id)
+            ->orderBy('f.id')
+            ->get()
+            ->map(function ($fulfillment) {
+                $items = DB::table('vendor_order_fulfillment_items as fi')
+                    ->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')
+                    ->where('fi.fulfillment_id', $fulfillment->id)
+                    ->get(['oi.id', 'oi.name', 'oi.quantity']);
+                return [
+                    'id' => (int) $fulfillment->id,
+                    'vendorName' => $fulfillment->name,
+                    'status' => $fulfillment->status,
+                    'carrier' => $fulfillment->carrier,
+                    'trackingNumber' => $fulfillment->tracking_number,
+                    'trackingUrl' => $fulfillment->tracking_url,
+                    'estimatedDelivery' => $fulfillment->estimated_delivery,
+                    'shippedAt' => $fulfillment->shipped_at,
+                    'deliveredAt' => $fulfillment->delivered_at,
+                    'items' => $items,
+                ];
+            })->values();
         return ['id' => $order->id, 'number' => $order->number, 'status' => $order->status, 'paymentStatus' => $order->payment_status,
             'fulfillmentStatus' => $order->fulfillment_status, 'currency' => $order->currency, 'subtotal' => (float) $order->subtotal,
             'discount' => (float) $order->discount, 'shipping' => (float) $order->shipping, 'tax' => (float) $order->tax,
             'total' => (float) $order->total, 'createdAt' => $order->created_at, 'shippingAddress' => $address,
             'shippingMethod' => $order->shipping_method_code ? ['id' => $order->shipping_method_code, 'name' => $order->shipping_method_name, 'price' => (float) $order->shipping, 'estimatedDelivery' => $order->shipping_estimated_delivery] : null,
-            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $this->shipmentPayload($order->id)];
+            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $this->shipmentPayload($order->id), 'vendorFulfillments' => $vendorFulfillments];
     }
 
     private function shipmentPayload(int $orderId): ?array
