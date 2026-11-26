@@ -304,15 +304,26 @@ class PaymentSimulationController extends Controller
 
             // Reverse the refunded product value against each affected vendor's ledger.
             // Shipping/tax portions are not deducted from vendor product earnings.
-            $orderItems = DB::table('customer_order_items as oi')
+            $returnContext = $refund->return_request_id
+                ? DB::table('return_requests')->where('id', $refund->return_request_id)->first()
+                : null;
+            $orderItemsQuery = DB::table('customer_order_items as oi')
                 ->join('products as p', 'p.id', '=', 'oi.product_id')
                 ->where('oi.order_id', $refund->order_id)
                 ->orderBy('p.vendor_id')
-                ->select('oi.id as order_item_id', 'oi.subtotal', 'p.vendor_id')
-                ->get();
+                ->select('oi.id as order_item_id', 'oi.subtotal', 'oi.quantity', 'p.vendor_id');
+            if ($returnContext) $orderItemsQuery->where('oi.id', $returnContext->order_item_id);
+            $orderItems = $orderItemsQuery->get();
             $orderSubtotal = max(0, (float) $order->subtotal);
             $discountedProductSubtotal = max(0, $orderSubtotal - (float) $order->discount);
-            $vendorRefundPool = min((float) $refund->amount, $discountedProductSubtotal);
+            $returnedItem = $returnContext ? $orderItems->first() : null;
+            $returnedItemValue = $returnedItem && $orderSubtotal > 0
+                ? max(0, (float) $returnedItem->subtotal) * ($discountedProductSubtotal / $orderSubtotal)
+                    * ((int) $returnContext->quantity / max(1, (int) $returnedItem->quantity))
+                : 0;
+            $vendorRefundPool = $returnContext
+                ? min((float) $refund->amount, $returnedItemValue)
+                : min((float) $refund->amount, $discountedProductSubtotal);
             foreach ($orderItems as $orderItem) {
                 if ($orderSubtotal <= 0 || $vendorRefundPool <= 0) continue;
                 $vendorId = (int) $orderItem->vendor_id;
@@ -322,7 +333,7 @@ class PaymentSimulationController extends Controller
                 $commissionType = $profile->commission_type ?? 'percentage';
                 $commissionValue = max(0, (float) ($profile->commission_value ?? 0));
                 $itemGross = max(0, (float) $orderItem->subtotal) * ($discountedProductSubtotal / $orderSubtotal);
-                $allocatedRefund = $vendorRefundPool * ((float) $orderItem->subtotal / $orderSubtotal);
+                $allocatedRefund = $returnContext ? $vendorRefundPool : $vendorRefundPool * ((float) $orderItem->subtotal / $orderSubtotal);
                 $saleEntry = DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)
                     ->where('order_item_id', $orderItem->order_item_id)->where('type', 'sale_credit')->first();
                 $fullCommission = $saleEntry
