@@ -6,6 +6,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\Password;
+use App\Constants\Role;
 
 class StoreUserRequest extends FormRequest
 {
@@ -14,7 +15,13 @@ class StoreUserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return Auth::guest() || $this->user()?->can('users.create');
+        if (Auth::guest()) return false;
+
+        $user = $this->user();
+        if (!$user || !$user->can('users.create')) return false;
+
+        return !in_array($this->input('role'), [Role::ADMIN, Role::SUPER_ADMIN], true)
+            || $user->hasRole(Role::SUPER_ADMIN);
     }
 
     /**
