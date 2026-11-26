@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\CatalogRequestController;
 use App\Http\Controllers\Api\ReviewManagementController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
+use App\Http\Controllers\Api\AuditLogController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
