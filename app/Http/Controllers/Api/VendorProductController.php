@@ -495,8 +495,8 @@ class VendorProductController extends Controller
 
         $type = strtolower($data['productType']) === 'variable' ? 'variable' : 'simple';
         $prices = collect($data['variants'])->map(fn ($variant) => (float) ($variant['salePrice'] ?? $variant['price']));
-        $metadata = $this->metadata($data, 'draft');
         $existingMetadata = $product->metadata ?? [];
+        $metadata = array_merge($existingMetadata, $this->metadata($data, 'draft'));
         $approval = strtolower((string) ($existingMetadata['approvalStatus'] ?? ($product->status === 'active' ? 'approved' : 'pending')));
         $metadata['approvalStatus'] = $approval;
         if (!empty($existingMetadata['rejectionReason'])) {
