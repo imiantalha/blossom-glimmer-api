@@ -82,12 +82,17 @@ class VendorDashboardController extends Controller
             'delivered' => DB::table('vendor_order_fulfillments')->where('vendor_id', $vendorId)->where('status', 'delivered')->count(),
         ];
 
-        $sales = DB::table('customer_order_items as oi')
+        $salesByCurrency = DB::table('customer_order_items as oi')
             ->join('products as p', 'p.id', '=', 'oi.product_id')
             ->join('customer_orders as o', 'o.id', '=', 'oi.order_id')
             ->where('p.vendor_id', $vendorId)
             ->whereNotIn('o.status', ['cancelled', 'refunded'])
-            ->sum('oi.subtotal');
+            ->select('o.currency', DB::raw('SUM(oi.subtotal) as gross_subtotal'))
+            ->groupBy('o.currency')
+            ->get()
+            ->map(fn ($row) => ['currency' => $row->currency, 'grossSubtotal' => (float) $row->gross_subtotal])
+            ->values();
+        $defaultSales = $salesByCurrency->firstWhere('currency', 'USD') ?? $salesByCurrency->first();
 
         $recentOrders = (clone $orders)
             ->orderByDesc('o.created_at')
@@ -127,9 +132,10 @@ class VendorDashboardController extends Controller
             'products' => $productCounts,
             'orders' => $orderCounts,
             'sales' => [
-                'grossSubtotal' => (float) $sales,
-                'currency' => 'USD',
+                'grossSubtotal' => (float) ($defaultSales['grossSubtotal'] ?? 0),
+                'currency' => $defaultSales['currency'] ?? 'USD',
             ],
+            'salesByCurrency' => $salesByCurrency,
             'lowStockProducts' => $lowStock,
             'recentOrders' => $recentOrders,
         ], 'Vendor dashboard retrieved.');
