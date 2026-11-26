@@ -78,8 +78,23 @@ class UserService
 
             unset($data['role'], $data['password_confirmation']);
 
+            // Never allow the marketplace to be left without an active administrator.
+            if (array_key_exists('is_active', $data) && !$data['is_active'] && $user->hasRole('Admin')) {
+                $activeAdmins = User::role('Admin')->where('is_active', true)->count();
+                if ($activeAdmins <= 1) {
+                    throw ValidationException::withMessages([
+                        'is_active' => 'The last active administrator cannot be deactivated.',
+                    ]);
+                }
+            }
+
             // Update user
             $user = $this->userRepository->update($user, $data);
+
+            // Revoke all existing API tokens immediately when an account is disabled.
+            if (!$user->is_active) {
+                $user->tokens()->delete();
+            }
 
             // Sync role
             if (!is_null($roles)) {
