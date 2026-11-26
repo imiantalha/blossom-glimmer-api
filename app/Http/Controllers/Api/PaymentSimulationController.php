@@ -314,6 +314,92 @@ class PaymentSimulationController extends Controller
         });
     }
 
+    /**
+     * Admin-only local webhook simulator. Event IDs are unique so retries cannot apply twice.
+     */
+    public function simulateWebhook(Request $request)
+    {
+        $data = $request->validate([
+            'transaction_id' => ['required', 'integer', 'exists:payment_transactions,id'],
+            'event_id' => ['required', 'string', 'max:120'],
+            'outcome' => ['required', 'in:success,failure'],
+        ]);
+
+        return DB::transaction(function () use ($request, $data) {
+            $existing = DB::table('payment_webhook_events')->where('event_id', $data['event_id'])->first();
+            if ($existing) {
+                return ApiResponse::successResponse([
+                    'event' => $existing,
+                    'duplicate' => true,
+                    'notice' => 'This event ID was already received; no second state change was applied.',
+                ], 'Previously received payment event returned.');
+            }
+
+            $transaction = DB::table('payment_transactions')->where('id', $data['transaction_id'])->lockForUpdate()->first();
+            abort_unless($transaction, 404, 'Payment transaction not found.');
+
+            $eventStatus = 'ignored';
+            $processedAt = now();
+            if ($transaction->status === 'pending') {
+                $status = $data['outcome'] === 'success' ? 'succeeded' : 'failed';
+                DB::table('payment_transactions')->where('id', $transaction->id)->update([
+                    'status' => $status,
+                    'metadata' => json_encode(['simulation' => true, 'webhook_event_id' => $data['event_id'], 'outcome' => $data['outcome'], 'notice' => 'No real payment was collected.']),
+                    'updated_at' => now(),
+                ]);
+                DB::table('customer_orders')->where('id', $transaction->order_id)->update([
+                    'payment_status' => $status === 'succeeded' ? 'paid' : 'failed',
+                    'status' => $status === 'succeeded' ? 'confirmed' : 'payment_failed',
+                    'updated_at' => now(),
+                ]);
+                $eventStatus = 'processed';
+
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $transaction->user_id,
+                    'type' => 'payment.' . $status,
+                    'title' => $status === 'succeeded' ? 'Payment confirmed' : 'Payment failed',
+                    'message' => 'Payment for order ' . $transaction->order_id . ($status === 'succeeded' ? ' was confirmed.' : ' failed. You can retry from your order details.'),
+                    'action_url' => '/account/orders/' . $transaction->order_id,
+                    'data' => json_encode(['order_id' => $transaction->order_id, 'transaction_id' => $transaction->id, 'event_id' => $data['event_id']]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+
+            $eventId = DB::table('payment_webhook_events')->insertGetId([
+                'payment_transaction_id' => $transaction->id,
+                'event_id' => $data['event_id'],
+                'event_type' => 'payment.' . ($data['outcome'] === 'success' ? 'succeeded' : 'failed'),
+                'status' => $eventStatus,
+                'payload' => json_encode(['simulated' => true, 'outcome' => $data['outcome'], 'actor_id' => $request->user()->id]),
+                'processed_at' => $processedAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return ApiResponse::successResponse([
+                'event' => DB::table('payment_webhook_events')->where('id', $eventId)->first(),
+                'transaction' => DB::table('payment_transactions')->where('id', $transaction->id)->first(),
+                'duplicate' => false,
+                'simulated' => true,
+                'notice' => 'No real payment was collected.',
+            ], $eventStatus === 'processed' ? 'Simulated payment event applied.' : 'Event recorded but ignored because the transaction was already finalized.');
+        });
+    }
+
+    public function webhookEvents(Request $request)
+    {
+        $query = DB::table('payment_webhook_events as e')
+            ->join('payment_transactions as p', 'p.id', '=', 'e.payment_transaction_id')
+            ->join('customer_orders as o', 'o.id', '=', 'p.order_id')
+            ->select('e.*', 'p.reference as payment_reference', 'p.status as payment_status', 'o.number as order_number');
+        if ($request->filled('status')) $query->where('e.status', $request->string('status')->toString());
+        $page = $query->orderByDesc('e.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Payment event history retrieved.');
+    }
+
     private function transactionPayload(object $transaction): array
     {
         return [
