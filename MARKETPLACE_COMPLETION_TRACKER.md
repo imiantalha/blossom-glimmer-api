@@ -295,3 +295,10 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Audited notification destinations and corrected support replies to open the correct Customer or Vendor support workspace, store approval notifications to open vendor store settings, and vendor review replies to open the reviewed product.
 
 - Demo orders now decrement managed inventory when first seeded, so the pending cancellation scenario can restore stock without inflating inventory; shipped and delivered scenarios also reserve their units.
+
+### Current review branches (not merged)
+
+- Backend implementation: PR #47, branch head 074ce84568eaee73fa36aeaba680906058e5d256 — mergeable, still open.
+- Next.js portal implementation: PR #57, branch head 5b62dcc8979ec43c7e1787433b00c747af7dddc8 — still open; mergeability depends on first applying the corrective revert below.
+- Corrective default-branch cleanup: PR #58, draft and unmerged. Merge this before PR #57 when the implementation is approved, so the Next.js portal changes land through the feature PR.
+- No merges, CI runs, local test runs, staging or production deployments have been performed.
