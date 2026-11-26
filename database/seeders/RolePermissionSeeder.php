@@ -54,6 +54,8 @@ class RolePermissionSeeder extends Seeder
             'name' => 'Admin'
         ]);
 
+        $superAdmin = Role::firstOrCreate(['name' => 'Super Admin']);
+
         $vendor = Role::firstOrCreate([
             'name' => 'Vendor'
         ]);
@@ -63,6 +65,7 @@ class RolePermissionSeeder extends Seeder
         ]);
 
         $admin->syncPermissions(Permission::all());
+        $superAdmin->syncPermissions(Permission::all());
 
         $vendor->syncPermissions([
             'products.view',
