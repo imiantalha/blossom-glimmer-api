@@ -14,7 +14,6 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
 
         DB::transaction(function (): void {
             $customer = DB::table('users')->where('email', 'customer2@demo.blossomglimmer.local')->first();
-            $admin = DB::table('users')->where('email', 'admin@demo.blossomglimmer.local')->first();
             $product = DB::table('products')->whereNotNull('vendor_id')->where('status', 'active')->where('type', 'simple')->orderBy('id')->first();
             if (!$customer || !$product) return;
 
