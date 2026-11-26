@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('vendor_order_fulfillments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('customer_orders')->cascadeOnDelete();
-            $table->foreignId('vendor_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('vendor_id')->constrained('users');
             $table->string('status', 40)->default('pending');
             $table->string('carrier', 120)->nullable();
             $table->string('tracking_number', 160)->nullable();
