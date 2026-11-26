@@ -212,6 +212,48 @@ class CatalogManagementController extends Controller
         ], 'Attribute created.');
     }
 
+    public function updateAttribute(Request $request, int $id)
+    {
+        $attribute = CatalogAttribute::findOrFail($id);
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:100|unique:attributes,name,' . $id,
+            'slug' => 'nullable|string|max:120|alpha_dash|unique:attributes,slug,' . $id,
+            'type' => 'required|in:select,text,number,color',
+            'is_variant_attribute' => 'required|boolean',
+            'values' => 'array|max:30',
+            'values.*' => 'required|string|max:100',
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if($slug === '', 422, 'A valid attribute slug could not be generated.');
+        $attribute->update([
+            'name' => $data['name'],
+            'slug' => $slug,
+            'type' => $data['type'],
+            'is_variant_attribute' => $data['is_variant_attribute'],
+        ]);
+
+        // Add new approved values without deleting values already referenced by variants.
+        foreach (array_values(array_unique($data['values'] ?? [])) as $value) {
+            $valueSlug = Str::slug($value);
+            if ($valueSlug !== '') {
+                AttributeValue::firstOrCreate(
+                    ['attribute_id' => $attribute->id, 'slug' => $valueSlug],
+                    ['value' => $value],
+                );
+            }
+        }
+
+        return ApiResponse::successResponse([
+            'id' => (string) $attribute->id,
+            'name' => $attribute->name,
+            'slug' => $attribute->slug,
+            'type' => $attribute->type,
+            'isVariantAttribute' => (bool) $attribute->is_variant_attribute,
+            'status' => strtoupper($attribute->status),
+            'values' => $attribute->fresh()->values->map(fn (AttributeValue $value) => ['id' => (string) $value->id, 'value' => $value->value, 'slug' => $value->slug])->values(),
+        ], 'Attribute updated.');
+    }
+
     public function updateAttributeStatus(Request $request, int $id)
     {
         $data = $request->validate(['status' => 'required|in:active,inactive,ACTIVE,INACTIVE']);
@@ -231,6 +273,19 @@ class CatalogManagementController extends Controller
         abort_if(DB::table('tags')->where('slug', $slug)->exists(), 422, 'This tag URL is already taken.');
         $tag = Tag::create(['name' => $data['name'], 'slug' => $slug, 'status' => 'active']);
         return ApiResponse::createdResponse(['id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug, 'status' => strtoupper($tag->status)], 'Tag created.');
+    }
+
+    public function updateTag(Request $request, int $id)
+    {
+        $tag = Tag::findOrFail($id);
+        $data = $request->validate([
+            'name' => 'required|string|min:2|max:50|unique:tags,name,' . $id,
+            'slug' => 'nullable|string|max:80|alpha_dash|unique:tags,slug,' . $id,
+        ]);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if($slug === '', 422, 'A valid tag slug could not be generated.');
+        $tag->update(['name' => $data['name'], 'slug' => $slug]);
+        return ApiResponse::successResponse(['id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug, 'status' => strtoupper($tag->status)], 'Tag updated.');
     }
 
     public function updateTagStatus(Request $request, int $id)
