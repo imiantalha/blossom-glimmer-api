@@ -106,6 +106,12 @@ class StorefrontScenarioSeeder extends Seeder
                         'sku' => $simple->sku, 'quantity' => 1,
                         'unit_price' => $price, 'subtotal' => $price, 'created_at' => now(), 'updated_at' => now(),
                     ]);
+                    $inventory = DB::table('inventory_items')->where('product_id', $simple->id)->whereNull('variant_id')->lockForUpdate()->first();
+                    if ($inventory && $inventory->manage_inventory) {
+                        DB::table('inventory_items')->where('id', $inventory->id)->update([
+                            'stock_quantity' => max(0, (int) $inventory->stock_quantity - 1), 'updated_at' => now(),
+                        ]);
+                    }
                 }
                 $shipmentId = DB::table('shipments')->where('order_id', $orderId)->value('id');
                 if (!$shipmentId) {
