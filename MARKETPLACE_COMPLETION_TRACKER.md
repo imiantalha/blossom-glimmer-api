@@ -338,3 +338,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Refund totals are calculated only after locking the parent order, preventing concurrent partial refunds from overwriting the cumulative order payment status.
 
 - Vendor sale credits now use discounted line-item values, and refund reversals use the original recorded commission where available. This keeps vendor net earnings aligned with coupon discounts and subsequent refunds.
+
+- The Vendor dashboard KPI now groups gross sales by currency instead of labelling a mixed-currency sum as USD.
