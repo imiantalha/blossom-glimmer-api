@@ -16,7 +16,7 @@ class PermissionController extends Controller
 {
     private function isVendorCorePermission(Permission $permission): bool
     {
-        return \\Spatie\\Permission\\Models\\Role::query()
+        return \Spatie\Permission\Models\Role::query()
             ->where('name', 'Vendor')
             ->whereHas('permissions', fn ($query) => $query->where('permissions.id', $permission->id))
             ->exists();
