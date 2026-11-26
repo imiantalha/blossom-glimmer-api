@@ -21,6 +21,7 @@ use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PaymentSimulationController;
+use App\Http\Controllers\Api\VendorFinanceController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -72,6 +73,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
+            Route::get('finance/summary', [VendorFinanceController::class, 'summary']);
+            Route::get('finance/payouts', [VendorFinanceController::class, 'payouts']);
+            Route::post('finance/payouts', [VendorFinanceController::class, 'requestPayout']);
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
             Route::get('orders', [StorefrontController::class, 'vendorOrders'])->middleware('permission:orders.view');
             Route::get('orders/{id}', [StorefrontController::class, 'vendorOrder'])->middleware('permission:orders.view');
@@ -149,6 +153,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
             Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);
+            Route::get('admin/payouts', [VendorFinanceController::class, 'adminPayouts']);
+            Route::patch('admin/payouts/{id}/review', [VendorFinanceController::class, 'reviewPayout']);
+            Route::post('admin/payouts/{id}/process', [VendorFinanceController::class, 'processPayout']);
             Route::patch('admin/refunds/{id}/review', [PaymentSimulationController::class, 'reviewRefund']);
             Route::post('admin/refunds/{id}/process', [PaymentSimulationController::class, 'processRefund']);
             Route::get('admin/orders/{id}', [StorefrontController::class, 'adminOrder']);
