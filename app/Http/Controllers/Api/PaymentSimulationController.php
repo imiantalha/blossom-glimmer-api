@@ -116,6 +116,21 @@ class PaymentSimulationController extends Controller
                 ]);
             }
 
+            if (in_array($status, ['succeeded', 'failed'], true)) {
+                $order = DB::table('customer_orders')->where('id', $transaction->order_id)->first();
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $transaction->user_id,
+                    'type' => 'payment.' . $status,
+                    'title' => $status === 'succeeded' ? 'Payment confirmed' : 'Payment failed',
+                    'message' => $status === 'succeeded'
+                        ? 'Payment for order ' . ($order->number ?? $transaction->order_id) . ' was confirmed.'
+                        : 'Payment for order ' . ($order->number ?? $transaction->order_id) . ' failed. You can retry from your order details.',
+                    'action_url' => '/account/orders/' . $transaction->order_id,
+                    'data' => json_encode(['order_id' => $transaction->order_id, 'transaction_id' => $id]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+
             $updated = DB::table('payment_transactions')->where('id', $id)->first();
             return ApiResponse::successResponse($this->transactionPayload($updated), 'Simulated payment outcome recorded.');
         });
@@ -176,6 +191,13 @@ class PaymentSimulationController extends Controller
                 'updated_at' => now(),
             ]);
 
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $request->user()->id, 'type' => 'refund.requested',
+                'title' => 'Refund request received',
+                'message' => 'Your refund request for order ' . $order->number . ' has been submitted for review.',
+                'action_url' => '/account/refunds', 'data' => json_encode(['refund_id' => $id, 'order_id' => $order->id]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
             return ApiResponse::successResponse(DB::table('refund_requests')->where('id', $id)->first(), 'Refund request submitted for administrator review.');
         });
     }
@@ -237,6 +259,13 @@ class PaymentSimulationController extends Controller
             'updated_at' => now(),
         ]);
 
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $refund->user_id, 'type' => 'refund.' . $data['decision'],
+            'title' => $data['decision'] === 'approve' ? 'Refund approved' : 'Refund request declined',
+            'message' => $data['decision'] === 'approve' ? 'Your refund request has been approved and is awaiting simulated processing.' : 'Your refund request was declined. Please review your order or contact support.',
+            'action_url' => '/account/refunds', 'data' => json_encode(['refund_id' => $id, 'order_id' => $refund->order_id]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse(DB::table('refund_requests')->where('id', $id)->first(), 'Refund decision recorded.');
     }
 
@@ -267,6 +296,13 @@ class PaymentSimulationController extends Controller
                 'updated_at' => now(),
             ]);
 
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $refund->user_id, 'type' => 'refund.processed',
+                'title' => 'Refund processed',
+                'message' => 'Your simulated refund of ' . number_format((float) $refund->amount, 2) . ' ' . $order->currency . ' has been recorded. No real funds were transferred.',
+                'action_url' => '/account/refunds', 'data' => json_encode(['refund_id' => $id, 'order_id' => $refund->order_id, 'reference' => $reference]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
             return ApiResponse::successResponse([
                 'id' => $id,
                 'reference' => $reference,
