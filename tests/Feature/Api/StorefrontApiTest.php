@@ -1640,4 +1640,25 @@ class StorefrontApiTest extends TestCase
         ]);
     }
 
+
+    public function test_admin_created_users_receive_the_selected_role(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/users', [
+                'name' => 'New Vendor Account',
+                'email' => 'new-vendor-account@gmail.com',
+                'password' => 'StrongPassword123!',
+                'password_confirmation' => 'StrongPassword123!',
+                'role' => 'Vendor',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'vendor')
+            ->assertJsonFragment(['Vendor']);
+
+        $created = User::where('email', 'new-vendor-account@gmail.com')->firstOrFail();
+        $this->assertTrue($created->hasRole('Vendor'));
+    }
+
 }
