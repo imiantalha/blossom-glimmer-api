@@ -79,6 +79,16 @@ class UserService
 
             unset($data['role'], $data['password_confirmation']);
 
+            // Prevent an administrator from removing their own access through a direct API call.
+            if ((int) auth()->id() === (int) $user->id) {
+                if (array_key_exists('is_active', $data) && !$data['is_active']) {
+                    throw ValidationException::withMessages(['is_active' => 'You cannot deactivate your own account.']);
+                }
+                if (!is_null($roles) && !$user->hasRole($roles)) {
+                    throw ValidationException::withMessages(['role' => 'You cannot change your own administrator role.']);
+                }
+            }
+
             // Never allow the marketplace to be left without an active administrator.
             if (array_key_exists('is_active', $data) && !$data['is_active'] && $user->hasRole('Admin')) {
                 $activeAdmins = User::role('Admin')->where('is_active', true)->count();
