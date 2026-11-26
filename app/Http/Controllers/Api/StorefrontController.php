@@ -661,7 +661,7 @@ class StorefrontController extends Controller
             'discount' => (float) $order->discount, 'shipping' => (float) $order->shipping, 'tax' => (float) $order->tax,
             'total' => (float) $order->total, 'createdAt' => $order->created_at, 'shippingAddress' => $address,
             'shippingMethod' => $order->shipping_method_code ? ['id' => $order->shipping_method_code, 'name' => $order->shipping_method_name, 'price' => (float) $order->shipping, 'estimatedDelivery' => $order->shipping_estimated_delivery] : null,
-            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $this->shipmentPayload($order->id), 'vendorFulfillments' => $vendorFulfillments];
+            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $vendorFulfillments->isEmpty() ? $this->shipmentPayload($order->id) : null, 'vendorFulfillments' => $vendorFulfillments];
     }
 
     private function shipmentPayload(int $orderId): ?array
