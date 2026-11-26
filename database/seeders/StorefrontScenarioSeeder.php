@@ -120,6 +120,36 @@ class StorefrontScenarioSeeder extends Seeder
                         'location' => 'Lahore', 'occurred_at' => now()->subHours(8), 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
+
+                // Keep demo orders compatible with the vendor-specific fulfilment model.
+                $vendorItems = DB::table('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->where('oi.order_id', $orderId)
+                    ->whereNotNull('p.vendor_id')
+                    ->select('oi.id as order_item_id', 'p.vendor_id')
+                    ->get()
+                    ->groupBy('vendor_id');
+
+                foreach ($vendorItems as $vendorId => $items) {
+                    $fulfillmentId = DB::table('vendor_order_fulfillments')
+                        ->where('order_id', $orderId)
+                        ->where('vendor_id', $vendorId)
+                        ->value('id');
+
+                    if (!$fulfillmentId) {
+                        $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                            'order_id' => $orderId, 'vendor_id' => $vendorId, 'status' => 'pending',
+                            'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    }
+
+                    foreach ($items as $item) {
+                        DB::table('vendor_order_fulfillment_items')->updateOrInsert(
+                            ['fulfillment_id' => $fulfillmentId, 'order_item_id' => $item->order_item_id],
+                            ['created_at' => now(), 'updated_at' => now()]
+                        );
+                    }
+                }
             }
         });
 
