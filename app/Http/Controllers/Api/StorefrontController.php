@@ -805,7 +805,7 @@ class StorefrontController extends Controller
 
     public function upsertShipment(Request $request, int $orderId)
     {
-        abort_unless($request->user()->hasRole(Role::ADMIN), 403);
+        abort_unless($request->user()->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]), 403);
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
         abort_unless($order, 404);
 
