@@ -326,3 +326,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 
 - Customer review submission now requires a delivered purchase; customers can list, edit and delete their own reviews, and edited reviews return to moderation.
 - Added per-user in-app notification preferences for orders, payments, shipping, refunds, returns, reviews, support, finance, catalog and marketing. Customer, Vendor and Admin notification centres expose the preference controls, and disabled categories are filtered from the in-app feed and unread count.
+
+- Extended the lifecycle demo seeder with a second independent delivered order and pending item-level return request, so return approval/completion can be exercised without colliding with the separate pending refund scenario.
