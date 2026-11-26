@@ -20,6 +20,7 @@ import PayoutManagementPage from "../pages/finance/PayoutManagementPage";
 import SupportTicketsPage from "../pages/support/SupportTicketsPage";
 import VendorSupportPage from "../pages/vendor/VendorSupportPage";
 import NotificationsPage from "../pages/notifications/NotificationsPage";
+import RefundManagementPage from "../pages/finance/RefundManagementPage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -41,6 +42,7 @@ export default function Router() {
                     <Route path="/users/:id/edit" element={<EditUserPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
                     <Route path="/payouts" element={<PayoutManagementPage />} />
+                    <Route path="/refunds" element={<RefundManagementPage />} />
                     <Route path="/support" element={<SupportTicketsPage />} />
                     <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
                     <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
