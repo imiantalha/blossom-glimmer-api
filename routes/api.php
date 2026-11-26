@@ -96,7 +96,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('cart/{id}', [StorefrontController::class, 'deleteCartItem']);
         Route::delete('cart', [StorefrontController::class, 'clearCart']);
 
-        Route::post('admin/orders/{orderId}/shipment', [StorefrontController::class, 'upsertShipment']);
+
         Route::get('orders', [StorefrontController::class, 'orders']);
         Route::post('orders', [StorefrontController::class, 'createOrder']);
         Route::get('orders/{id}', [StorefrontController::class, 'order']);
