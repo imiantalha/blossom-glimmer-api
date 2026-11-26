@@ -1,0 +1,192 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Support\ApiResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class VendorFinanceController extends Controller
+{
+    public function summary(Request $request)
+    {
+        $vendorId = (int) $request->user()->id;
+        $this->syncEarnedLedger($vendorId);
+
+        $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('net_amount');
+        $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'payout_debit')->sum('net_amount'));
+        $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->whereIn('status', ['pending', 'approved'])->sum('amount');
+        $profile = DB::table('vendor_profiles')->where('user_id', $vendorId)->whereNull('deleted_at')->first();
+
+        return ApiResponse::successResponse([
+            'currency' => 'USD',
+            'grossEarned' => (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('gross_amount'),
+            'commissionDeducted' => (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('commission_amount'),
+            'netEarned' => $credits,
+            'paidOut' => $debits,
+            'reserved' => $reserved,
+            'availableBalance' => max(0, $credits - $debits - $reserved),
+            'commission' => $profile ? ['type' => $profile->commission_type, 'value' => (float) $profile->commission_value] : null,
+            'ledger' => DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->orderByDesc('id')->limit(100)->get(),
+        ], 'Vendor finance summary retrieved.');
+    }
+
+    public function payouts(Request $request)
+    {
+        $items = DB::table('vendor_payout_requests')->where('vendor_id', $request->user()->id)->orderByDesc('id')->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $items->items(),
+            'pagination' => ['current_page' => $items->currentPage(), 'last_page' => $items->lastPage(), 'per_page' => $items->perPage(), 'total' => $items->total()],
+        ], 'Vendor payout requests retrieved.');
+    }
+
+    public function requestPayout(Request $request)
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'vendor_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $vendorId = (int) $request->user()->id;
+
+        return DB::transaction(function () use ($vendorId, $data) {
+            $this->syncEarnedLedger($vendorId);
+            $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('net_amount');
+            $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'payout_debit')->sum('net_amount'));
+            $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->whereIn('status', ['pending', 'approved'])->sum('amount');
+            $available = max(0, $credits - $debits - $reserved);
+            if ((float) $data['amount'] > $available) {
+                throw ValidationException::withMessages(['amount' => ['The requested payout exceeds your available balance.']]);
+            }
+
+            $id = DB::table('vendor_payout_requests')->insertGetId([
+                'vendor_id' => $vendorId,
+                'amount' => $data['amount'],
+                'currency' => 'USD',
+                'status' => 'pending',
+                'payout_method' => 'manual_simulation',
+                'vendor_note' => $data['vendor_note'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            return ApiResponse::successResponse(DB::table('vendor_payout_requests')->where('id', $id)->first(), 'Payout request submitted for administrator review.');
+        });
+    }
+
+    public function adminPayouts(Request $request)
+    {
+        $query = DB::table('vendor_payout_requests as p')
+            ->join('users as u', 'u.id', '=', 'p.vendor_id')
+            ->select('p.*', 'u.name as vendor_name', 'u.email as vendor_email');
+        if ($request->filled('status')) $query->where('p.status', $request->string('status')->toString());
+        if ($request->filled('search')) {
+            $term = '%' . trim((string) $request->input('search')) . '%';
+            $query->where(fn ($q) => $q->where('u.name', 'like', $term)->orWhere('u.email', 'like', $term));
+        }
+        $page = $query->orderByDesc('p.id')->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Marketplace payout requests retrieved.');
+    }
+
+    public function reviewPayout(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+            'admin_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $payout = DB::table('vendor_payout_requests')->where('id', $id)->first();
+        abort_unless($payout, 404, 'Payout request not found.');
+        abort_unless($payout->status === 'pending', 409, 'Only pending payout requests can be reviewed.');
+
+        DB::table('vendor_payout_requests')->where('id', $id)->update([
+            'status' => $data['decision'] === 'approve' ? 'approved' : 'rejected',
+            'reviewed_by' => $request->user()->id,
+            'admin_note' => $data['admin_note'] ?? null,
+            'reviewed_at' => now(),
+            'updated_at' => now(),
+        ]);
+        return ApiResponse::successResponse(DB::table('vendor_payout_requests')->where('id', $id)->first(), 'Payout decision recorded.');
+    }
+
+    public function processPayout(int $id)
+    {
+        return DB::transaction(function () use ($id) {
+            $payout = DB::table('vendor_payout_requests')->where('id', $id)->lockForUpdate()->first();
+            abort_unless($payout, 404, 'Payout request not found.');
+            abort_unless($payout->status === 'approved', 409, 'Only approved payouts can be processed.');
+
+            $reference = 'BG-PAYOUT-' . Str::upper(Str::random(14));
+            DB::table('vendor_ledger_entries')->insert([
+                'vendor_id' => $payout->vendor_id,
+                'type' => 'payout_debit',
+                'reference' => $reference,
+                'gross_amount' => 0,
+                'commission_amount' => 0,
+                'net_amount' => -abs((float) $payout->amount),
+                'currency' => $payout->currency,
+                'metadata' => json_encode(['simulated' => true, 'payout_request_id' => $id, 'notice' => 'No bank transfer was made.']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('vendor_payout_requests')->where('id', $id)->update([
+                'status' => 'processed',
+                'reference' => $reference,
+                'processed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return ApiResponse::successResponse([
+                'id' => $id,
+                'reference' => $reference,
+                'status' => 'processed',
+                'simulated' => true,
+                'notice' => 'No real funds were transferred.',
+            ], 'Simulated vendor payout recorded.');
+        });
+    }
+
+    private function syncEarnedLedger(int $vendorId): void
+    {
+        $profile = DB::table('vendor_profiles')->where('user_id', $vendorId)->whereNull('deleted_at')->first();
+        $type = $profile->commission_type ?? 'percentage';
+        $value = max(0, (float) ($profile->commission_value ?? 0));
+
+        $items = DB::table('customer_order_items as oi')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->join('customer_orders as o', 'o.id', '=', 'oi.order_id')
+            ->where('p.vendor_id', $vendorId)
+            ->where('o.status', 'delivered')
+            ->where(function ($query) {
+                $query->where('o.payment_status', 'paid')
+                    ->orWhere('o.payment_method', 'cod');
+            })
+            ->select('oi.id', 'oi.order_id', 'oi.subtotal', 'o.currency')
+            ->get();
+
+        foreach ($items as $item) {
+            $gross = max(0, (float) $item->subtotal);
+            $commission = $type === 'fixed'
+                ? min($gross, $value)
+                : min($gross, $gross * min($value, 100) / 100);
+            $reference = 'BG-SALE-' . $vendorId . '-' . $item->id;
+            DB::table('vendor_ledger_entries')->insertOrIgnore([
+                'vendor_id' => $vendorId,
+                'order_id' => $item->order_id,
+                'order_item_id' => $item->id,
+                'type' => 'sale_credit',
+                'reference' => $reference,
+                'gross_amount' => $gross,
+                'commission_amount' => $commission,
+                'net_amount' => $gross - $commission,
+                'currency' => $item->currency ?: 'USD',
+                'metadata' => json_encode(['commission_type' => $type, 'commission_value' => $value]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+}
