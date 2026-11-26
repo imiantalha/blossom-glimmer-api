@@ -5,6 +5,7 @@
 - Administrators use the administrator workspace and are protected by the Admin role.
 - Vendors use the vendor workspace and are protected by the Vendor role plus endpoint-specific Spatie permissions.
 - Customers can only read their own customer orders and manage their own addresses.
+- Administrators can enable or disable user accounts; disabling revokes existing API tokens and blocks future login. The last active administrator cannot be disabled or demoted.
 - Vendor product queries and mutations are scoped to the authenticated user's vendor_id; foreign product IDs return not found.
 - Vendor order projections include only line items assigned to the authenticated vendor. They do not expose other vendors' line items or the parent order's marketplace total.
 
