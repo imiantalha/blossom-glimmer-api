@@ -20,6 +20,7 @@ const Sidebar = () => {
                     <li className="nav-item"><NavLink to="/vendor/orders" className={linkClass}>My Orders</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/store" className={linkClass}>Store Profile</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/finance" className={linkClass}>Earnings & Payouts</NavLink></li>
+                    <li className="nav-item"><NavLink to="/vendor/support" className={linkClass}>Support</NavLink></li>
                 ) : null}
                 {isAdmin ? (
                     <>
@@ -28,6 +29,7 @@ const Sidebar = () => {
                         <li className="nav-item"><NavLink to="/customers" className={linkClass}>Customers</NavLink></li>
                         <li className="nav-item"><NavLink to="/audit-logs" className={linkClass}>Audit Activity</NavLink></li>
                         <li className="nav-item"><NavLink to="/payouts" className={linkClass}>Vendor Payouts</NavLink></li>
+                        <li className="nav-item"><NavLink to="/support" className={linkClass}>Support Tickets</NavLink></li>
                         {roles.includes("super admin") ? (
                             <>
                                 <li className="nav-item"><NavLink to="/roles" className={linkClass}>Roles</NavLink></li>
