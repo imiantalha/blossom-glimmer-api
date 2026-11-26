@@ -129,6 +129,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/tags/{id}/status', [CatalogManagementController::class, 'updateTagStatus']);
             Route::get('admin/catalog-requests', [CatalogRequestController::class, 'adminIndex']);
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
+            Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
+            Route::get('admin/orders/{id}', [StorefrontController::class, 'adminOrder']);
             Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
             Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
             Route::patch('admin/stores/{id}', [StorefrontController::class, 'updateAdminStore']);
