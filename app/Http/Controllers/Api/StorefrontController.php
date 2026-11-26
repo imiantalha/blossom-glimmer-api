@@ -710,11 +710,32 @@ class StorefrontController extends Controller
             $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
             $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
             $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            $fulfillmentItemsByVendor = [];
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
-                DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug, 'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
+                $orderItemId = DB::table('customer_order_items')->insertGetId([
+                    'order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id,
+                    'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug,
+                    'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku,
+                    'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'],
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if ($p->vendor_id) $fulfillmentItemsByVendor[$p->vendor_id][] = $orderItemId;
                 if ($inventory && $inventory->manage_inventory) DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => max(0, $inventory->stock_quantity - $i->quantity), 'updated_at' => now()]);
                 DB::table('products')->where('id', $p->id)->increment('sold_count', $i->quantity);
+            }
+
+            foreach ($fulfillmentItemsByVendor as $vendorId => $orderItemIds) {
+                $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                    'order_id' => $id, 'vendor_id' => $vendorId, 'status' => 'pending',
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                foreach ($orderItemIds as $orderItemId) {
+                    DB::table('vendor_order_fulfillment_items')->insert([
+                        'fulfillment_id' => $fulfillmentId, 'order_item_id' => $orderItemId,
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
                 return DB::table('customer_orders')->find($id);
