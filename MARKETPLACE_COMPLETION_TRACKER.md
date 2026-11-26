@@ -330,3 +330,6 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Extended the lifecycle demo seeder with a second independent delivered order and pending item-level return request, so return approval/completion can be exercised without colliding with the separate pending refund scenario.
 
 - Refund processing now creates idempotent vendor-ledger reversal entries allocated across order items after discount allocation; affected vendors are notified, and refunded amounts reduce currency-specific available payout balances. Full/partial-refunded orders remain eligible for ledger reconciliation.
+
+- Payment intent creation now locks the customer order and has a database unique index for per-user idempotency keys, preventing concurrent duplicate payment attempts.
+- COD orders are marked paid when all vendor fulfilments reach delivered, aligning vendor earnings, customer refunds and revenue reports.
