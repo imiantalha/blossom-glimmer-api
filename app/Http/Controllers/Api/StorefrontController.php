@@ -677,6 +677,7 @@ class StorefrontController extends Controller
             abort_unless(in_array($order->status, ['pending', 'confirmed', 'payment_failed'], true), 422, 'This order can no longer be cancelled. Contact support to request a return or refund.');
             abort_unless(in_array($order->payment_status, ['pending', 'failed', 'unpaid'], true) || $order->payment_method === 'cod', 422, 'Paid orders must go through the refund process instead of cancellation.');
             abort_unless($order->fulfillment_status === 'pending', 422, 'Cancellation is no longer available after fulfilment has started.');
+            abort_if(DB::table('vendor_order_fulfillments')->where('order_id', $id)->where('status', '<>', 'pending')->exists(), 422, 'Cancellation is no longer available after a vendor has started fulfilment.');
 
             $items = DB::table('customer_order_items')->where('order_id', $id)->get();
             foreach ($items as $item) {
