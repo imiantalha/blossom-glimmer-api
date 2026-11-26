@@ -72,13 +72,13 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Avoid GitHub Actions runs because the monthly minutes budget is nearly exhausted. Do not claim tests passed unless actually executed locally and recorded.
 - Keep work on the existing feature branches/PRs. Do not merge or deploy until implementation and local verification are complete and the user explicitly approves.
 
-## Known gaps identified in the 2026-11-26 audit
+## Initial gaps identified in the 2026-11-26 baseline audit
 
-- Backend payment methods currently expose COD only; order creation accepts only `cod`.
-- No payment transaction lifecycle, refund/return workflow, vendor ledger/payout workflow, coupon/promotion module, in-app notification center, or support-ticket module was found in the Laravel API tree.
-- The Laravel React dashboard currently has a small set of routes (dashboard, users, customers, login); marketplace administration and vendor workspace screens remain to be implemented there.
-- Next.js still contains legacy `/administrator` and `/vendor` routes despite the agreed architecture. Audit and consolidate these without removing customer functionality.
-- Both applications need page-level resilience beyond API envelope validation. Root/route error boundaries have been started on the respective branches; continue validating every module's data contracts and error states.
+The bullets in this historical baseline were progressively addressed by the implementation entries below; they are not a current declaration that the modules are still absent.
+
+- Payment simulation, refunds, vendor ledger/payouts, coupons, notifications and support-ticket APIs/UI have since been added.
+- Admin and Vendor dashboard pages and multiple marketplace-management workspaces have since been added to the Next.js feature branch.
+- Remaining work is tracked in the current implementation checklist at the end of this document. Runtime correctness, migration execution and end-to-end completion remain unverified until the planned local test phase.
 
 
 ## Implementation progress — 2026-11-26 continuation
@@ -302,3 +302,12 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Next.js portal implementation: PR #57, branch head 5b62dcc8979ec43c7e1787433b00c747af7dddc8 — still open; mergeability depends on first applying the corrective revert below.
 - Corrective default-branch cleanup: PR #58, draft and unmerged. Merge this before PR #57 when the implementation is approved, so the Next.js portal changes land through the feature PR.
 - No merges, CI runs, local test runs, staging or production deployments have been performed.
+
+### Implementation progress — returns, payment events and financial accuracy
+
+- Added a separate return-request workflow with item-level quantity reservations, delivered-order eligibility, a 30-day post-delivery window, Admin approve/reject, received and completed states, and Customer/Admin notifications. Returns are distinct from monetary refund processing.
+- Added an order-level `delivered_at` timestamp and set it when all vendor fulfilments are delivered; seeded lifecycle orders include delivery timestamps.
+- Added an idempotent simulated payment-webhook event ledger, Admin transaction/event history endpoints and a Finance workspace for simulating success/failure events. Event IDs are rechecked after transaction locking to protect concurrent retries.
+- Vendor finance now calculates earnings, reservations, paid-out totals and available payout balances independently per currency. Vendor payout requests must specify the currency, preventing cross-currency balance aggregation.
+- Added Customer Returns and Admin Returns workspaces, item-specific return links from delivered order details, and a pending-return KPI on the Admin dashboard.
+- Restricted support-ticket assignment to Admin and Super Admin accounts; internal support notes remain hidden from requesters.
