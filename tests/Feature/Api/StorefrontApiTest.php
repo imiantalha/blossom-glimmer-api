@@ -1755,4 +1755,31 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('permissions', ['id' => $permission->id, 'name' => 'products.create']);
     }
 
+
+    public function test_admin_can_disable_vendor_account_and_revoke_existing_tokens(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $token = $vendor->createToken('disable-test')->plainTextToken;
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/users/' . $vendor->id, [
+                'role' => 'Vendor',
+                'is_active' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.isActive', false);
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $vendor->id, 'name' => 'disable-test']);
+        $this->postJson('/api/v1/login', [
+            'email' => $vendor->email,
+            'password' => 'Password123!',
+        ])->assertUnauthorized();
+
+        $this->patchJson('/api/v1/admin/users/' . $admin->id, [
+            'role' => 'Admin',
+            'is_active' => false,
+        ])->assertUnprocessable();
+    }
+
 }
