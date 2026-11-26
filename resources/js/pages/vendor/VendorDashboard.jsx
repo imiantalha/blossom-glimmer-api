@@ -33,7 +33,7 @@ export default function VendorDashboard() {
         ["Products", data?.products?.total ?? 0],
         ["Active products", data?.products?.active ?? 0],
         ["Orders", data?.orders?.total ?? 0],
-        ["Sales", data?.sales?.gross ?? 0],
+        ["Sales", data?.sales?.grossSubtotal ?? 0],
     ];
 
     return <div className="container-fluid py-4">
