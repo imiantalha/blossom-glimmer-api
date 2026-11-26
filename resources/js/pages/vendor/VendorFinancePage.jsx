@@ -31,7 +31,7 @@ export default function VendorFinancePage() {
         if (!Number.isFinite(value) || value <= 0) { setError("Enter a valid payout amount."); return; }
         setSaving(true);
         try {
-            const response = await api.post("/vendor/finance/payouts", { amount: value, vendor_note: note });
+            const response = await api.post("/vendor/finance/payouts", { amount: value, currency: summary?.currency ?? "USD", vendor_note: note });
             if (!response?.data?.success) throw new Error(response?.data?.message || "Payout request failed.");
             setAmount(""); setNote(""); setNotice("Payout request submitted for administrator review."); await load();
         } catch (exception) { setError(exception?.response?.data?.message || exception?.message || "Unable to submit payout request."); }
