@@ -38,11 +38,9 @@ const LoginForm = () => {
         setApiError("");
 
         try {
-            await login(form);
-
-            navigate("/", {
-                replace: true,
-            });
+            const session = await login(form);
+            const roles = (session?.user?.roles ?? []).map((role) => String(role).toLowerCase());
+            navigate(roles.includes("vendor") ? "/vendor" : "/dashboard", { replace: true });
         } catch (error) {
             if (error.response?.status === 422) {
                 setErrors(error.response.data.errors);
