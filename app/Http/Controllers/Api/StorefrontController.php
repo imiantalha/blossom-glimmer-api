@@ -1140,7 +1140,7 @@ class StorefrontController extends Controller
                 'tracking_number' => $data['tracking_number'] ?? $fulfillment->tracking_number,
                 'tracking_url' => $data['tracking_url'] ?? $fulfillment->tracking_url,
                 'estimated_delivery' => isset($data['estimated_delivery'])
-                    ? \\Illuminate\\Support\\Carbon::parse($data['estimated_delivery'])->toDateString()
+                    ? \Illuminate\Support\Carbon::parse($data['estimated_delivery'])->toDateString()
                     : $fulfillment->estimated_delivery,
                 'shipped_at' => $data['status'] === 'shipped' ? ($fulfillment->shipped_at ?: now()) : $fulfillment->shipped_at,
                 'updated_at' => now(),
