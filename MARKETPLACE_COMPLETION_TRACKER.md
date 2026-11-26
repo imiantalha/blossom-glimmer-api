@@ -259,3 +259,10 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Serialized vendor payout requests on the vendor row and made admin payout review atomic; vendor notifications now cover payout approval/rejection/processing.
 - Enforced a 100% upper bound for percentage coupons.
 - Made refund review atomic to prevent concurrent duplicate decisions.
+
+### Repository workflow correction (2026-11-26)
+
+- A group of Next.js portal files was initially created on the frontend repository's default branch because the branch argument was omitted from some create-file calls. This was identified during the commit audit.
+- All affected portal files have now been copied to the existing frontend feature branch for PR #57.
+- A draft corrective revert PR was opened: https://github.com/imiantalha/blossom-glimmer/pull/58. It is intentionally unmerged. If approved, merge the revert PR before the feature PR so the portal implementation returns through review rather than remaining as direct default-branch commits.
+- No PRs have been merged and no deployments have been made.
