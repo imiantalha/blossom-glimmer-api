@@ -229,3 +229,19 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Vendor store profile editor, customer return workflow for delivered orders, order lifecycle consistency and support follow-up.
 - Complete notifications for store/product approvals and other administrative actions; check duplicate/noisy notification behavior.
 - Seed demo data, reconcile all front-end API contracts, and then run full role, lifecycle, API and browser verification.
+
+### Implementation progress — local lifecycle demo data
+
+- Existing catalog seed data already supplies multiple categories/subcategories, brands, vendors, products, images and both simple/variable product structures. Demo seeding remains gated to local/testing environments and the storefront seed flag.
+- Added a lifecycle scenario seeder with a paid/delivered marketplace order, simulated payment transaction, vendor fulfilment tracking, pending refund request, WELCOME10 coupon, customer support ticket/message, notification and pending simulated vendor payout request.
+- Added the lifecycle seeder to DatabaseSeeder after catalog and baseline scenario data.
+- Corrected the baseline shipped demo order's vendor fulfilment records so their status and tracking details agree with the parent order; customer payloads suppress the legacy parent shipment when vendor-specific shipments exist, avoiding duplicate tracking cards.
+- Demo credentials in local/testing only: customer and customer2 plus seeded admin use Password123!; vendor accounts use the email pattern vendor+STORE-SLUG@demo.blossomglimmer.local with Password123!. A Super Admin is only bootstrapped when explicit SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD environment variables are set.
+- Seeders have not been executed against a local database in this session. Treat these as code changes pending actual migration/seed verification.
+
+### Remaining implementation work
+
+- Verify and refine the seeded lifecycle data on MySQL/SQL Server; add more order states and customer/vendor role scenarios if gaps remain.
+- Add notifications for admin product/store decisions and make support ticket assignment/priority handling more complete.
+- Audit the remaining Next.js customer/vendor/admin screens and API fallback paths; finish outstanding order/refund/support actions.
+- Then run the complete test phase once implementation is frozen.
