@@ -35,7 +35,7 @@ export default function VendorProductsPage() {
     const toggleAttribute = (attribute, checked) => setForm(current => {
         const defaultValue = attribute.values?.[0]?.value ?? "";
         const attributes = checked
-            ? [...current.attributes, { name: attribute.name, values: [{ value: defaultValue }] }]
+            ? [...current.attributes, { name: attribute.name, values: (attribute.values ?? []).map(value => ({ value: value.value })) }]
             : current.attributes.filter(item => item.name !== attribute.name);
         const variants = current.variants.map(variant => ({
             ...variant,
