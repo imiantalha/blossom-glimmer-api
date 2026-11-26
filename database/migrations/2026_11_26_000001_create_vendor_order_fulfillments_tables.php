@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('vendor_order_fulfillments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('customer_orders')->cascadeOnDelete();
-            $table->foreignId('vendor_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('vendor_id')->constrained('users')->restrictOnDelete();
             $table->string('status', 40)->default('pending');
             $table->string('carrier', 120)->nullable();
             $table->string('tracking_number', 160)->nullable();
@@ -28,7 +28,8 @@ return new class extends Migration
         Schema::create('vendor_order_fulfillment_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('fulfillment_id')->constrained('vendor_order_fulfillments')->cascadeOnDelete();
-            $table->foreignId('order_item_id')->constrained('customer_order_items')->cascadeOnDelete();
+            // Deliberately indexed without a cascading FK: customer_orders already cascades to both order items and fulfilments. A second cascade path is rejected by SQL Server.
+            $table->unsignedBigInteger('order_item_id');
             $table->timestamps();
             $table->unique(['fulfillment_id', 'order_item_id']);
             $table->unique('order_item_id');
