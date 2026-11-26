@@ -1660,4 +1660,23 @@ class StorefrontApiTest extends TestCase
         $this->assertTrue($created->hasRole('Vendor'));
     }
 
+
+    public function test_core_marketplace_roles_cannot_be_created_renamed_or_deleted_via_api(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \Spatie\Permission\Models\Role::findByName('Vendor');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/roles', ['name' => 'vendor', 'permissions' => []])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/roles/' . $vendorRole->id, ['name' => 'Limited Vendor', 'permissions' => []])
+            ->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/roles/' . $vendorRole->id)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('roles', ['id' => $vendorRole->id, 'name' => 'Vendor']);
+    }
+
 }
