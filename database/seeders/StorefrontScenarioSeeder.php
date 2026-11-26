@@ -138,8 +138,20 @@ class StorefrontScenarioSeeder extends Seeder
 
                     if (!$fulfillmentId) {
                         $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
-                            'order_id' => $orderId, 'vendor_id' => $vendorId, 'status' => 'pending',
+                            'order_id' => $orderId, 'vendor_id' => $vendorId, 'status' => 'shipped',
+                            'carrier' => 'Demo Logistics', 'tracking_number' => 'BG-DEMO-TRACK-1001',
+                            'tracking_url' => 'https://example.com/track/BG-DEMO-TRACK-1001',
+                            'estimated_delivery' => now()->addDays(3)->toDateString(),
+                            'shipped_at' => now()->subDay(),
                             'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    } else {
+                        DB::table('vendor_order_fulfillments')->where('id', $fulfillmentId)->update([
+                            'status' => 'shipped', 'carrier' => 'Demo Logistics',
+                            'tracking_number' => 'BG-DEMO-TRACK-1001',
+                            'tracking_url' => 'https://example.com/track/BG-DEMO-TRACK-1001',
+                            'estimated_delivery' => now()->addDays(3)->toDateString(),
+                            'shipped_at' => now()->subDay(), 'updated_at' => now(),
                         ]);
                     }
 
