@@ -1483,4 +1483,46 @@ class StorefrontApiTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_vendor_order_projection_never_exposes_another_stores_order_items(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $productA = Product::where('vendor_id', $vendorA->id)->firstOrFail();
+        $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
+
+        DB::table('customer_order_items')->insert([
+            'order_id' => $order->id,
+            'product_id' => $productB->id,
+            'name' => $productB->name,
+            'product_slug' => $productB->slug,
+            'sku' => $productB->sku,
+            'quantity' => 2,
+            'unit_price' => 15,
+            'subtotal' => 30,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $vendorAResponse = $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/' . $order->id)
+            ->assertOk();
+        $vendorAItems = collect($vendorAResponse->json('data.items'));
+        $this->assertNotEmpty($vendorAItems);
+        $this->assertFalse($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
+
+        $vendorBResponse = $this->actingAs($vendorB, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/' . $order->id)
+            ->assertOk();
+        $vendorBItems = collect($vendorBResponse->json('data.items'));
+        $this->assertCount(1, $vendorBItems);
+        $this->assertSame((int) $productB->id, (int) $vendorBItems->first()['productId']);
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/99999999')
+            ->assertNotFound();
+    }
+
 }
