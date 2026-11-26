@@ -1466,8 +1466,11 @@ class StorefrontApiTest extends TestCase
             ->assertForbidden();
 
         // Read access remains available because products.view is still granted.
-        $this->getJson('/api/v1/vendor/products')
-            ->assertOk();
+        $this->getJson('/api/v1/vendor/products')->assertOk();
+
+        $vendorRole->revokePermissionTo('orders.update');
+        $this->patchJson('/api/v1/vendor/orders/1/fulfillment', ['status' => 'processing'])
+            ->assertForbidden();
 
         $vendorRole->revokePermissionTo('orders.view');
         $this->getJson('/api/v1/vendor/orders')
@@ -1680,6 +1683,10 @@ class StorefrontApiTest extends TestCase
 
         $created = User::where('email', 'new-vendor-account@gmail.com')->firstOrFail();
         $this->assertTrue($created->hasRole('Vendor'));
+
+        $this->getJson('/api/v1/admin/users')
+            ->assertOk()
+            ->assertJsonFragment(['email' => 'new-vendor-account@gmail.com', 'role' => 'vendor']);
     }
 
 
