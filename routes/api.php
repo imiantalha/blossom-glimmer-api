@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PaymentSimulationController;
 use App\Http\Controllers\Api\VendorFinanceController;
 use App\Http\Controllers\Api\EngagementController;
+use App\Http\Controllers\Api\VendorReviewController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -77,6 +78,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
+            Route::get('reviews', [VendorReviewController::class, 'index'])->middleware('permission:reviews.view');
+            Route::patch('reviews/{id}/reply', [VendorReviewController::class, 'reply'])->middleware('permission:reviews.update');
             Route::get('support/tickets', [EngagementController::class, 'tickets']);
             Route::post('support/tickets', [EngagementController::class, 'createTicket']);
             Route::get('support/tickets/{id}', [EngagementController::class, 'showTicket']);
