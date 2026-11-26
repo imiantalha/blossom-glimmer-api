@@ -1178,6 +1178,17 @@ class StorefrontController extends Controller
             'approved_at' => $data['status'] === 'active' ? ($profile->approved_at ?: now()) : $profile->approved_at,
             'updated_at' => now(),
         ]);
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $profile->user_id,
+            'type' => 'store.' . $data['status'],
+            'title' => $data['status'] === 'active' ? 'Your store is approved' : ($data['status'] === 'suspended' ? 'Your store has been suspended' : 'Your store status changed'),
+            'message' => $data['status'] === 'active'
+                ? 'Your store "' . $profile->name . '" is active and can sell approved products.'
+                : 'Your store "' . $profile->name . '" status is now ' . $data['status'] . '.',
+            'action_url' => '/vendor/store',
+            'data' => json_encode(['store_id' => $id, 'status' => $data['status']]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store status updated.');
     }
 
