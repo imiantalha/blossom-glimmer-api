@@ -129,4 +129,4 @@ class LogRequest
 
         return Str::limit(implode('.', array_filter([$scope, $resource, $verb])), 160, '');
     }
-}}
+}
