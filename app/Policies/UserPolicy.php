@@ -46,7 +46,12 @@ class UserPolicy
      */
     public function delete(User $user, User $model): bool
     {
-        return $user->id === $model->id || $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.delete');
+        // Only a super admin may remove privileged accounts, and never itself.
+        if ($model->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN])) {
+            return $user->hasRole(Role::SUPER_ADMIN) && $user->id !== $model->id;
+        }
+
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.delete');
     }
 
     /**
