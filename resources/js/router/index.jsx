@@ -12,6 +12,8 @@ import EditUserPage from "../pages/users/EditUserPage";
 import CustomersPage from "../pages/customers/CustomersPage";
 import AuditLogsPage from "../pages/audit/AuditLogsPage";
 import VendorDashboard from "../pages/vendor/VendorDashboard";
+import RolesPage from "../pages/roles/RolesPage";
+import PermissionsPage from "../pages/permissions/PermissionsPage";
 
 export default function Router() {
     return (
@@ -29,6 +31,8 @@ export default function Router() {
                     <Route path="/users/create" element={<CreateUserPage />} />
                     <Route path="/users/:id/edit" element={<EditUserPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
+                    <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
+                    <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
                 </Route>
 
                 <Route element={<ProtectedRoute roles={["Vendor"]}><DashboardLayout /></ProtectedRoute>}>
