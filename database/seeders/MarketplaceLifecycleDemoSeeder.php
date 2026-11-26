@@ -44,6 +44,7 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                 $orderId = DB::table('customer_orders')->insertGetId([
                     'number' => 'BG-DEMO-1002', 'user_id' => $customer->id, 'address_id' => $addressId,
                     'status' => 'delivered', 'payment_status' => 'paid', 'fulfillment_status' => 'delivered',
+                        'delivered_at' => now()->subDays(2),
                     'payment_method' => 'mock_card', 'shipping_method_code' => 'standard',
                     'shipping_method_name' => 'Standard delivery', 'shipping_estimated_delivery' => '3–7 business days',
                     'currency' => 'USD', 'subtotal' => $price, 'discount' => 0, 'shipping' => 0, 'tax' => 0,
