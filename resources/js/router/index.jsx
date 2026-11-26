@@ -12,6 +12,9 @@ import EditUserPage from "../pages/users/EditUserPage";
 import CustomersPage from "../pages/customers/CustomersPage";
 import AuditLogsPage from "../pages/audit/AuditLogsPage";
 import VendorDashboard from "../pages/vendor/VendorDashboard";
+import VendorProductsPage from "../pages/vendor/VendorProductsPage";
+import VendorOrdersPage from "../pages/vendor/VendorOrdersPage";
+import VendorStorePage from "../pages/vendor/VendorStorePage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -37,6 +40,9 @@ export default function Router() {
 
                 <Route element={<ProtectedRoute roles={["Vendor"]}><DashboardLayout /></ProtectedRoute>}>
                     <Route path="/vendor" element={<VendorDashboard />} />
+                    <Route path="/vendor/products" element={<VendorProductsPage />} />
+                    <Route path="/vendor/orders" element={<VendorOrdersPage />} />
+                    <Route path="/vendor/store" element={<VendorStorePage />} />
                 </Route>
 
                 <Route path="*" element={<ErrorPage code="404" title="Page Not Found" description="The page you are looking for does not exist." />} />
