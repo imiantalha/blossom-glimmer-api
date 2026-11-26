@@ -1776,7 +1776,7 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.isActive', false);
 
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $vendor->id, 'name' => 'disable-test']);
-        $this->postJson('/api/v1/login', [
+        $this->postJson('/api/v1/auth/login', [
             'email' => $vendor->email,
             'password' => 'Password123!',
         ])->assertUnauthorized();
