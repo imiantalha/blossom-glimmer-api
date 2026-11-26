@@ -63,7 +63,7 @@ class CouponManagementController extends Controller
 
     private function validated(Request $request, ?int $ignoreId = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'code' => ['required', 'string', 'max:60', 'alpha_dash', Rule::unique('coupons', 'code')->ignore($ignoreId)],
             'name' => ['required', 'string', 'max:180'],
             'discount_type' => ['required', Rule::in(['percentage', 'fixed'])],
@@ -76,6 +76,10 @@ class CouponManagementController extends Controller
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'is_active' => ['required', 'boolean'],
         ]);
+        if ($data['discount_type'] === 'percentage' && (float) $data['discount_value'] > 100) {
+            throw ValidationException::withMessages(['discount_value' => ['Percentage discounts cannot exceed 100%.']]);
+        }
+        return $data;
     }
 
     private function values(array $data): array
