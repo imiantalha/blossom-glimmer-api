@@ -45,7 +45,7 @@ class MarketplaceReportController extends Controller
             ->leftJoin('products as p', 'p.id', '=', 'i.product_id')
             ->whereDate('o.created_at', '>=', $from)->whereDate('o.created_at', '<=', $to)
             ->where('o.payment_status', 'paid')->whereNotIn('o.status', ['cancelled', 'refunded'])
-            ->select('i.product_id', 'i.name', 'o.currency', DB::raw('SUM(i.quantity) as units_sold'), DB::raw('SUM(i.subtotal) as revenue'))
+            ->select('i.product_id', 'i.name', 'o.currency', DB::raw('SUM(i.quantity) as units_sold'), DB::raw('SUM(CASE WHEN o.subtotal > 0 THEN i.subtotal * ((o.subtotal - o.discount) / o.subtotal) ELSE 0 END) as revenue'))
             ->groupBy('i.product_id', 'i.name', 'o.currency')->orderByDesc('revenue')->limit(20)->get()
             ->map(fn ($r) => ['productId' => $r->product_id, 'name' => $r->name, 'currency' => $r->currency, 'unitsSold' => (int) $r->units_sold, 'revenue' => (float) $r->revenue])->values();
 
@@ -80,7 +80,7 @@ class MarketplaceReportController extends Controller
             ->whereDate('o.created_at', '>=', $from)->whereDate('o.created_at', '<=', $to)
             ->where('o.payment_status', 'paid')->whereNotIn('o.status', ['cancelled', 'refunded']);
 
-        $salesByCurrency = (clone $items)->select('o.currency', DB::raw('COUNT(DISTINCT o.id) as order_count'), DB::raw('SUM(i.subtotal) as gross_revenue'), DB::raw('SUM(i.quantity) as units_sold'))
+        $salesByCurrency = (clone $items)->select('o.currency', DB::raw('COUNT(DISTINCT o.id) as order_count'), DB::raw('SUM(CASE WHEN o.subtotal > 0 THEN i.subtotal * ((o.subtotal - o.discount) / o.subtotal) ELSE 0 END) as gross_revenue'), DB::raw('SUM(i.quantity) as units_sold'))
             ->groupBy('o.currency')->get()->map(fn ($r) => ['currency' => $r->currency, 'orders' => (int) $r->order_count, 'grossRevenue' => (float) $r->gross_revenue, 'unitsSold' => (int) $r->units_sold])->values();
 
         $dailySales = (clone $items)->select(DB::raw('CAST(o.created_at AS DATE) as sale_date'), 'o.currency', DB::raw('SUM(i.subtotal) as revenue'))
