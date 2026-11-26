@@ -298,10 +298,10 @@ The bullets in this historical baseline were progressively addressed by the impl
 
 ### Current review branches (not merged)
 
-- Backend implementation: PR #47, branch head 074ce84568eaee73fa36aeaba680906058e5d256 — mergeable, still open.
-- Next.js portal implementation: PR #57, branch head 5b62dcc8979ec43c7e1787433b00c747af7dddc8 — still open; mergeability depends on first applying the corrective revert below.
-- Corrective default-branch cleanup: PR #58, draft and unmerged. Merge this before PR #57 when the implementation is approved, so the Next.js portal changes land through the feature PR.
-- No merges, CI runs, local test runs, staging or production deployments have been performed.
+- Backend implementation: PR #47, current branch head b3db22e544b8f32eda3307e24181b607dee82d80 — open and mergeable.
+- Next.js portal implementation: PR #57, current branch head 9b6304420337cf1b2c23588deccd8bbaa5b4bf55 — open; currently not mergeable because the corrective default-branch cleanup PR has not been merged.
+- Corrective default-branch cleanup: PR #58, current head d5106dbf788d7154e2b2186dc67137edb896b311 — draft and unmerged. It must be reviewed/merged before PR #57 if the user approves that workflow.
+- No PRs have been merged, no GitHub Actions have been run, and no staging or production deployments have been made.
 
 ### Implementation progress — returns, payment events and financial accuracy
 
@@ -348,3 +348,24 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Return-linked refund ledger reversals are scoped to the returned order item and its owning vendor; general order refunds continue to allocate product-value adjustments proportionally across all vendors.
 
 - Customer payment confirmation and Admin webhook simulation now lock the order before the payment transaction, matching cancellation's lock order and preventing a late simulated success from resurrecting a cancelled order.
+
+### Current implementation closeout — authoritative status
+
+The older "Remaining implementation work" bullets above are historical snapshots and are superseded by this closeout list.
+
+**Implemented in code on the feature branches (not runtime-verified):**
+- Customer storefront/account, cart, checkout, payment simulation, order history/details/cancellation, item-level returns, refunds, reviews, support, notifications and notification preferences.
+- Vendor store/product/catalog requests, variants/inventory, vendor orders/fulfilment, reviews/replies, support, currency-specific earnings/payouts, refund ledger adjustments, analytics and notifications.
+- Admin marketplace dashboards, customer/vendor/store/product/order/catalog/shipping/coupon/review/support/return/refund/payout/finance/payment-event/report/notification workflows.
+- Super Admin-only role/permission administration and privileged-account safeguards.
+- API role separation, ownership checks, account-active middleware, audit logging, idempotency and transactional financial state changes.
+- Demo lifecycle data for shipped/delivered/pending orders, payment attempts, refunds, returns, payouts, reviews, support and notifications.
+
+**Still required before the test phase can be the only remaining work:**
+- Finish the final page-by-page API contract and fallback audit across all Next.js customer/vendor/Admin/Super Admin screens, and resolve any remaining mismatches.
+- Resolve the overlapping Next.js portal and Laravel React dashboard ownership so there is one clear production website entry point for all roles; do not delete existing screens until their use is confirmed.
+- Confirm all customer/vendor/Admin navigation entries point to the intended route and that role guards match the API.
+- Review demo seeder idempotency and fixture completeness, then execute migrations and seeders only in the local test environment.
+- Confirm local environment configuration for the supported database drivers. Real payment and payout gateways remain intentionally simulated until provider credentials and an approved integration scope exist; shipment tracking currently supports manually managed carrier/tracking data.
+
+**Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed in this implementation session.
