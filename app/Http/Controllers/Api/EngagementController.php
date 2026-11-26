@@ -141,10 +141,15 @@ class EngagementController extends Controller
             'internal_note' => (bool) ($data['internal_note'] ?? false), 'created_at' => now(), 'updated_at' => now(),
         ]);
         if (empty($data['internal_note'])) {
+            $requesterRole = DB::table('model_has_roles as m')
+                ->join('roles as r', 'r.id', '=', 'm.role_id')
+                ->where('m.model_type', 'App\\Models\\User')
+                ->where('m.model_id', $ticket->user_id)
+                ->value('r.name');
             DB::table('marketplace_notifications')->insert([
                 'user_id' => $ticket->user_id, 'type' => 'support.reply', 'title' => 'Support replied to your ticket',
                 'message' => 'There is a new reply to ticket ' . $ticket->number . '.',
-                'action_url' => '/account/support/' . $id, 'data' => json_encode(['ticket_id' => $id]),
+                'action_url' => $requesterRole === 'Vendor' ? '/vendor/support' : '/account/support', 'data' => json_encode(['ticket_id' => $id]),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('support_tickets')->where('id', $id)->update(['status' => 'waiting_customer', 'updated_at' => now()]);
