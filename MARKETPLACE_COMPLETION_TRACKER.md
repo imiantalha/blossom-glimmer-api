@@ -278,3 +278,12 @@ A module is complete only when its UI, API, validation, authorization, persisten
 
 - The Next.js admin portal now hides the Roles & Permissions navigation entry from ordinary Admin users and guards the role-management page itself to Super Admin. This matches the Laravel API's Super Admin-only role/permission routes.
 - Admin and Super Admin retain access to normal marketplace operations; Vendor and Customer workspaces remain role-scoped by their respective layouts and API middleware.
+
+### Implementation progress — portal dashboards
+
+- Added a role-scoped Admin/Super Admin dashboard metrics endpoint covering user/store/product/order counts, paid revenue grouped by currency, pending refunds/payouts, support workload, reviews and catalog requests.
+- Connected the Next.js Admin dashboard to live API metrics with a safe unavailable state when the API cannot be reached.
+- Connected the Next.js Vendor dashboard to vendor-scoped live product/order/sales metrics, low-stock alerts and recent vendor orders.
+- Added Next.js portal workspaces and routes for vendor finance, reviews, support and notifications; Admin/Super Admin finance, coupons, support and notifications; Customer support, refunds and notifications.
+- Added action links in notification workspaces so users can navigate to the related order, refund, finance or support area.
+- Role-management navigation and page access are now Super Admin-only, matching API route middleware.
