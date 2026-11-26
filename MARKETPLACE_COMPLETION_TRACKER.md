@@ -198,3 +198,18 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Add customer order tracking/return journey and automatic notifications for payment, shipment, refund and fulfilment state changes.
 - Complete vendor store profile editing and richer order details/fulfilment workflow.
 - Final audit of all route/permission contracts, migrations and seed data, followed by one comprehensive test pass.
+
+### Implementation progress — remaining admin catalogue screens
+
+- Added Admin/Super Admin management screens for storefront collections and shipping methods, including create/edit and enable/disable actions.
+- Added catalog attribute and tag management, including attribute type, variant flag, approved values and active/inactive controls.
+- Added customer review moderation UI with pending/approved/rejected filters and approve/reject actions with rejection reasons.
+- Registered all screens in the Admin/Super Admin protected router and navigation.
+- Existing APIs were reused; no duplicate endpoint families were introduced.
+
+### Remaining implementation work
+
+- Improve vendor store profile editor and customer-facing review reply rendering.
+- Complete customer order tracking and return/cancellation/refund lifecycle UX, including notifications from payment, shipment, refund and fulfilment changes.
+- Inspect the frontend for other incomplete flows and reconcile all API contracts and fallback behavior.
+- Complete demo data seeding and then run the single comprehensive test phase after implementation is complete.
