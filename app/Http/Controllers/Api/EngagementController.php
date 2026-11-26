@@ -12,14 +12,70 @@ class EngagementController extends Controller
 {
     public function notifications(Request $request)
     {
-        $query = DB::table('marketplace_notifications')->where('user_id', $request->user()->id)->orderByDesc('created_at');
+        $userId = $request->user()->id;
+        $disabled = DB::table('marketplace_notification_preferences')->where('user_id', $userId)->where('in_app_enabled', false)->pluck('category')->all();
+        $patterns = [];
+        foreach ($disabled as $category) {
+            foreach ($this->notificationPatterns($category) as $pattern) $patterns[] = $pattern;
+        }
+        $query = DB::table('marketplace_notifications')->where('user_id', $userId)->orderByDesc('created_at');
+        if ($patterns) $query->where(function ($q) use ($patterns) { foreach ($patterns as $pattern) $q->where('type', 'not like', $pattern); });
         if ($request->boolean('unread')) $query->whereNull('read_at');
         $page = $query->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        $unreadQuery = DB::table('marketplace_notifications')->where('user_id', $userId)->whereNull('read_at');
+        if ($patterns) $unreadQuery->where(function ($q) use ($patterns) { foreach ($patterns as $pattern) $q->where('type', 'not like', $pattern); });
         return ApiResponse::successResponse([
             'data' => $page->items(),
-            'unreadCount' => DB::table('marketplace_notifications')->where('user_id', $request->user()->id)->whereNull('read_at')->count(),
+            'unreadCount' => $unreadQuery->count(),
             'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
         ], 'Notifications retrieved.');
+    }
+
+    public function notificationPreferences(Request $request)
+    {
+        $categories = ['orders', 'payments', 'shipping', 'refunds', 'returns', 'reviews', 'support', 'finance', 'catalog', 'marketing'];
+        $saved = DB::table('marketplace_notification_preferences')->where('user_id', $request->user()->id)->get()->keyBy('category');
+        return ApiResponse::successResponse(collect($categories)->mapWithKeys(fn ($category) => [
+            $category => (bool) ($saved->get($category)->in_app_enabled ?? true),
+        ])->all(), 'Notification preferences retrieved.');
+    }
+
+    public function updateNotificationPreferences(Request $request)
+    {
+        $data = $request->validate([
+            'preferences' => ['required', 'array', 'min:1'],
+            'preferences.*' => ['required', 'boolean'],
+        ]);
+        $allowed = ['orders', 'payments', 'shipping', 'refunds', 'returns', 'reviews', 'support', 'finance', 'catalog', 'marketing'];
+        $unknown = array_diff(array_keys($data['preferences']), $allowed);
+        abort_if($unknown, 422, 'One or more notification categories are not supported.');
+
+        DB::transaction(function () use ($request, $data) {
+            foreach ($data['preferences'] as $category => $enabled) {
+                DB::table('marketplace_notification_preferences')->updateOrInsert(
+                    ['user_id' => $request->user()->id, 'category' => $category],
+                    ['in_app_enabled' => (bool) $enabled, 'updated_at' => now(), 'created_at' => now()]
+                );
+            }
+        });
+        return $this->notificationPreferences($request);
+    }
+
+    private function notificationPatterns(string $category): array
+    {
+        return match ($category) {
+            'orders' => ['order.%'],
+            'payments' => ['payment.%'],
+            'shipping' => ['shipment.%', 'order.fulfilment.%'],
+            'refunds' => ['refund.%'],
+            'returns' => ['return.%'],
+            'reviews' => ['review.%'],
+            'support' => ['support.%'],
+            'finance' => ['payout.%'],
+            'catalog' => ['catalog_request.%'],
+            'marketing' => ['marketing.%'],
+            default => [],
+        };
     }
 
     public function markNotificationRead(Request $request, int $id)
