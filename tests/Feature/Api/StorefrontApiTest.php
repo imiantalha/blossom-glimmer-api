@@ -215,6 +215,30 @@ class StorefrontApiTest extends TestCase
         $this->assertGreaterThan(0, DB::table('vendor_order_fulfillment_items as fi')->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')->where('oi.order_id', $orderId)->count());
     }
 
+    public function test_checkout_rejects_cart_items_from_a_suspended_vendor(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $cart = DB::table('carts')->where('user_id', $customer->id)->firstOrFail();
+        $item = DB::table('cart_items')->where('cart_id', $cart->id)->firstOrFail();
+        $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->value('id');
+        $product = Product::findOrFail($item->product_id);
+
+        $this->assertNotNull($product->vendor_id);
+        DB::table('vendor_profiles')->where('user_id', $product->vendor_id)->update(['status' => 'suspended']);
+        $orderCount = DB::table('customer_orders')->count();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'address_id' => $addressId,
+                'shipping_method_id' => 'standard',
+                'payment_method' => 'cod',
+            ], ['Idempotency-Key' => 'suspended-vendor-checkout'])
+            ->assertUnprocessable();
+
+        $this->assertSame($orderCount, DB::table('customer_orders')->count());
+        $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'cart_id' => $cart->id]);
+    }
+
     public function test_authenticated_customer_receives_a_persistent_empty_cart(): void
     {
         $customer = User::factory()->create();
