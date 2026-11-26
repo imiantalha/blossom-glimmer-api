@@ -1495,52 +1495,50 @@ class StorefrontApiTest extends TestCase
         $productA = Product::where('vendor_id', $vendorA->id)->firstOrFail();
         $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
 
-        DB::table('customer_order_items')->insert([
-            [
-                'order_id' => $order->id,
-                'product_id' => $productA->id,
-                'name' => $productA->name,
-                'product_slug' => $productA->slug,
-                'sku' => $productA->sku,
-                'quantity' => 1,
-                'unit_price' => 20,
-                'subtotal' => 20,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-            'order_id' => $order->id,
-            'product_id' => $productB->id,
-            'name' => $productB->name,
-            'product_slug' => $productB->slug,
-            'sku' => $productB->sku,
-            'quantity' => 2,
-            'unit_price' => 15,
-            'subtotal' => 30,
-            'created_at' => now(),
-            'updated_at' => now(),
-            ],
+        $itemAId = DB::table('customer_order_items')->insertGetId([
+            'order_id' => $order->id, 'product_id' => $productA->id,
+            'name' => $productA->name, 'product_slug' => $productA->slug,
+            'sku' => $productA->sku, 'quantity' => 1, 'unit_price' => 20,
+            'subtotal' => 20, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $itemBId = DB::table('customer_order_items')->insertGetId([
+            'order_id' => $order->id, 'product_id' => $productB->id,
+            'name' => $productB->name, 'product_slug' => $productB->slug,
+            'sku' => $productB->sku, 'quantity' => 2, 'unit_price' => 15,
+            'subtotal' => 30, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        foreach ([[$vendorA, $itemAId], [$vendorB, $itemBId]] as [$vendor, $itemId]) {
+            $fulfillmentId = DB::table('vendor_order_fulfillments')
+                ->where('order_id', $order->id)->where('vendor_id', $vendor->id)->value('id');
+            if (!$fulfillmentId) {
+                $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                    'order_id' => $order->id, 'vendor_id' => $vendor->id,
+                    'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            DB::table('vendor_order_fulfillment_items')->updateOrInsert(
+                ['fulfillment_id' => $fulfillmentId, 'order_item_id' => $itemId],
+                ['created_at' => now(), 'updated_at' => now()]
+            );
+        }
+
         $vendorAResponse = $this->actingAs($vendorA, 'sanctum')
-            ->getJson('/api/v1/vendor/orders/' . $order->id)
-            ->assertOk();
+            ->getJson('/api/v1/vendor/orders/' . $order->id)->assertOk();
         $vendorAItems = collect($vendorAResponse->json('data.items'));
-        $this->assertNotEmpty($vendorAItems);
+        $this->assertTrue($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productA->id));
         $this->assertFalse($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
 
         $vendorBResponse = $this->actingAs($vendorB, 'sanctum')
-            ->getJson('/api/v1/vendor/orders/' . $order->id)
-            ->assertOk();
+            ->getJson('/api/v1/vendor/orders/' . $order->id)->assertOk();
         $vendorBItems = collect($vendorBResponse->json('data.items'));
-        $this->assertCount(1, $vendorBItems);
-        $this->assertSame((int) $productB->id, (int) $vendorBItems->first()['productId']);
+        $this->assertTrue($vendorBItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
+        $this->assertFalse($vendorBItems->contains(fn ($item) => (int) $item['productId'] === (int) $productA->id));
 
         $this->actingAs($vendorA, 'sanctum')
             ->getJson('/api/v1/vendor/orders/99999999')
             ->assertNotFound();
     }
-
 
     public function test_vendor_fulfilment_updates_are_isolated_and_cannot_regress(): void
     {
