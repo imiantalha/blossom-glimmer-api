@@ -1352,7 +1352,7 @@ class StorefrontApiTest extends TestCase
         $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonMissing(['id' => 'admin-test-express']);
 
         $settings = $this->getJson('/api/v1/admin/marketplace-settings')->assertOk();
-        $settings->assertJsonFragment(['slug' => 'admin-test-collection']);
+        $settings->assertJsonFragment(['slug' => 'admin-test-collection-updated']);
         $settings->assertJsonFragment(['code' => 'admin-test-express']);
     }
 
