@@ -118,6 +118,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('orders', [StorefrontController::class, 'orders']);
         Route::post('orders', [StorefrontController::class, 'createOrder']);
         Route::get('orders/{id}', [StorefrontController::class, 'order']);
+        Route::post('orders/{id}/cancel', [StorefrontController::class, 'cancelOrder']);
 
         Route::get('wishlist', [StorefrontController::class, 'wishlist']);
         Route::post('wishlist/merge', [StorefrontController::class, 'mergeWishlist']);
