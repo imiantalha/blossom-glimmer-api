@@ -217,11 +217,13 @@ class VendorFinanceController extends Controller
                 $query->whereIn('o.payment_status', ['paid', 'partially_refunded', 'refunded'])
                     ->orWhere('o.payment_method', 'cod');
             })
-            ->select('oi.id', 'oi.order_id', 'oi.subtotal', 'o.currency')
+            ->select('oi.id', 'oi.order_id', 'oi.subtotal', 'o.subtotal as order_subtotal', 'o.discount as order_discount', 'o.currency')
             ->get();
 
         foreach ($items as $item) {
-            $gross = max(0, (float) $item->subtotal);
+            $orderSubtotal = max(0, (float) $item->order_subtotal);
+            $discountRatio = $orderSubtotal > 0 ? max(0, $orderSubtotal - (float) $item->order_discount) / $orderSubtotal : 0;
+            $gross = max(0, (float) $item->subtotal * $discountRatio);
             $commission = $type === 'fixed'
                 ? min($gross, $value)
                 : min($gross, $gross * min($value, 100) / 100);
