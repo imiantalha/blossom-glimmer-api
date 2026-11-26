@@ -1130,7 +1130,7 @@ class StorefrontController extends Controller
         $sequence = ['pending' => 0, 'processing' => 1, 'ready_to_ship' => 2, 'shipped' => 3, 'delivered' => 4];
         $current = $sequence[$fulfillment->status] ?? -1;
         $next = $sequence[$data['status']] ?? -1;
-        abort_if($next < $current, 422, 'Fulfilment status cannot move backwards.');
+        abort_if($next <= $current, 422, 'Fulfilment status must advance to the next step.');
         abort_if($next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
         abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
 
@@ -1190,7 +1190,7 @@ class StorefrontController extends Controller
         $sequence = ['pending' => 0, 'processing' => 1, 'ready_to_ship' => 2, 'shipped' => 3, 'delivered' => 4];
         $current = $sequence[$fulfillment->status] ?? -1;
         $next = $sequence[$data['status']] ?? -1;
-        abort_if($next < $current || $next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
+        abort_if($next <= $current || $next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
         abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
         abort_if($data['status'] === 'shipped' && empty($data['tracking_number']) && empty($fulfillment->tracking_number), 422, 'A tracking number is required before shipping.');
 
