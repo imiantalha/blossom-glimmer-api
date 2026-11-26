@@ -181,6 +181,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
             Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);
+            Route::get('admin/payments/webhook-events', [PaymentSimulationController::class, 'webhookEvents']);
+            Route::post('admin/payments/webhook-events/simulate', [PaymentSimulationController::class, 'simulateWebhook']);
             Route::get('admin/returns', [ReturnRequestController::class, 'adminIndex']);
             Route::patch('admin/returns/{id}/review', [ReturnRequestController::class, 'review']);
             Route::patch('admin/returns/{id}/status', [ReturnRequestController::class, 'updateStatus']);
