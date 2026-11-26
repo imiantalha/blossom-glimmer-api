@@ -56,6 +56,12 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                     'sku' => $product->sku, 'quantity' => 1, 'unit_price' => $price, 'subtotal' => $price,
                     'created_at' => now()->subDays(5), 'updated_at' => now()->subDays(5),
                 ]);
+                $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->lockForUpdate()->first();
+                if ($inventory && $inventory->manage_inventory) {
+                    DB::table('inventory_items')->where('id', $inventory->id)->update([
+                        'stock_quantity' => max(0, (int) $inventory->stock_quantity - 1), 'updated_at' => now(),
+                    ]);
+                }
             } else {
                 $orderItemId = DB::table('customer_order_items')->where('order_id', $orderId)->value('id');
                 $price = (float) DB::table('customer_orders')->where('id', $orderId)->value('total');
@@ -174,6 +180,12 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                         'unit_price' => $pendingPrice, 'subtotal' => $pendingPrice,
                         'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
                     ]);
+                    $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->lockForUpdate()->first();
+                    if ($inventory && $inventory->manage_inventory) {
+                        DB::table('inventory_items')->where('id', $inventory->id)->update([
+                            'stock_quantity' => max(0, (int) $inventory->stock_quantity - 1), 'updated_at' => now(),
+                        ]);
+                    }
                     if ($vendor) {
                         $pendingFulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
                             'order_id' => $pendingOrderId, 'vendor_id' => $vendor->id, 'status' => 'pending',
