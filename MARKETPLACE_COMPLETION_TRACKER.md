@@ -266,3 +266,10 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - All affected portal files have now been copied to the existing frontend feature branch for PR #57.
 - A draft corrective revert PR was opened: https://github.com/imiantalha/blossom-glimmer/pull/58. It is intentionally unmerged. If approved, merge the revert PR before the feature PR so the portal implementation returns through review rather than remaining as direct default-branch commits.
 - No PRs have been merged and no deployments have been made.
+
+### Next.js portal consolidation progress
+
+- Copied customer support/refund/notification pages and vendor finance/reviews/support/notifications workspaces into the frontend feature branch.
+- Added Next.js Admin/Super Admin finance (payout/refund), coupons, support and notification workspaces and registered them in the portal navigation.
+- The Next.js application already contains Admin/Super Admin store, product, order, category, brand, catalog-settings, marketplace-settings, roles and review pages; the new modules fill gaps in that same portal rather than relying only on the Laravel React dashboard.
+- Frontend feature branch includes the new routes/components; see PR #57. The corrective default-branch revert is tracked separately in draft PR #58.
