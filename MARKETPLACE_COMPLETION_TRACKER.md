@@ -340,3 +340,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Vendor sale credits now use discounted line-item values, and refund reversals use the original recorded commission where available. This keeps vendor net earnings aligned with coupon discounts and subsequent refunds.
 
 - The Vendor dashboard KPI now groups gross sales by currency instead of labelling a mixed-currency sum as USD.
+
+- Vendor dashboard and analytics revenue figures now reflect proportional coupon discounts and are filtered to paid orders; dashboard sales remain grouped by currency.
