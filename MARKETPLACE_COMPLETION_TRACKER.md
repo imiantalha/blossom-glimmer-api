@@ -181,3 +181,20 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Vendor store profile editing and order detail/fulfilment UX; customer order details and order history consistency.
 - Verify admin/vendor/customer navigation and role isolation, especially separate route groups and permission seeding.
 - Finish seeded data and comprehensive tests only after implementation scope is complete.
+
+### Implementation progress — admin catalogue, orders and cancellation
+
+- Added Admin/Super Admin marketplace order search, filtering, order details, vendor-specific fulfilment progression and tracking capture.
+- Added Admin/Super Admin product moderation controls (approve/reject, activate/deactivate, feature/unfeature), store approval/suspension and commission controls, and brand/category CRUD.
+- Added customer order cancellation for unpaid/pending or COD orders before any vendor begins fulfilment. Cancellation restores managed inventory, cancels pending simulated payment attempts, releases coupon redemption usage and records a customer notification.
+- Added a customer order-detail cancellation action with server-authoritative eligibility checks and clear handling for paid orders (refund flow instead).
+- Hardened the cancellation guard to check vendor fulfilment rows directly, not only the parent order status.
+- Normalized uppercase product statuses in the admin product controls so activation/deactivation actions work against the backend payload.
+- These are implementation commits only; full tests remain intentionally deferred until the requested implementation phase is complete.
+
+### Remaining implementation work (next)
+
+- Complete marketplace settings UI (collections, shipping methods, attributes, tags) and admin review moderation.
+- Add customer order tracking/return journey and automatic notifications for payment, shipment, refund and fulfilment state changes.
+- Complete vendor store profile editing and richer order details/fulfilment workflow.
+- Final audit of all route/permission contracts, migrations and seed data, followed by one comprehensive test pass.
