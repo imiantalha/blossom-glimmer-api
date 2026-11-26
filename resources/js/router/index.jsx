@@ -19,6 +19,7 @@ import VendorFinancePage from "../pages/vendor/VendorFinancePage";
 import PayoutManagementPage from "../pages/finance/PayoutManagementPage";
 import SupportTicketsPage from "../pages/support/SupportTicketsPage";
 import VendorSupportPage from "../pages/vendor/VendorSupportPage";
+import VendorReviewsPage from "../pages/vendor/VendorReviewsPage";
 import NotificationsPage from "../pages/notifications/NotificationsPage";
 import RefundManagementPage from "../pages/finance/RefundManagementPage";
 import RolesPage from "../pages/roles/RolesPage";
@@ -56,6 +57,7 @@ export default function Router() {
                     <Route path="/vendor/store" element={<VendorStorePage />} />
                     <Route path="/vendor/finance" element={<VendorFinancePage />} />
                     <Route path="/vendor/support" element={<VendorSupportPage />} />
+                    <Route path="/vendor/reviews" element={<VendorReviewsPage />} />
                 </Route>
 
                 <Route path="*" element={<ErrorPage code="404" title="Page Not Found" description="The page you are looking for does not exist." />} />
