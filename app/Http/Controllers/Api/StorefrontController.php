@@ -618,7 +618,13 @@ class StorefrontController extends Controller
             ->where('i.product_id', $data['product_id'])
             ->exists();
         abort_unless($verifiedPurchase, 422, 'You can review a product after it has been delivered in one of your orders.');
-        DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
+        $existingReview = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
+        $reviewValues = ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now()];
+        if ($existingReview) {
+            DB::table('product_reviews')->where('id', $existingReview->id)->update($reviewValues);
+        } else {
+            DB::table('product_reviews')->insert($reviewValues + ['product_id' => $data['product_id'], 'user_id' => $request->user()->id, 'created_at' => now()]);
+        }
         $review = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
         return ApiResponse::createdResponse(['id' => $review->id, 'productId' => $review->product_id, 'rating' => $review->rating, 'title' => $review->title, 'body' => $review->body, 'user' => ['id' => $request->user()->id, 'name' => $request->user()->name], 'createdAt' => $review->created_at], 'Review submitted for moderation.');
     }
