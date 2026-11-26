@@ -1387,7 +1387,7 @@ class StorefrontApiTest extends TestCase
     public function test_admin_can_edit_product_without_resetting_its_approval_or_publication_state(): void
     {
         $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
-        $product = Product::where('type', 'simple')->where('status', 'active')->firstOrFail();
+        $product = Product::where('type', 'simple')->where('status', 'active')->whereNotNull('brand_id')->whereHas('categories')->firstOrFail();
         $categoryId = $product->categories()->value('categories.id');
         $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->first();
         $shippingCode = DB::table('shipping_methods')->where('is_active', true)->value('code');
