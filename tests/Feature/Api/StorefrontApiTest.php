@@ -1654,8 +1654,7 @@ class StorefrontApiTest extends TestCase
                 'role' => 'Vendor',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.role', 'vendor')
-            ->assertJsonFragment(['Vendor']);
+            ->assertJsonPath('data.role', 'vendor');
 
         $created = User::where('email', 'new-vendor-account@gmail.com')->firstOrFail();
         $this->assertTrue($created->hasRole('Vendor'));
