@@ -1065,6 +1065,68 @@ class StorefrontController extends Controller
         );
     }
 
+    private function adminOrderPayload(object $order): array
+    {
+        $user = DB::table('users')->where('id', $order->user_id)->first();
+        return array_merge($this->orderPayload($order), [
+            'customer' => $user ? [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ] : null,
+        ]);
+    }
+
+    public function adminOrders(Request $request)
+    {
+        $query = DB::table('customer_orders as o');
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->where(function ($filter) use ($search) {
+                $filter->where('o.number', 'like', '%' . $search . '%')
+                    ->orWhereExists(function ($customer) use ($search) {
+                        $customer->selectRaw('1')->from('users as u')
+                            ->whereColumn('u.id', 'o.user_id')
+                            ->where(function ($q) use ($search) {
+                                $q->where('u.name', 'like', '%' . $search . '%')
+                                    ->orWhere('u.email', 'like', '%' . $search . '%');
+                            });
+                    });
+            });
+        }
+        if ($request->filled('status')) $query->where('o.status', strtolower((string) $request->input('status')));
+        if ($request->filled('payment_status')) $query->where('o.payment_status', strtolower((string) $request->input('payment_status')));
+
+        $page = $query->orderByDesc('o.created_at')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        $data = $page->getCollection()->map(fn ($order) => $this->adminOrderPayload($order));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Administrator orders retrieved.',
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'count' => $data->count(),
+                'from' => $page->firstItem(),
+                'to' => $page->lastItem(),
+                'has_previous' => $page->currentPage() > 1,
+                'has_next' => $page->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function adminOrder(int $id)
+    {
+        $order = DB::table('customer_orders')->where('id', $id)->first();
+        abort_unless($order, 404);
+        return ApiResponse::successResponse($this->adminOrderPayload($order), 'Administrator order retrieved.');
+    }
+
     public function paymentMethods()
     {
         $methods = [];
