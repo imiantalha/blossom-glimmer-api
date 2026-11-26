@@ -102,8 +102,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
 
-        Route::middleware('role:Admin')->group(function () {
+        Route::middleware('role:Admin|Super Admin')->group(function () {
             Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::get('admin/audit-logs', [AuditLogController::class, 'index']);
             Route::get('admin/brands', [CatalogManagementController::class, 'brands']);
             Route::post('admin/brands', [CatalogManagementController::class, 'storeBrand']);
             Route::get('admin/brands/{id}', [CatalogManagementController::class, 'brand']);
