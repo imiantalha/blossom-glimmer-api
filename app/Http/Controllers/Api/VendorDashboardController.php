@@ -88,7 +88,7 @@ class VendorDashboardController extends Controller
             ->where('p.vendor_id', $vendorId)
             ->whereNotIn('o.status', ['cancelled', 'refunded'])
             ->where('o.payment_status', 'paid')
-            ->select('o.currency', DB::raw('SUM(oi.subtotal) as gross_subtotal'))
+            ->select('o.currency', DB::raw('SUM(CASE WHEN o.subtotal > 0 THEN oi.subtotal * ((o.subtotal - o.discount) / o.subtotal) ELSE 0 END) as gross_subtotal'))
             ->groupBy('o.currency')
             ->get()
             ->map(fn ($row) => ['currency' => $row->currency, 'grossSubtotal' => (float) $row->gross_subtotal])
