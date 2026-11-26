@@ -997,13 +997,27 @@ class StorefrontController extends Controller
      */
     private function vendorOrderPayload(object $order, int $vendorId): array
     {
-        $items = DB::table('customer_order_items as oi')
+        $fulfillment = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)
+            ->where('vendor_id', $vendorId)
+            ->first();
+
+        $itemsQuery = DB::table('customer_order_items as oi')
             ->join('products as p', 'p.id', '=', 'oi.product_id')
             ->where('oi.order_id', $order->id)
-            ->where('p.vendor_id', $vendorId)
-            ->select('oi.id', 'oi.product_id', 'oi.variant_id', 'oi.name', 'oi.product_slug',
-                'oi.image_url', 'oi.sku', 'oi.quantity', 'oi.unit_price', 'oi.subtotal')
-            ->get();
+            ->where('p.vendor_id', $vendorId);
+
+        if ($fulfillment) {
+            $itemsQuery->whereExists(function ($query) use ($fulfillment) {
+                $query->selectRaw('1')
+                    ->from('vendor_order_fulfillment_items as fi')
+                    ->whereColumn('fi.order_item_id', 'oi.id')
+                    ->where('fi.fulfillment_id', $fulfillment->id);
+            });
+        }
+
+        $items = $itemsQuery->select('oi.id', 'oi.product_id', 'oi.variant_id', 'oi.name', 'oi.product_slug',
+            'oi.image_url', 'oi.sku', 'oi.quantity', 'oi.unit_price', 'oi.subtotal')->get();
 
         return [
             'id' => (int) $order->id,
@@ -1012,6 +1026,16 @@ class StorefrontController extends Controller
             'createdAt' => $order->created_at,
             'currency' => $order->currency,
             'vendorSubtotal' => (float) $items->sum('subtotal'),
+            'fulfillment' => $fulfillment ? [
+                'id' => (int) $fulfillment->id,
+                'status' => $fulfillment->status,
+                'carrier' => $fulfillment->carrier,
+                'trackingNumber' => $fulfillment->tracking_number,
+                'trackingUrl' => $fulfillment->tracking_url,
+                'estimatedDelivery' => $fulfillment->estimated_delivery,
+                'shippedAt' => $fulfillment->shipped_at,
+                'deliveredAt' => $fulfillment->delivered_at,
+            ] : null,
             'items' => $items->map(fn ($item) => [
                 'id' => (int) $item->id,
                 'productId' => (int) $item->product_id,
