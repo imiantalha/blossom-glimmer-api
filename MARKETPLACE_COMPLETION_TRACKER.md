@@ -251,3 +251,11 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Completed the vendor support ticket conversation UI: vendors can create tickets, open their own ticket threads, read support responses and send follow-up messages until resolved/closed.
 - Added notifications to vendors when product moderation decisions are made and when their store is approved, set pending or suspended.
 - Added lifecycle demo records for delivered/paid order, pending refund, support ticket, coupon and payout review to support later integrated verification.
+
+### Implementation progress — variable product correctness and financial concurrency
+
+- Expanded the vendor product form to select approved variant attributes and choose a valid value for each variant; saved metadata now carries the full approved value set.
+- Added frontend and backend checks for unique variant SKUs, unique/complete variant combinations and sale prices below regular prices. This prevents database uniqueness failures for variable products and rejects duplicate SKU use across products.
+- Serialized vendor payout requests on the vendor row and made admin payout review atomic; vendor notifications now cover payout approval/rejection/processing.
+- Enforced a 100% upper bound for percentage coupons.
+- Made refund review atomic to prevent concurrent duplicate decisions.
