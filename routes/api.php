@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\ReviewManagementController;
 use App\Http\Controllers\ProductAssistantController;
 use App\Http\Controllers\Api\EmailLogController;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\PaymentSimulationController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -105,7 +106,12 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('wishlist/merge', [StorefrontController::class, 'mergeWishlist']);
         Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
-        Route::post('reviews', [StorefrontController::class, 'createReview']);\n            Route::post('payments/intents', [PaymentSimulationController::class, 'createIntent']);\n            Route::post('payments/intents/{id}/confirm', [PaymentSimulationController::class, 'confirmIntent']);\n            Route::get('payments/transactions', [PaymentSimulationController::class, 'customerTransactions']);\n            Route::post('refunds', [PaymentSimulationController::class, 'requestRefund']);\n            Route::get('refunds', [PaymentSimulationController::class, 'customerRefunds']);
+        Route::post('reviews', [StorefrontController::class, 'createReview']);
+            Route::post('payments/intents', [PaymentSimulationController::class, 'createIntent']);
+            Route::post('payments/intents/{id}/confirm', [PaymentSimulationController::class, 'confirmIntent']);
+            Route::get('payments/transactions', [PaymentSimulationController::class, 'customerTransactions']);
+            Route::post('refunds', [PaymentSimulationController::class, 'requestRefund']);
+            Route::get('refunds', [PaymentSimulationController::class, 'customerRefunds']);
 
         });
 
@@ -141,7 +147,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/tags/{id}/status', [CatalogManagementController::class, 'updateTagStatus']);
             Route::get('admin/catalog-requests', [CatalogRequestController::class, 'adminIndex']);
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
-            Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);\n            Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);\n            Route::patch('admin/refunds/{id}/review', [PaymentSimulationController::class, 'reviewRefund']);\n            Route::post('admin/refunds/{id}/process', [PaymentSimulationController::class, 'processRefund']);
+            Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
+            Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);
+            Route::patch('admin/refunds/{id}/review', [PaymentSimulationController::class, 'reviewRefund']);
+            Route::post('admin/refunds/{id}/process', [PaymentSimulationController::class, 'processRefund']);
             Route::get('admin/orders/{id}', [StorefrontController::class, 'adminOrder']);
             Route::patch('admin/orders/{orderId}/fulfillments/{fulfillmentId}', [StorefrontController::class, 'updateAdminFulfillment']);
             Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
