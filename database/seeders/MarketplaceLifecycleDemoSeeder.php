@@ -19,6 +19,11 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
             if (!$customer || !$product) return;
 
             $vendor = DB::table('users')->where('id', $product->vendor_id)->first();
+            DB::table('product_reviews')->updateOrInsert(
+                ['user_id' => $customer->id, 'product_id' => $product->id],
+                ['rating' => 4, 'title' => 'A good demo product', 'body' => 'Seeded pending review for moderation and vendor response testing.',
+                    'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]
+            );
             $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->where('address1', '456 Demo Commerce Avenue')->value('id');
             if (!$addressId) {
                 $addressId = DB::table('customer_addresses')->insertGetId([
