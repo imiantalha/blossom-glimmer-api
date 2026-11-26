@@ -123,6 +123,57 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                     'data' => json_encode(['order_id' => $orderId]), 'read_at' => null, 'created_at' => now(), 'updated_at' => now()]
             );
 
+            $pendingCustomer = DB::table('users')->where('email', 'customer@demo.blossomglimmer.local')->first();
+            if ($pendingCustomer) {
+                $pendingAddressId = DB::table('customer_addresses')->where('user_id', $pendingCustomer->id)->value('id');
+                $pendingOrderId = DB::table('customer_orders')->where('number', 'BG-DEMO-1003')->value('id');
+                if (!$pendingOrderId && $pendingAddressId) {
+                    $pendingPrice = (float) ($product->base_price ?? 25);
+                    $pendingAddress = DB::table('customer_addresses')->where('id', $pendingAddressId)->first();
+                    $pendingOrderId = DB::table('customer_orders')->insertGetId([
+                        'number' => 'BG-DEMO-1003', 'user_id' => $pendingCustomer->id, 'address_id' => $pendingAddressId,
+                        'status' => 'pending', 'payment_status' => 'pending', 'fulfillment_status' => 'pending',
+                        'payment_method' => 'mock_card', 'shipping_method_code' => 'standard',
+                        'shipping_method_name' => 'Standard delivery', 'shipping_estimated_delivery' => '3–7 business days',
+                        'currency' => 'USD', 'subtotal' => $pendingPrice, 'discount' => 0, 'shipping' => 0,
+                        'tax' => 0, 'total' => $pendingPrice,
+                        'shipping_address' => json_encode([
+                            'firstName' => $pendingAddress->first_name, 'lastName' => $pendingAddress->last_name,
+                            'address1' => $pendingAddress->address1, 'address2' => $pendingAddress->address2,
+                            'city' => $pendingAddress->city, 'state' => $pendingAddress->state,
+                            'postalCode' => $pendingAddress->postal_code, 'country' => $pendingAddress->country,
+                            'phone' => $pendingAddress->phone,
+                        ]),
+                        'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                    ]);
+                    $pendingItemId = DB::table('customer_order_items')->insertGetId([
+                        'order_id' => $pendingOrderId, 'product_id' => $product->id, 'name' => $product->name,
+                        'product_slug' => $product->slug, 'sku' => $product->sku, 'quantity' => 1,
+                        'unit_price' => $pendingPrice, 'subtotal' => $pendingPrice,
+                        'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                    ]);
+                    if ($vendor) {
+                        $pendingFulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                            'order_id' => $pendingOrderId, 'vendor_id' => $vendor->id, 'status' => 'pending',
+                            'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                        ]);
+                        DB::table('vendor_order_fulfillment_items')->insert([
+                            'fulfillment_id' => $pendingFulfillmentId, 'order_item_id' => $pendingItemId,
+                            'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    }
+                    DB::table('payment_transactions')->updateOrInsert(
+                        ['reference' => 'BG-DEMO-PAY-1003'],
+                        [
+                            'order_id' => $pendingOrderId, 'user_id' => $pendingCustomer->id, 'provider' => 'simulation',
+                            'method' => 'mock_card', 'amount' => $pendingPrice, 'currency' => 'USD', 'status' => 'pending',
+                            'metadata' => json_encode(['simulation' => true, 'seeded' => true]),
+                            'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                        ]
+                    );
+                }
+            }
+
             if ($vendor) {
                 $hasSeededPayout = DB::table('vendor_payout_requests')
                     ->where('vendor_id', $vendor->id)
