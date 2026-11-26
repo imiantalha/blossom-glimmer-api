@@ -94,8 +94,13 @@ class LogRequest
 
     private function resolveAction(string $method, string $path, ?string $routeName): string
     {
+        if ($routeName) {
+            return Str::limit($routeName, 160, '');
+        }
+
         $path = preg_replace('#^api/v1/?#', '', $path) ?: $path;
-        $segments = explode('/', trim($path, '/'));
+        $segments = array_values(array_filter(explode('/', trim($path, '/'))));
+        $scope = in_array($segments[0] ?? '', ['admin', 'vendor'], true) ? array_shift($segments) : null;
         $resource = $segments[0] ?? 'api';
         $verb = match (strtoupper($method)) {
             'GET' => 'view',
@@ -105,13 +110,23 @@ class LogRequest
             default => strtolower($method),
         };
 
-        if ($resource === 'products' && strtoupper($method) === 'GET' && count($segments) > 1) {
+        if ($resource === 'orders' && strtoupper($method) === 'POST') {
+            $verb = 'purchase';
+        } elseif ($resource === 'products' && strtoupper($method) === 'GET' && count($segments) > 1) {
             $resource = 'product';
             $verb = 'view';
-        } elseif ($resource === 'orders' && strtoupper($method) === 'POST') {
-            $verb = 'purchase';
         }
 
-        return Str::limit($routeName ?: $resource . '.' . $verb, 160, '');
+        $knownActions = [
+            'approval', 'status', 'featured', 'commission', 'fulfillment',
+            'shipment', 'inventory', 'addresses', 'password', 'login',
+            'logout', 'register', 'merge', 'quote', 'validate', 'retry',
+        ];
+        $last = end($segments);
+        if (count($segments) > 1 && in_array($last, $knownActions, true)) {
+            $resource .= '.' . $last;
+        }
+
+        return Str::limit(implode('.', array_filter([$scope, $resource, $verb])), 160, '');
     }
-}
+}}
