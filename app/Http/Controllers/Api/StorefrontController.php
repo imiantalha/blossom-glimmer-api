@@ -611,11 +611,59 @@ class StorefrontController extends Controller
     public function createReview(Request $request)
     {
         $data = $request->validate(['product_id' => 'required|integer|exists:products,id', 'rating' => 'required|integer|min:1|max:5', 'title' => 'nullable|string|max:180', 'body' => 'required|string|max:5000']);
+        $verifiedPurchase = DB::table('customer_order_items as i')
+            ->join('customer_orders as o', 'o.id', '=', 'i.order_id')
+            ->where('o.user_id', $request->user()->id)
+            ->where('o.status', 'delivered')
+            ->where('i.product_id', $data['product_id'])
+            ->exists();
+        abort_unless($verifiedPurchase, 422, 'You can review a product after it has been delivered in one of your orders.');
         DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
         $review = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
         return ApiResponse::createdResponse(['id' => $review->id, 'productId' => $review->product_id, 'rating' => $review->rating, 'title' => $review->title, 'body' => $review->body, 'user' => ['id' => $request->user()->id, 'name' => $request->user()->name], 'createdAt' => $review->created_at], 'Review submitted for moderation.');
     }
 
+
+    public function myReviews(Request $request)
+    {
+        $page = DB::table('product_reviews as r')
+            ->join('products as p', 'p.id', '=', 'r.product_id')
+            ->where('r.user_id', $request->user()->id)
+            ->orderByDesc('r.updated_at')
+            ->select('r.*', 'p.name as product_name', 'p.slug as product_slug')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Your product reviews retrieved.');
+    }
+
+    public function updateReview(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:180'],
+            'body' => ['required', 'string', 'min:3', 'max:5000'],
+        ]);
+        $review = DB::table('product_reviews')->where('id', $id)->where('user_id', $request->user()->id)->first();
+        abort_unless($review, 404, 'Review not found.');
+        $verifiedPurchase = DB::table('customer_order_items as i')
+            ->join('customer_orders as o', 'o.id', '=', 'i.order_id')
+            ->where('o.user_id', $request->user()->id)
+            ->where('o.status', 'delivered')
+            ->where('i.product_id', $review->product_id)
+            ->exists();
+        abort_unless($verifiedPurchase, 403, 'A delivered purchase is required to update this review.');
+        DB::table('product_reviews')->where('id', $id)->update($data + ['status' => 'pending', 'updated_at' => now()]);
+        return ApiResponse::successResponse(DB::table('product_reviews')->where('id', $id)->first(), 'Review updated and submitted for moderation.');
+    }
+
+    public function deleteReview(Request $request, int $id)
+    {
+        $deleted = DB::table('product_reviews')->where('id', $id)->where('user_id', $request->user()->id)->delete();
+        abort_unless($deleted, 404, 'Review not found.');
+        return ApiResponse::deletedResponse('Your review was deleted.');
+    }
 
     public function updateProfile(Request $request)
     {
