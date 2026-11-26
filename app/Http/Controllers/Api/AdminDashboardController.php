@@ -51,7 +51,7 @@ class AdminDashboardController extends Controller
                 'processing' => (clone $orders)->whereIn('status', ['processing', 'shipped'])->count(),
                 'delivered' => (clone $orders)->where('status', 'delivered')->count(),
                 'cancelled' => (clone $orders)->where('status', 'cancelled')->count(),
-                'revenue' => (float) (clone $orders)->where('payment_status', 'paid')->whereNotIn('status', ['cancelled', 'refunded'])->sum('total'),
+                'revenueByCurrency' => (clone $orders)->where('payment_status', 'paid')->whereNotIn('status', ['cancelled', 'refunded'])->select('currency', DB::raw('SUM(total) as total'))->groupBy('currency')->get()->map(fn ($row) => ['currency' => $row->currency, 'total' => (float) $row->total])->values(),
                 'lastThirtyDays' => (clone $orders)->where('created_at', '>=', $lastThirtyDays)->count(),
             ],
             'finance' => [
