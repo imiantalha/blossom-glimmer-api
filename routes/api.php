@@ -128,6 +128,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
+            Route::get('reviews/mine', [StorefrontController::class, 'myReviews']);
+            Route::patch('reviews/{id}', [StorefrontController::class, 'updateReview']);
+            Route::delete('reviews/{id}', [StorefrontController::class, 'deleteReview']);
             Route::get('support/tickets', [EngagementController::class, 'tickets']);
         Route::post('support/tickets', [EngagementController::class, 'createTicket']);
         Route::get('support/tickets/{id}', [EngagementController::class, 'showTicket']);
