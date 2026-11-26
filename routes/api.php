@@ -145,10 +145,6 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/customers/{user}', [UserController::class, 'customer']);
             Route::get('admin/users/options', [UserController::class, 'options']);
             Route::apiResource('admin/users', UserController::class);
-            Route::get('roles/options', [RoleController::class, 'options']);
-            Route::apiResource('roles', RoleController::class);
-            Route::get('permissions/options', [PermissionController::class, 'options']);
-            Route::apiResource('permissions', PermissionController::class);
             Route::get('email-logs', [EmailLogController::class, 'index']);
             Route::get('email-logs/{emailLog}', [EmailLogController::class, 'show']);
             Route::delete('email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
@@ -165,6 +161,14 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             // the lower-level product resource separately to avoid duplicate GET routes.
             Route::apiResource('catalog/products', ProductController::class);
             Route::apiResource('admin.products.variants', ProductVariantController::class);
+        });
+
+        // Only the super-admin role can change the authorization model itself.
+        Route::middleware('role:Super Admin')->group(function () {
+            Route::get('roles/options', [RoleController::class, 'options']);
+            Route::apiResource('roles', RoleController::class);
+            Route::get('permissions/options', [PermissionController::class, 'options']);
+            Route::apiResource('permissions', PermissionController::class);
         });
 
         Route::post('ai/product-assistant', [ProductAssistantController::class, 'chat']);
