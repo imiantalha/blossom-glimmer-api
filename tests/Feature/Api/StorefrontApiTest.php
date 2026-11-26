@@ -1625,7 +1625,7 @@ class StorefrontApiTest extends TestCase
                 'status' => 'processing',
             ])
             ->assertOk()
-            ->assertJsonPath('data.vendorFulfillments.0.status', 'processing');
+            ->assertJsonFragment(['vendorId' => $vendor->id, 'status' => 'processing']);
 
         $this->actingAs($vendor, 'sanctum')
             ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
