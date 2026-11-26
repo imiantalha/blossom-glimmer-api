@@ -336,3 +336,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 
 - Refund and payout operations now serialize on the vendor account row. Admin payout processing rechecks the vendor's currency-specific available balance after refunds and other reservations, and blocks a stale approved payout if the balance no longer covers it.
 - Refund totals are calculated only after locking the parent order, preventing concurrent partial refunds from overwriting the cumulative order payment status.
+
+- Vendor sale credits now use discounted line-item values, and refund reversals use the original recorded commission where available. This keeps vendor net earnings aligned with coupon discounts and subsequent refunds.
