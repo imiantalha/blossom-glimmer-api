@@ -1391,11 +1391,13 @@ class StorefrontController extends Controller
                     ->where('order_id', $orderId)
                     ->where('status', '<>', 'delivered')
                     ->count();
-                DB::table('customer_orders')->where('id', $orderId)->update([
+                $orderUpdates = [
                     'status' => $undelivered === 0 ? 'delivered' : 'shipped',
                     'fulfillment_status' => $undelivered === 0 ? 'delivered' : 'shipped',
                     'updated_at' => now(),
-                ]);
+                ];
+                if ($undelivered === 0) $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
             }
             $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
             DB::table('marketplace_notifications')->insert([
@@ -1457,11 +1459,13 @@ class StorefrontController extends Controller
             if ($notShipped === 0) {
                 $notDelivered = DB::table('vendor_order_fulfillments')
                     ->where('order_id', $orderId)->where('status', '<>', 'delivered')->count();
-                DB::table('customer_orders')->where('id', $orderId)->update([
+                $orderUpdates = [
                     'status' => $notDelivered === 0 ? 'delivered' : 'shipped',
                     'fulfillment_status' => $notDelivered === 0 ? 'delivered' : 'shipped',
                     'updated_at' => now(),
-                ]);
+                ];
+                if ($notDelivered === 0) $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
             }
             $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
             DB::table('marketplace_notifications')->insert([
