@@ -14,10 +14,10 @@ use Illuminate\Http\JsonResponse;
 
 class PermissionController extends Controller
 {
-    private function isVendorCorePermission(Permission $permission): bool
+    private function isCoreMarketplacePermission(Permission $permission): bool
     {
         return \Spatie\Permission\Models\Role::query()
-            ->where('name', 'Vendor')
+            ->whereIn('name', ['Admin', 'Vendor', 'Customer', 'Super Admin'])
             ->whereHas('permissions', fn ($query) => $query->where('permissions.id', $permission->id))
             ->exists();
     }
@@ -85,7 +85,7 @@ class PermissionController extends Controller
     ): JsonResponse {
 
         $this->authorize('update', $permission);
-        abort_if($this->isVendorCorePermission($permission), 422, 'Core vendor permissions cannot be renamed.');
+        abort_if($this->isVendorCorePermission($permission), 422, 'Core marketplace permissions cannot be renamed.');
 
         $permission = $this->permissionService->update(
             $permission,
@@ -106,7 +106,7 @@ class PermissionController extends Controller
     ): JsonResponse {
 
         $this->authorize('delete', $permission);
-        abort_if($this->isVendorCorePermission($permission), 422, 'Core vendor permissions cannot be deleted.');
+        abort_if($this->isVendorCorePermission($permission), 422, 'Core marketplace permissions cannot be deleted.');
 
         $this->permissionService->delete($permission);
 
