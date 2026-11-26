@@ -552,6 +552,17 @@ class VendorProductController extends Controller
             'is_featured' => $data['decision'] === 'approve' ? $product->is_featured : false,
             'metadata' => $metadata,
         ]);
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $product->vendor_id,
+            'type' => 'product.' . $metadata['approvalStatus'],
+            'title' => $data['decision'] === 'approve' ? 'Product approved' : 'Product needs changes',
+            'message' => $data['decision'] === 'approve'
+                ? 'Your product "' . $product->name . '" has been approved and is now eligible for sale.'
+                : 'Your product "' . $product->name . '" was rejected: ' . trim($data['reason']),
+            'action_url' => '/vendor/products',
+            'data' => json_encode(['product_id' => $product->id, 'approval_status' => $metadata['approvalStatus']]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product approval updated.');
     }
 
