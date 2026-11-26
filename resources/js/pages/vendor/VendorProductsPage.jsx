@@ -100,7 +100,7 @@ export default function VendorProductsPage() {
             const combinations = form.variants.map(variant => form.attributes.map(attribute => {
                 return variant.attributeValues?.find(value => value.attributeName === attribute.name)?.value ?? "";
             }).join("|"));
-            if (combinations.some(value => value.includes("") ) || new Set(combinations).size !== combinations.length) {
+            if (combinations.some(value => value.split("|").some(part => !part.trim())) || new Set(combinations).size !== combinations.length) {
                 setError("Each variable product must have a complete, unique combination of approved attribute values.");
                 setSaving(false);
                 return;
