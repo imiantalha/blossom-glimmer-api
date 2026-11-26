@@ -99,18 +99,32 @@ class VendorFinanceController extends Controller
             'decision' => ['required', 'in:approve,reject'],
             'admin_note' => ['nullable', 'string', 'max:2000'],
         ]);
-        $payout = DB::table('vendor_payout_requests')->where('id', $id)->first();
-        abort_unless($payout, 404, 'Payout request not found.');
-        abort_unless($payout->status === 'pending', 409, 'Only pending payout requests can be reviewed.');
 
-        DB::table('vendor_payout_requests')->where('id', $id)->update([
-            'status' => $data['decision'] === 'approve' ? 'approved' : 'rejected',
-            'reviewed_by' => $request->user()->id,
-            'admin_note' => $data['admin_note'] ?? null,
-            'reviewed_at' => now(),
-            'updated_at' => now(),
-        ]);
-        return ApiResponse::successResponse(DB::table('vendor_payout_requests')->where('id', $id)->first(), 'Payout decision recorded.');
+        return DB::transaction(function () use ($request, $id, $data) {
+            $payout = DB::table('vendor_payout_requests')->where('id', $id)->lockForUpdate()->first();
+            abort_unless($payout, 404, 'Payout request not found.');
+            abort_unless($payout->status === 'pending', 409, 'Only pending payout requests can be reviewed.');
+
+            DB::table('vendor_payout_requests')->where('id', $id)->update([
+                'status' => $data['decision'] === 'approve' ? 'approved' : 'rejected',
+                'reviewed_by' => $request->user()->id,
+                'admin_note' => $data['admin_note'] ?? null,
+                'reviewed_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $payout->vendor_id,
+                'type' => 'payout.' . $data['decision'],
+                'title' => $data['decision'] === 'approve' ? 'Payout request approved' : 'Payout request declined',
+                'message' => $data['decision'] === 'approve'
+                    ? 'Your payout request has been approved and is awaiting simulated processing.'
+                    : 'Your payout request was declined. Please contact marketplace support if you need details.',
+                'action_url' => '/vendor/finance',
+                'data' => json_encode(['payout_id' => $id]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            return ApiResponse::successResponse(DB::table('vendor_payout_requests')->where('id', $id)->first(), 'Payout decision recorded.');
+        });
     }
 
     public function processPayout(int $id)
