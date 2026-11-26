@@ -245,3 +245,9 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Add notifications for admin product/store decisions and make support ticket assignment/priority handling more complete.
 - Audit the remaining Next.js customer/vendor/admin screens and API fallback paths; finish outstanding order/refund/support actions.
 - Then run the complete test phase once implementation is frozen.
+
+### Implementation progress — vendor support and operational notifications
+
+- Completed the vendor support ticket conversation UI: vendors can create tickets, open their own ticket threads, read support responses and send follow-up messages until resolved/closed.
+- Added notifications to vendors when product moderation decisions are made and when their store is approved, set pending or suspended.
+- Added lifecycle demo records for delivered/paid order, pending refund, support ticket, coupon and payout review to support later integrated verification.
