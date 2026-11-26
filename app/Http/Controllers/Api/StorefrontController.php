@@ -1444,7 +1444,10 @@ class StorefrontController extends Controller
                     'fulfillment_status' => $undelivered === 0 ? 'delivered' : 'shipped',
                     'updated_at' => now(),
                 ];
-                if ($undelivered === 0) $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                if ($undelivered === 0) {
+                    $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                    if (DB::table('customer_orders')->where('id', $orderId)->value('payment_method') === 'cod') $orderUpdates['payment_status'] = 'paid';
+                }
                 DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
             }
             $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
@@ -1512,7 +1515,10 @@ class StorefrontController extends Controller
                     'fulfillment_status' => $notDelivered === 0 ? 'delivered' : 'shipped',
                     'updated_at' => now(),
                 ];
-                if ($notDelivered === 0) $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                if ($notDelivered === 0) {
+                    $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                    if (DB::table('customer_orders')->where('id', $orderId)->value('payment_method') === 'cod') $orderUpdates['payment_status'] = 'paid';
+                }
                 DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
             }
             $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
