@@ -1494,6 +1494,19 @@ class StorefrontApiTest extends TestCase
         $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
 
         DB::table('customer_order_items')->insert([
+            [
+                'order_id' => $order->id,
+                'product_id' => $productA->id,
+                'name' => $productA->name,
+                'product_slug' => $productA->slug,
+                'sku' => $productA->sku,
+                'quantity' => 1,
+                'unit_price' => 20,
+                'subtotal' => 20,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
             'order_id' => $order->id,
             'product_id' => $productB->id,
             'name' => $productB->name,
@@ -1504,6 +1517,7 @@ class StorefrontApiTest extends TestCase
             'subtotal' => 30,
             'created_at' => now(),
             'updated_at' => now(),
+            ],
         ]);
 
         $vendorAResponse = $this->actingAs($vendorA, 'sanctum')
