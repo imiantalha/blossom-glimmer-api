@@ -297,6 +297,46 @@ class PaymentSimulationController extends Controller
                 'updated_at' => now(),
             ]);
 
+            // Reverse the refunded product value against each affected vendor's ledger.
+            // Shipping/tax portions are not deducted from vendor product earnings.
+            $orderItems = DB::table('customer_order_items as oi')
+                ->join('products as p', 'p.id', '=', 'oi.product_id')
+                ->where('oi.order_id', $refund->order_id)
+                ->select('oi.id as order_item_id', 'oi.subtotal', 'p.vendor_id')
+                ->get();
+            $orderSubtotal = max(0, (float) $order->subtotal);
+            $discountedProductSubtotal = max(0, $orderSubtotal - (float) $order->discount);
+            $vendorRefundPool = min((float) $refund->amount, $discountedProductSubtotal);
+            foreach ($orderItems as $orderItem) {
+                if ($orderSubtotal <= 0 || $vendorRefundPool <= 0) continue;
+                $vendorId = (int) $orderItem->vendor_id;
+                $profile = DB::table('vendor_profiles')->where('user_id', $vendorId)->whereNull('deleted_at')->first();
+                $commissionType = $profile->commission_type ?? 'percentage';
+                $commissionValue = max(0, (float) ($profile->commission_value ?? 0));
+                $itemGross = max(0, (float) $orderItem->subtotal) * ($discountedProductSubtotal / $orderSubtotal);
+                $allocatedRefund = $vendorRefundPool * ((float) $orderItem->subtotal / $orderSubtotal);
+                $fullCommission = $commissionType === 'fixed'
+                    ? min($itemGross, $commissionValue)
+                    : min($itemGross, $itemGross * min($commissionValue, 100) / 100);
+                $commissionReversal = $itemGross > 0 ? $fullCommission * min(1, $allocatedRefund / $itemGross) : 0;
+                $netReversal = max(0, $allocatedRefund - $commissionReversal);
+
+                DB::table('vendor_ledger_entries')->insertOrIgnore([
+                    'vendor_id' => $vendorId,
+                    'order_id' => $refund->order_id,
+                    'order_item_id' => $orderItem->order_item_id,
+                    'type' => 'refund_debit',
+                    'reference' => 'BG-REFUND-' . $refund->id . '-' . $orderItem->order_item_id,
+                    'gross_amount' => -$allocatedRefund,
+                    'commission_amount' => -$commissionReversal,
+                    'net_amount' => -$netReversal,
+                    'currency' => $order->currency,
+                    'metadata' => json_encode(['refund_request_id' => $refund->id, 'simulated' => true]),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
             DB::table('marketplace_notifications')->insert([
                 'user_id' => $refund->user_id, 'type' => 'refund.processed',
                 'title' => 'Refund processed',
