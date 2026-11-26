@@ -16,19 +16,34 @@ class VendorFinanceController extends Controller
         $vendorId = (int) $request->user()->id;
         $this->syncEarnedLedger($vendorId);
 
-        $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('net_amount');
-        $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'payout_debit')->sum('net_amount'));
-        $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->whereIn('status', ['pending', 'approved'])->sum('amount');
+        $currencies = DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->distinct()->pluck('currency')
+            ->merge(DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->distinct()->pluck('currency'))
+            ->filter()->unique()->values();
+        if ($currencies->isEmpty()) $currencies = collect(['USD']);
+
+        $balances = $currencies->map(function ($currency) use ($vendorId) {
+            $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('net_amount');
+            $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'payout_debit')->sum('net_amount'));
+            $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->where('currency', $currency)->whereIn('status', ['pending', 'approved'])->sum('amount');
+            $gross = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('gross_amount');
+            $commission = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('commission_amount');
+            return [
+                'currency' => $currency,
+                'grossEarned' => $gross,
+                'commissionDeducted' => $commission,
+                'netEarned' => $credits,
+                'paidOut' => $debits,
+                'reserved' => $reserved,
+                'availableBalance' => max(0, $credits - $debits - $reserved),
+            ];
+        })->values();
+        $defaultCurrency = $balances->firstWhere('currency', 'USD') ?? $balances->first();
         $profile = DB::table('vendor_profiles')->where('user_id', $vendorId)->whereNull('deleted_at')->first();
 
         return ApiResponse::successResponse([
-            'currency' => 'USD',
-            'grossEarned' => (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('gross_amount'),
-            'commissionDeducted' => (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('commission_amount'),
-            'netEarned' => $credits,
-            'paidOut' => $debits,
-            'reserved' => $reserved,
-            'availableBalance' => max(0, $credits - $debits - $reserved),
+            ...$defaultCurrency,
+            'currency' => $defaultCurrency['currency'],
+            'balances' => $balances,
             'commission' => $profile ? ['type' => $profile->commission_type, 'value' => (float) $profile->commission_value] : null,
             'ledger' => DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->orderByDesc('id')->limit(100)->get(),
         ], 'Vendor finance summary retrieved.');
@@ -47,16 +62,18 @@ class VendorFinanceController extends Controller
     {
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],
+            'currency' => ['required', 'string', 'size:3'],
             'vendor_note' => ['nullable', 'string', 'max:1000'],
         ]);
         $vendorId = (int) $request->user()->id;
 
         return DB::transaction(function () use ($vendorId, $data) {
             DB::table('users')->where('id', $vendorId)->lockForUpdate()->first();
+            $currency = strtoupper($data['currency']);
             $this->syncEarnedLedger($vendorId);
-            $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('net_amount');
-            $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'payout_debit')->sum('net_amount'));
-            $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->whereIn('status', ['pending', 'approved'])->sum('amount');
+            $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'sale_credit')->sum('net_amount');
+            $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('currency', $currency)->where('type', 'payout_debit')->sum('net_amount'));
+            $reserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $vendorId)->where('currency', $currency)->whereIn('status', ['pending', 'approved'])->sum('amount');
             $available = max(0, $credits - $debits - $reserved);
             if ((float) $data['amount'] > $available) {
                 throw ValidationException::withMessages(['amount' => ['The requested payout exceeds your available balance.']]);
@@ -65,7 +82,7 @@ class VendorFinanceController extends Controller
             $id = DB::table('vendor_payout_requests')->insertGetId([
                 'vendor_id' => $vendorId,
                 'amount' => $data['amount'],
-                'currency' => 'USD',
+                'currency' => $currency,
                 'status' => 'pending',
                 'payout_method' => 'manual_simulation',
                 'vendor_note' => $data['vendor_note'] ?? null,
