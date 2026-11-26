@@ -66,6 +66,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('user', fn (Request $request) => new UserResource($request->user()));
         Route::get('users/me', [AuthController::class, 'me']);
         Route::get('notifications', [EngagementController::class, 'notifications']);
+        Route::get('notifications/preferences', [EngagementController::class, 'notificationPreferences']);
+        Route::patch('notifications/preferences', [EngagementController::class, 'updateNotificationPreferences']);
         Route::patch('notifications/{id}/read', [EngagementController::class, 'markNotificationRead']);
         Route::post('notifications/read-all', [EngagementController::class, 'markAllNotificationsRead']);
         Route::patch('users/me', [StorefrontController::class, 'updateProfile']);
