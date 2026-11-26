@@ -125,3 +125,24 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Added Admin/Super Admin endpoints to review and process approved refunds. Processing is explicitly simulated and returns a reference; it does not transfer money.
 - Checkout now accepts `mock_card` and `mock_wallet` as simulation-only methods alongside COD. The API never accepts card PAN/CVV or banking credentials.
 - This slice is committed to the existing backend feature branch. It has not been run against Laravel/PHP or a database; it is not runtime-verified. Frontend checkout wiring, refund UI, test coverage and remaining modules are still outstanding.
+
+### Implementation progress — finance, support and notifications
+
+- Added vendor ledger and payout persistence, with idempotent sale-credit entries for eligible delivered order items, commission deduction, available-balance calculation, payout reservation, admin review and simulated processing.
+- Added Vendor finance summary/ledger/payout APIs and Admin/Super Admin payout queue/review/process APIs.
+- Added Vendor Earnings & Payouts and Support screens, Admin Payout and Refund management screens, and Admin support-ticket management.
+- Added support-ticket APIs for customer/vendor ticket creation, owner-scoped listing/details/replies, Admin queue/replies/status/priority/assignment, and private internal notes. Customer responses cannot read internal notes.
+- Added in-app notification persistence and owner-scoped list/read/read-all APIs, plus notification screens for dashboard users and customers.
+- Added customer account pages for support tickets, refund requests/history, and notifications; linked them in account navigation.
+- Added notification/support/refund endpoint contracts to the Next.js API endpoint registry.
+- All payout/refund operations remain explicitly simulated; no real bank or payment transfer is performed.
+- These changes are committed to the existing feature branches. They have not been run against Laravel, a database, Next.js, or a browser; no tests are claimed as passed.
+
+### Remaining implementation work
+
+- Vendor product create/edit/variant/media flows and vendor analytics/review responses.
+- Admin category/brand/store/product/order/inventory/shipping/promotion/settings/report screens and complete lifecycle controls.
+- Coupons/discount rules and checkout application with server-side totals and usage limits.
+- Order cancellation/return eligibility and state machine; shipment tracking and notification event automation.
+- Seeded multi-role demo dataset and automated tests for RBAC, ownership, financial state transitions, malformed API responses, browser login/logout and complete purchase/fulfilment/refund/payout journeys.
+- Audit all endpoint contracts and old Next.js dashboard routes; resolve any discovered mismatches.
