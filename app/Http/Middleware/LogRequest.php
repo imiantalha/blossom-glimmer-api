@@ -43,17 +43,23 @@ class LogRequest
             $roles = $actor?->getRoleNames() ?? collect();
             $route = $request->route();
             $parameters = $route?->parameters() ?? [];
-            $subjectType = null;
+            $resourcePath = preg_replace('#^api/v1/?#', '', $request->path()) ?: $request->path();
+            $resourceSegments = array_values(array_filter(explode('/', trim($resourcePath, '/'))));
+            if (in_array($resourceSegments[0] ?? '', ['admin', 'vendor'], true)) {
+                array_shift($resourceSegments);
+            }
+            $subjectType = isset($resourceSegments[0])
+                ? Str::studly(Str::singular($resourceSegments[0]))
+                : null;
             $subjectId = null;
 
-            foreach ($parameters as $key => $value) {
+            foreach ($parameters as $value) {
                 if (is_object($value) && method_exists($value, 'getKey')) {
                     $subjectType = class_basename($value);
                     $subjectId = (string) $value->getKey();
                     break;
                 }
                 if (is_scalar($value)) {
-                    $subjectType = Str::studly(Str::singular((string) $key));
                     $subjectId = Str::limit((string) $value, 120, '');
                     break;
                 }
