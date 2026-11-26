@@ -158,6 +158,18 @@ class StorefrontApiTest extends TestCase
         $this->actingAs($vendor, 'sanctum')
             ->getJson('/api/v1/vendor/products/' . $otherProduct->id)
             ->assertNotFound();
+
+        $this->patchJson('/api/v1/vendor/products/' . $otherProduct->id, [
+            'name' => 'Unauthorized cross-vendor edit',
+        ])->assertNotFound();
+
+        $this->deleteJson('/api/v1/vendor/products/' . $otherProduct->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('products', [
+            'id' => $otherProduct->id,
+            'name' => 'Unauthorized cross-vendor edit',
+        ]);
     }
 
     public function test_demo_shipping_and_storefront_scenarios_are_seeded(): void
@@ -1456,6 +1468,11 @@ class StorefrontApiTest extends TestCase
         // Read access remains available because products.view is still granted.
         $this->getJson('/api/v1/vendor/products')
             ->assertOk();
+
+        $vendorRole->revokePermissionTo('orders.view');
+        $this->getJson('/api/v1/vendor/orders')
+            ->assertForbidden();
+        $vendorRole->givePermissionTo('orders.view');
     }
 
     public function test_vendor_cannot_use_customer_or_admin_order_management_as_an_admin(): void
