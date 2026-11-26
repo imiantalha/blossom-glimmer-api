@@ -85,6 +85,27 @@ export default function VendorProductsPage() {
             setSaving(false);
             return;
         }
+        const skus = form.variants.map(variant => variant.sku.trim().toLowerCase());
+        if (skus.some(sku => !sku) || new Set(skus).size !== skus.length) {
+            setError("Every variant must have a unique SKU.");
+            setSaving(false);
+            return;
+        }
+        if (form.variants.some(variant => variant.salePrice !== "" && Number(variant.salePrice) >= Number(variant.price))) {
+            setError("A sale price must be lower than its regular price.");
+            setSaving(false);
+            return;
+        }
+        if (form.productType === "Variable") {
+            const combinations = form.variants.map(variant => form.attributes.map(attribute => {
+                return variant.attributeValues?.find(value => value.attributeName === attribute.name)?.value ?? "";
+            }).join("|"));
+            if (combinations.some(value => value.includes("") ) || new Set(combinations).size !== combinations.length) {
+                setError("Each variable product must have a complete, unique combination of approved attribute values.");
+                setSaving(false);
+                return;
+            }
+        }
         const payload = {
             name: form.name.trim(), slug: form.slug.trim() || undefined,
             brandId: Number(form.brandId), categoryId: Number(form.categoryId),
