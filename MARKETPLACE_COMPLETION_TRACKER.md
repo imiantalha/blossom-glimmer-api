@@ -311,3 +311,13 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Vendor finance now calculates earnings, reservations, paid-out totals and available payout balances independently per currency. Vendor payout requests must specify the currency, preventing cross-currency balance aggregation.
 - Added Customer Returns and Admin Returns workspaces, item-specific return links from delivered order details, and a pending-return KPI on the Admin dashboard.
 - Restricted support-ticket assignment to Admin and Super Admin accounts; internal support notes remain hidden from requesters.
+
+### Additional implementation progress — returns, reviews and reporting
+
+- Completed the separate Customer/Admin return workspace and API routes. Return requests reserve item quantities, require delivery within the 30-day return window, support Admin approval/rejection and received/completed transitions, and create a linked pending refund request when a return is completed.
+- Added order-level delivery timestamps, backfilled existing delivered orders, and set the timestamp when all vendor fulfilments are delivered.
+- Added a customer My Reviews workspace and API for listing, editing and deleting owned reviews. New and edited reviews require a delivered purchase and return to moderation.
+- Added Admin marketplace reports with date filters, paid sales grouped by currency, daily revenue, order status, top products, processed refunds and simulated payouts.
+- Added Vendor analytics with vendor-scoped paid sales, daily revenue, top products and fulfilment status reporting; all financial values remain separated by currency.
+- Added Admin payment transaction listing, simulated webhook event application and event history, with duplicate event IDs protected by transaction locking.
+- Corrected vendor finance summaries and payout requests to calculate and reserve balances per currency rather than mixing different currencies.
