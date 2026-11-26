@@ -22,49 +22,52 @@ class PaymentSimulationController extends Controller
             'idempotency_key' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $order = DB::table('customer_orders')
-            ->where('id', $data['order_id'])
-            ->where('user_id', $request->user()->id)
-            ->first();
-
-        abort_unless($order, 404, 'Order not found.');
-        abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order cannot be paid.');
-        abort_unless($order->payment_method === $data['method'], 422, 'The payment method does not match the selected checkout method.');
-
-        $activeAttempt = DB::table('payment_transactions')
-            ->where('order_id', $order->id)
-            ->where('user_id', $request->user()->id)
-            ->whereIn('status', ['pending', 'succeeded'])
-            ->orderByDesc('id')
-            ->first();
-        if ($activeAttempt) return ApiResponse::successResponse($this->transactionPayload($activeAttempt), 'An active simulated payment attempt already exists.');
-
-        $key = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
-        if ($key) {
-            $existing = DB::table('payment_transactions')
+        return DB::transaction(function () use ($request, $data) {
+            $order = DB::table('customer_orders')
+                ->where('id', $data['order_id'])
                 ->where('user_id', $request->user()->id)
-                ->where('idempotency_key', $key)
+                ->lockForUpdate()
                 ->first();
-            if ($existing) return ApiResponse::successResponse($this->transactionPayload($existing), 'Existing simulated payment attempt returned.');
-        }
 
-        $transactionId = DB::table('payment_transactions')->insertGetId([
-            'order_id' => $order->id,
-            'user_id' => $request->user()->id,
-            'provider' => 'simulation',
-            'method' => $data['method'],
-            'reference' => 'BG-SIM-' . Str::upper(Str::random(16)),
-            'idempotency_key' => $key,
-            'amount' => $order->total,
-            'currency' => $order->currency,
-            'status' => 'pending',
-            'metadata' => json_encode(['simulation' => true, 'notice' => 'No real payment was collected.']),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            abort_unless($order, 404, 'Order not found.');
+            abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order cannot be paid.');
+            abort_unless($order->payment_method === $data['method'], 422, 'The payment method does not match the selected checkout method.');
 
-        $transaction = DB::table('payment_transactions')->where('id', $transactionId)->first();
-        return ApiResponse::successResponse($this->transactionPayload($transaction), 'Simulated payment attempt created.');
+            $key = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
+            if ($key) {
+                $existing = DB::table('payment_transactions')
+                    ->where('user_id', $request->user()->id)
+                    ->where('idempotency_key', $key)
+                    ->first();
+                if ($existing) return ApiResponse::successResponse($this->transactionPayload($existing), 'Existing simulated payment attempt returned.');
+            }
+
+            $activeAttempt = DB::table('payment_transactions')
+                ->where('order_id', $order->id)
+                ->where('user_id', $request->user()->id)
+                ->whereIn('status', ['pending', 'succeeded'])
+                ->orderByDesc('id')
+                ->first();
+            if ($activeAttempt) return ApiResponse::successResponse($this->transactionPayload($activeAttempt), 'An active simulated payment attempt already exists.');
+
+            $transactionId = DB::table('payment_transactions')->insertGetId([
+                'order_id' => $order->id,
+                'user_id' => $request->user()->id,
+                'provider' => 'simulation',
+                'method' => $data['method'],
+                'reference' => 'BG-SIM-' . Str::upper(Str::random(16)),
+                'idempotency_key' => $key,
+                'amount' => $order->total,
+                'currency' => $order->currency,
+                'status' => 'pending',
+                'metadata' => json_encode(['simulation' => true, 'notice' => 'No real payment was collected.']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $transaction = DB::table('payment_transactions')->where('id', $transactionId)->first();
+            return ApiResponse::successResponse($this->transactionPayload($transaction), 'Simulated payment attempt created.');
+        });
     }
 
     /**
