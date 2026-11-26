@@ -759,22 +759,13 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseMissing('permissions', ['id' => $permission['id']]);
     }
 
-    public function test_admin_shipment_updates_are_visible_in_customer_order_history_and_details(): void
+    public function test_legacy_parent_shipment_updates_are_blocked_for_vendor_fulfilment_orders(): void
     {
         $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
         $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
-        $otherCustomer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
-        $orderId = DB::table('customer_orders')
-            ->where('user_id', $customer->id)
-            ->where('number', 'BG-DEMO-1001')
-            ->value('id');
-
+        $orderId = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->value('id');
         $this->assertNotNull($orderId);
-
-        // Exercise the legacy single-shipment workflow only for an order that
-        // has no vendor-specific fulfilment records. Marketplace orders with
-        // vendor fulfilments are covered by the isolation regression test.
-        DB::table('vendor_order_fulfillments')->where('order_id', $orderId)->delete();
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['order_id' => $orderId]);
 
         $this->actingAs($customer, 'sanctum')
             ->postJson('/api/v1/admin/orders/' . $orderId . '/shipment', [
@@ -789,55 +780,10 @@ class StorefrontApiTest extends TestCase
                 'tracking_number' => 'BG-REGRESSION-TRACK-1001',
                 'tracking_url' => 'https://tracking.example.test/BG-REGRESSION-TRACK-1001',
                 'status' => 'in_transit',
-                'description' => 'Package is moving through the network.',
-                'location' => 'Lahore',
             ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'in_transit')
-            ->assertJsonPath('data.trackingNumber', 'BG-REGRESSION-TRACK-1001');
-
-        $this->assertDatabaseHas('shipment_events', [
-            'shipment_id' => DB::table('shipments')->where('order_id', $orderId)->value('id'),
-            'status' => 'in_transit',
-            'location' => 'Lahore',
-        ]);
-
-        $this->actingAs($customer, 'sanctum')
-            ->getJson('/api/v1/orders')
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonFragment(['number' => 'BG-DEMO-1001'])
-            ->assertJsonFragment(['trackingNumber' => 'BG-REGRESSION-TRACK-1001']);
-
-        $this->getJson('/api/v1/orders/' . $orderId)
-            ->assertOk()
-            ->assertJsonPath('data.shipment.status', 'in_transit')
-            ->assertJsonPath('data.shipment.trackingUrl', 'https://tracking.example.test/BG-REGRESSION-TRACK-1001');
-
-        $this->actingAs($otherCustomer, 'sanctum')
-            ->getJson('/api/v1/orders/' . $orderId)
-            ->assertNotFound();
-
-        $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/v1/admin/orders/' . $orderId . '/shipment', [
-                'status' => 'delivered',
-                'delivered_at' => now()->toISOString(),
-                'description' => 'Delivered to recipient.',
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'delivered');
-
-        $this->assertDatabaseHas('customer_orders', [
-            'id' => $orderId,
-            'status' => 'delivered',
-            'fulfillment_status' => 'delivered',
-        ]);
-        $this->assertDatabaseHas('shipment_events', [
-            'shipment_id' => DB::table('shipments')->where('order_id', $orderId)->value('id'),
-            'status' => 'delivered',
-        ]);
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This order uses vendor-specific fulfilments. Update each vendor fulfilment instead.');
     }
-
 
     public function test_checkout_rejects_insufficient_stock_without_creating_an_order_or_clearing_cart(): void
     {
