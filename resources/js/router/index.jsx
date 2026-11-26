@@ -26,6 +26,7 @@ import CouponsPage from "../pages/marketing/CouponsPage";
 import AdminOrdersPage from "../pages/orders/AdminOrdersPage";
 import AdminProductsPage from "../pages/catalog/AdminProductsPage";
 import AdminStoresPage from "../pages/stores/AdminStoresPage";
+import CatalogManagementPage from "../pages/catalog/CatalogManagementPage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -52,6 +53,7 @@ export default function Router() {
                     <Route path="/orders" element={<AdminOrdersPage />} />
                     <Route path="/products" element={<AdminProductsPage />} />
                     <Route path="/stores" element={<AdminStoresPage />} />
+                    <Route path="/catalog" element={<CatalogManagementPage />} />
                     <Route path="/support" element={<SupportTicketsPage />} />
                     <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
                     <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
