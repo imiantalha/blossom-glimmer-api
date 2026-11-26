@@ -273,3 +273,8 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Added Next.js Admin/Super Admin finance (payout/refund), coupons, support and notification workspaces and registered them in the portal navigation.
 - The Next.js application already contains Admin/Super Admin store, product, order, category, brand, catalog-settings, marketplace-settings, roles and review pages; the new modules fill gaps in that same portal rather than relying only on the Laravel React dashboard.
 - Frontend feature branch includes the new routes/components; see PR #57. The corrective default-branch revert is tracked separately in draft PR #58.
+
+### RBAC UI alignment
+
+- The Next.js admin portal now hides the Roles & Permissions navigation entry from ordinary Admin users and guards the role-management page itself to Super Admin. This matches the Laravel API's Super Admin-only role/permission routes.
+- Admin and Super Admin retain access to normal marketplace operations; Vendor and Customer workspaces remain role-scoped by their respective layouts and API middleware.
