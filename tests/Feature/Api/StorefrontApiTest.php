@@ -1224,6 +1224,19 @@ class StorefrontApiTest extends TestCase
         $options->assertJsonFragment(['name' => 'Material']);
         $options->assertJsonFragment(['name' => 'Handmade']);
 
+        $this->patchJson('/api/v1/admin/attributes/' . $attribute->json('data.id'), [
+            'name' => 'Fabric Material',
+            'slug' => 'fabric-material',
+            'type' => 'select',
+            'is_variant_attribute' => true,
+            'values' => ['Silk', 'Wool'],
+        ])->assertOk()->assertJsonPath('data.name', 'Fabric Material')->assertJsonCount(4, 'data.values');
+
+        $this->patchJson('/api/v1/admin/tags/' . $tag->json('data.id'), [
+            'name' => 'Artisan Handmade',
+            'slug' => 'artisan-handmade',
+        ])->assertOk()->assertJsonPath('data.name', 'Artisan Handmade');
+
         $this->patchJson('/api/v1/admin/attributes/' . $attribute->json('data.id') . '/status', ['status' => 'inactive'])
             ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
         $this->patchJson('/api/v1/admin/tags/' . $tag->json('data.id') . '/status', ['status' => 'inactive'])
@@ -1305,6 +1318,12 @@ class StorefrontApiTest extends TestCase
             ])->assertCreated()->assertJsonPath('data.slug', 'admin-test-collection');
 
         $this->getJson('/api/v1/collections')->assertOk()->assertJsonFragment(['slug' => 'admin-test-collection']);
+        $this->patchJson('/api/v1/admin/collections/' . $collection->json('data.id'), [
+            'name' => 'Admin Test Collection Updated',
+            'slug' => 'admin-test-collection-updated',
+            'description' => 'Updated curated collection.',
+            'sort_order' => 91,
+        ])->assertOk();
         $this->patchJson('/api/v1/admin/collections/' . $collection->json('data.id') . '/status', ['is_active' => false])
             ->assertOk()->assertJsonPath('data.isActive', false);
         $this->getJson('/api/v1/collections')->assertOk()->assertJsonMissing(['slug' => 'admin-test-collection']);
@@ -1322,6 +1341,12 @@ class StorefrontApiTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.code', 'admin-test-express');
 
         $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonFragment(['id' => 'admin-test-express']);
+        $this->patchJson('/api/v1/admin/shipping-methods/' . $shipping->json('data.id'), [
+            'name' => 'Admin Test Priority',
+            'price' => 15.00,
+            'currency' => 'USD',
+            'estimated_delivery' => '1-2 business days',
+        ])->assertOk();
         $this->patchJson('/api/v1/admin/shipping-methods/' . $shipping->json('data.id') . '/status', ['is_active' => false])
             ->assertOk()->assertJsonPath('data.isActive', false);
         $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonMissing(['id' => 'admin-test-express']);
