@@ -14,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('app')).render(
     <React.StrictMode>
         <AuthProvider>
             <ToastProvider>
-                <Router />
+                <ErrorBoundary>
+                    <Router />
+                </ErrorBoundary>
             </ToastProvider>
         </AuthProvider>
     </React.StrictMode>
