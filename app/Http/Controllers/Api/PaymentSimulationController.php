@@ -322,10 +322,15 @@ class PaymentSimulationController extends Controller
                 $commissionValue = max(0, (float) ($profile->commission_value ?? 0));
                 $itemGross = max(0, (float) $orderItem->subtotal) * ($discountedProductSubtotal / $orderSubtotal);
                 $allocatedRefund = $vendorRefundPool * ((float) $orderItem->subtotal / $orderSubtotal);
-                $fullCommission = $commissionType === 'fixed'
-                    ? min($itemGross, $commissionValue)
-                    : min($itemGross, $itemGross * min($commissionValue, 100) / 100);
-                $commissionReversal = $itemGross > 0 ? $fullCommission * min(1, $allocatedRefund / $itemGross) : 0;
+                $saleEntry = DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)
+                    ->where('order_item_id', $orderItem->order_item_id)->where('type', 'sale_credit')->first();
+                $fullCommission = $saleEntry
+                    ? abs((float) $saleEntry->commission_amount)
+                    : ($commissionType === 'fixed'
+                        ? min($itemGross, $commissionValue)
+                        : min($itemGross, $itemGross * min($commissionValue, 100) / 100));
+                $commissionBase = $saleEntry ? max(0, (float) $saleEntry->gross_amount) : $itemGross;
+                $commissionReversal = $commissionBase > 0 ? $fullCommission * min(1, $allocatedRefund / $commissionBase) : 0;
                 $netReversal = max(0, $allocatedRefund - $commissionReversal);
 
                 DB::table('vendor_ledger_entries')->insertOrIgnore([
