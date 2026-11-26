@@ -969,6 +969,102 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store commission updated.');
     }
 
+    /**
+     * Vendor-facing order projection. A marketplace order may contain products
+     * from multiple stores, so only this vendor's line items are ever returned.
+     * Parent-order totals and shared shipment state are deliberately omitted.
+     */
+    private function vendorOrderPayload(object $order, int $vendorId): array
+    {
+        $items = DB::table('customer_order_items as oi')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->where('oi.order_id', $order->id)
+            ->where('p.vendor_id', $vendorId)
+            ->select('oi.id', 'oi.product_id', 'oi.variant_id', 'oi.name', 'oi.product_slug',
+                'oi.image_url', 'oi.sku', 'oi.quantity', 'oi.unit_price', 'oi.subtotal')
+            ->get();
+
+        return [
+            'id' => (int) $order->id,
+            'number' => $order->number,
+            'status' => $order->status,
+            'createdAt' => $order->created_at,
+            'currency' => $order->currency,
+            'vendorSubtotal' => (float) $items->sum('subtotal'),
+            'items' => $items->map(fn ($item) => [
+                'id' => (int) $item->id,
+                'productId' => (int) $item->product_id,
+                'variantId' => $item->variant_id ? (int) $item->variant_id : null,
+                'name' => $item->name,
+                'slug' => $item->product_slug,
+                'imageUrl' => $item->image_url,
+                'sku' => $item->sku,
+                'quantity' => (int) $item->quantity,
+                'unitPrice' => (float) $item->unit_price,
+                'subtotal' => (float) $item->subtotal,
+            ])->values(),
+            // Fulfilment needs the ship-to details, but never another vendor's
+            // items, payment credentials, or the customer's full order total.
+            'shippingAddress' => $order->shipping_address ? json_decode($order->shipping_address, true) : null,
+        ];
+    }
+
+    public function vendorOrders(Request $request)
+    {
+        $vendorId = (int) $request->user()->id;
+        $orders = DB::table('customer_orders as o')
+            ->whereExists(function ($query) use ($vendorId) {
+                $query->selectRaw('1')
+                    ->from('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->whereColumn('oi.order_id', 'o.id')
+                    ->where('p.vendor_id', $vendorId);
+            })
+            ->orderByDesc('o.created_at')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+
+        $data = $orders->getCollection()->map(fn ($order) => $this->vendorOrderPayload($order, $vendorId));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Vendor orders retrieved.',
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'per_page' => $orders->perPage(),
+                'total' => $orders->total(),
+                'count' => $data->count(),
+                'from' => $orders->firstItem(),
+                'to' => $orders->lastItem(),
+                'has_previous' => $orders->currentPage() > 1,
+                'has_next' => $orders->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function vendorOrder(Request $request, int $id)
+    {
+        $vendorId = (int) $request->user()->id;
+        $order = DB::table('customer_orders as o')
+            ->where('o.id', $id)
+            ->whereExists(function ($query) use ($vendorId) {
+                $query->selectRaw('1')
+                    ->from('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->whereColumn('oi.order_id', 'o.id')
+                    ->where('p.vendor_id', $vendorId);
+            })
+            ->first();
+
+        abort_unless($order, 404);
+
+        return ApiResponse::successResponse(
+            $this->vendorOrderPayload($order, $vendorId),
+            'Vendor order retrieved.'
+        );
+    }
+
     public function paymentMethods()
     {
         $methods = [];
