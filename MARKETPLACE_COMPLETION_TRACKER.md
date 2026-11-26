@@ -146,3 +146,20 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Order cancellation/return eligibility and state machine; shipment tracking and notification event automation.
 - Seeded multi-role demo dataset and automated tests for RBAC, ownership, financial state transitions, malformed API responses, browser login/logout and complete purchase/fulfilment/refund/payout journeys.
 - Audit all endpoint contracts and old Next.js dashboard routes; resolve any discovered mismatches.
+
+### Implementation progress — vendor catalogue, reviews and coupons
+
+- Replaced the vendor products read-only table with a catalogue workflow for creating and editing simple/variable products, approved brand/category/shipping selection, image URL, SKU/pricing/stock/dimensions, draft saving, approval submission, inventory adjustments and archive actions.
+- Added vendor review inbox API and UI. Vendors can view reviews belonging only to their own products and publish a public reply to approved reviews; the customer receives an in-app notification. Added vendor review permissions and schema fields.
+- Added coupon rule storage, admin CRUD/status management UI, global/per-customer usage limits, active date windows, minimum subtotal, percentage/fixed discounts and maximum discount caps.
+- Added customer cart coupon validation and applied coupon discounts atomically during order creation, with redemption history and usage-count updates. Customer checkout now previews the discount and sends the coupon code for server-side revalidation.
+- Added customer/admin coupon endpoint contracts and Admin/Super Admin coupon navigation.
+- These changes are committed on the existing feature branches. Runtime validation, migrations, build checks and browser journeys are still pending and have not been claimed as passed.
+
+### Remaining implementation work (updated)
+
+- Vendor analytics/reports, store profile completeness, vendor order lifecycle and customer order cancellation/return eligibility/state machine.
+- Customer-facing review reply rendering and notification event coverage for all order/payment/refund/shipping transitions.
+- Admin shipping/tracking, promotions reporting, marketplace settings, order/fulfillment, inventory and moderation workflows: audit all screens against the backend route contracts and complete missing actions.
+- Seeded multi-role demo dataset, schema compatibility verification (MySQL and SQL Server), API ownership/RBAC tests, frontend type/lint/build checks and full browser login/logout + purchase-to-delivery/refund/payout scenarios.
+- Review idempotency and coupon lifecycle edge cases (failed/cancelled payment redemptions, coupon edits after usage, and order retry semantics) during the comprehensive verification phase.
