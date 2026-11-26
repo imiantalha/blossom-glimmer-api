@@ -38,16 +38,21 @@ class VendorDashboardController extends Controller
         ];
 
         $inventory = DB::table('inventory_items as i')
-            ->join('products as p', function ($join) {
-                $join->on('p.id', '=', 'i.product_id')
-                    ->orOn('p.id', '=', DB::raw('(SELECT product_id FROM product_variants WHERE product_variants.id = i.variant_id)'));
+            ->leftJoin('products as direct_product', 'direct_product.id', '=', 'i.product_id')
+            ->leftJoin('product_variants as v', 'v.id', '=', 'i.variant_id')
+            ->leftJoin('products as variant_product', 'variant_product.id', '=', 'v.product_id')
+            ->where(function ($query) use ($vendorId) {
+                $query->where('direct_product.vendor_id', $vendorId)
+                    ->orWhere('variant_product.vendor_id', $vendorId);
             })
-            ->where('p.vendor_id', $vendorId)
             ->where('i.manage_inventory', true);
 
         $lowStock = (clone $inventory)
             ->whereRaw('(i.stock_quantity - i.reserved_quantity) <= i.low_stock_threshold')
-            ->select('p.id as product_id', 'p.name', 'p.sku', 'i.stock_quantity', 'i.reserved_quantity', 'i.low_stock_threshold')
+            ->selectRaw('COALESCE(direct_product.id, variant_product.id) as product_id')
+            ->addSelect(DB::raw('COALESCE(direct_product.name, variant_product.name) as name'))
+            ->addSelect(DB::raw('COALESCE(direct_product.sku, v.sku) as sku'))
+            ->addSelect('i.stock_quantity', 'i.reserved_quantity', 'i.low_stock_threshold')
             ->orderByRaw('(i.stock_quantity - i.reserved_quantity) asc')
             ->limit(8)
             ->get()
