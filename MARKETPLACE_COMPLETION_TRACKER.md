@@ -333,3 +333,6 @@ The bullets in this historical baseline were progressively addressed by the impl
 
 - Payment intent creation now locks the customer order and has a database unique index for per-user idempotency keys, preventing concurrent duplicate payment attempts.
 - COD orders are marked paid when all vendor fulfilments reach delivered, aligning vendor earnings, customer refunds and revenue reports.
+
+- Refund and payout operations now serialize on the vendor account row. Admin payout processing rechecks the vendor's currency-specific available balance after refunds and other reservations, and blocks a stale approved payout if the balance no longer covers it.
+- Refund totals are calculated only after locking the parent order, preventing concurrent partial refunds from overwriting the cumulative order payment status.
