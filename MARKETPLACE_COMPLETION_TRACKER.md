@@ -289,3 +289,5 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Role-management navigation and page access are now Super Admin-only, matching API route middleware.
 
 - Extended the lifecycle demo seed data with a pending mock-card order (pending payment + pending vendor fulfilment) for cancellation/payment-retry scenarios, and a high-priority vendor support ticket so both Customer and Vendor support queues are populated.
+
+- Added a seeded pending customer review on the second customer account so Admin review moderation and Vendor review inboxes have realistic pending content alongside the approved review.
