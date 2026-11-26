@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\EmailLogController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PaymentSimulationController;
 use App\Http\Controllers\Api\VendorFinanceController;
+use App\Http\Controllers\Api\EngagementController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -59,6 +60,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         Route::get('user', fn (Request $request) => new UserResource($request->user()));
         Route::get('users/me', [AuthController::class, 'me']);
+        Route::get('notifications', [EngagementController::class, 'notifications']);
+        Route::patch('notifications/{id}/read', [EngagementController::class, 'markNotificationRead']);
+        Route::post('notifications/read-all', [EngagementController::class, 'markAllNotificationsRead']);
         Route::patch('users/me', [StorefrontController::class, 'updateProfile']);
         Route::patch('users/me/password', [AuthController::class, 'changePassword']);
         Route::get('users/me/addresses', [StorefrontController::class, 'addresses']);
@@ -73,6 +77,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
+            Route::get('support/tickets', [EngagementController::class, 'tickets']);
+            Route::post('support/tickets', [EngagementController::class, 'createTicket']);
+            Route::get('support/tickets/{id}', [EngagementController::class, 'showTicket']);
+            Route::post('support/tickets/{id}/messages', [EngagementController::class, 'replyTicket']);
             Route::get('finance/summary', [VendorFinanceController::class, 'summary']);
             Route::get('finance/payouts', [VendorFinanceController::class, 'payouts']);
             Route::post('finance/payouts', [VendorFinanceController::class, 'requestPayout']);
@@ -111,7 +119,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('wishlist', [StorefrontController::class, 'addWishlist']);
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
-            Route::post('payments/intents', [PaymentSimulationController::class, 'createIntent']);
+            Route::get('support/tickets', [EngagementController::class, 'tickets']);
+        Route::post('support/tickets', [EngagementController::class, 'createTicket']);
+        Route::get('support/tickets/{id}', [EngagementController::class, 'showTicket']);
+        Route::post('support/tickets/{id}/messages', [EngagementController::class, 'replyTicket']);
+        Route::post('payments/intents', [PaymentSimulationController::class, 'createIntent']);
             Route::post('payments/intents/{id}/confirm', [PaymentSimulationController::class, 'confirmIntent']);
             Route::get('payments/transactions', [PaymentSimulationController::class, 'customerTransactions']);
             Route::post('refunds', [PaymentSimulationController::class, 'requestRefund']);
@@ -153,6 +165,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
             Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);
+            Route::get('admin/support/tickets', [EngagementController::class, 'adminTickets']);
+            Route::get('admin/support/tickets/{id}', [EngagementController::class, 'adminShowTicket']);
+            Route::post('admin/support/tickets/{id}/messages', [EngagementController::class, 'adminReplyTicket']);
+            Route::patch('admin/support/tickets/{id}', [EngagementController::class, 'updateTicket']);
             Route::get('admin/payouts', [VendorFinanceController::class, 'adminPayouts']);
             Route::patch('admin/payouts/{id}/review', [VendorFinanceController::class, 'reviewPayout']);
             Route::post('admin/payouts/{id}/process', [VendorFinanceController::class, 'processPayout']);
