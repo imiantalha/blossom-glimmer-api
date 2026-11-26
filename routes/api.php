@@ -65,18 +65,18 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
         Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
-            Route::get('store/me', [StorefrontController::class, 'myStore']);
-            Route::post('store', [StorefrontController::class, 'createStore']);
-            Route::patch('store', [StorefrontController::class, 'updateMyStore']);
-            Route::get('catalog-requests', [CatalogRequestController::class, 'vendorIndex']);
-            Route::post('catalog-requests', [CatalogRequestController::class, 'store']);
-            Route::get('products/options', [VendorProductController::class, 'options']);
-            Route::get('products', [VendorProductController::class, 'index']);
-            Route::post('products', [VendorProductController::class, 'store']);
-            Route::get('products/{id}', [VendorProductController::class, 'show']);
-            Route::patch('products/{id}', [VendorProductController::class, 'update']);
-            Route::delete('products/{id}', [VendorProductController::class, 'destroy']);
-            Route::patch('products/{id}/inventory', [VendorProductController::class, 'updateInventory']);
+            Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
+            Route::post('store', [StorefrontController::class, 'createStore'])->middleware('permission:stores.manage');
+            Route::patch('store', [StorefrontController::class, 'updateMyStore'])->middleware('permission:stores.manage');
+            Route::get('catalog-requests', [CatalogRequestController::class, 'vendorIndex'])->middleware('permission:products.view');
+            Route::post('catalog-requests', [CatalogRequestController::class, 'store'])->middleware('permission:products.create');
+            Route::get('products/options', [VendorProductController::class, 'options'])->middleware('permission:products.view');
+            Route::get('products', [VendorProductController::class, 'index'])->middleware('permission:products.view');
+            Route::post('products', [VendorProductController::class, 'store'])->middleware('permission:products.create');
+            Route::get('products/{id}', [VendorProductController::class, 'show'])->middleware('permission:products.view');
+            Route::patch('products/{id}', [VendorProductController::class, 'update'])->middleware('permission:products.update');
+            Route::delete('products/{id}', [VendorProductController::class, 'destroy'])->middleware('permission:products.delete');
+            Route::patch('products/{id}/inventory', [VendorProductController::class, 'updateInventory'])->middleware('permission:inventory.update');
         });
 
         Route::get('cart', [StorefrontController::class, 'cart']);
