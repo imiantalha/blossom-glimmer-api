@@ -15,9 +15,10 @@ class ReturnRequestController extends Controller
         $page = DB::table('return_requests as r')
             ->join('customer_orders as o', 'o.id', '=', 'r.order_id')
             ->join('customer_order_items as i', 'i.id', '=', 'r.order_item_id')
+            ->leftJoin('refund_requests as rr', 'rr.return_request_id', '=', 'r.id')
             ->where('r.user_id', $request->user()->id)
             ->orderByDesc('r.created_at')
-            ->select('r.*', 'o.number as order_number', 'i.name as product_name', 'i.image_url as product_image')
+            ->select('r.*', 'o.number as order_number', 'i.name as product_name', 'i.image_url as product_image', 'rr.id as refund_request_id', 'rr.status as refund_status')
             ->paginate(min(max($request->integer('per_page', 20), 1), 100));
 
         return ApiResponse::successResponse([
