@@ -54,7 +54,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         });
     });
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         Route::get('user', fn (Request $request) => new UserResource($request->user()));
         Route::get('users/me', [AuthController::class, 'me']);
         Route::patch('users/me', [StorefrontController::class, 'updateProfile']);
@@ -67,6 +67,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::middleware('role:Customer')->group(function () {
             Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
             Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
+        });
+
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
@@ -86,6 +88,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('products/{id}/inventory', [VendorProductController::class, 'updateInventory'])->middleware('permission:inventory.update');
         });
 
+        Route::middleware('role:Customer')->group(function () {
         Route::get('cart', [StorefrontController::class, 'cart']);
         Route::post('cart/merge', [StorefrontController::class, 'mergeCart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
