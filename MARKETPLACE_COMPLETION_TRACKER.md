@@ -79,3 +79,33 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - The Laravel React dashboard currently has a small set of routes (dashboard, users, customers, login); marketplace administration and vendor workspace screens remain to be implemented there.
 - Next.js still contains legacy `/administrator` and `/vendor` routes despite the agreed architecture. Audit and consolidate these without removing customer functionality.
 - Both applications need page-level resilience beyond API envelope validation. Root/route error boundaries have been started on the respective branches; continue validating every module's data contracts and error states.
+
+
+## Implementation progress — 2026-11-26 continuation
+
+### Implemented on the feature branch (not yet runtime-verified)
+
+- Added SQL-backed `audit_logs` storage and an API middleware audit trail for versioned API activity. Records actor ID/role, action, HTTP method/path, resource type/identifier, response status, IP, user agent, timing, outcome and safe metadata key names.
+- Request audit metadata deliberately excludes credentials and sensitive payment/banking values; it does not persist raw request bodies.
+- Product detail API reads are recorded as product views (including guest views); order placement also writes explicit order and per-product purchase audit records.
+- Successful/failed login, logout and registration events are explicitly audited.
+- Added an admin audit-log API and searchable React audit activity page.
+- Added Super Admin role provisioning through the role seeder and optional environment-configured first-account bootstrap (`SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, optional `SUPER_ADMIN_NAME`). No default credentials are created.
+- Restricted role and permission management API routes to Super Admin. Added basic React role/permission management pages.
+- Added user-request authorization rules preventing Admin users from creating/promoting/deleting privileged Admin or Super Admin accounts.
+- Added active-account middleware and applied it to authenticated API groups; deactivated users' current access token is revoked on access.
+- Separated customer shopping/checkout APIs from Vendor and Admin route groups; admin shipment update is in the admin route group.
+- Corrected Laravel React dashboard API base URL to `/api/v1`, auth route paths to `/auth/*`, and admin user service paths to `/admin/users`.
+- Corrected the dashboard login response parsing for Laravel's `success/message/data` envelope and role-aware login redirects.
+- Added role-aware React dashboard routing/navigation, vendor dashboard, vendor order fulfilment page, vendor store profile page, and vendor product/inventory list.
+- Added defensive Next.js API envelope/pagination parsing and invalid-JSON handling, plus route/root error recovery screens. Added a React dashboard error boundary.
+
+### Still outstanding — do not mark complete
+
+- Full vendor product create/edit experience in the Laravel React dashboard; vendor analytics, earnings, commission ledger, payout requests, notifications and support.
+- Admin React pages and workflows for marketplace products, categories, brands, stores, orders, inventory, reviews, shipping, settings, reports, refunds, returns, promotions/coupons, support and financial operations.
+- Customer-facing payment transaction lifecycle and mock payment adapter; refund/return state machine; payout simulation and vendor ledger.
+- Promotions/coupons, notification center/preferences and support ticket workflows.
+- End-to-end role/permission and ownership-isolation test matrix, API contract tests, malformed-payload UI tests, browser scenarios and seeded multi-role demo data.
+- Verify all route/service contracts in both repositories, including old Next.js `/administrator` and `/vendor` route consolidation.
+- Validate SQL Server and SQLite migrations/queries. No tests, CI, staging or production checks have been run during this continuation.
