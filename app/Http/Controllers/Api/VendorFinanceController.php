@@ -52,6 +52,7 @@ class VendorFinanceController extends Controller
         $vendorId = (int) $request->user()->id;
 
         return DB::transaction(function () use ($vendorId, $data) {
+            DB::table('users')->where('id', $vendorId)->lockForUpdate()->first();
             $this->syncEarnedLedger($vendorId);
             $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'sale_credit')->sum('net_amount');
             $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $vendorId)->where('type', 'payout_debit')->sum('net_amount'));
