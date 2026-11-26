@@ -41,6 +41,7 @@ const Sidebar = () => {
                         <li className="nav-item"><NavLink to="/catalog" className={linkClass}>Brands & Categories</NavLink></li>
                         <li className="nav-item"><NavLink to="/marketplace-settings" className={linkClass}>Marketplace Settings</NavLink></li>
                         <li className="nav-item"><NavLink to="/catalog-settings" className={linkClass}>Attributes & Tags</NavLink></li>
+                        <li className="nav-item"><NavLink to="/reviews" className={linkClass}>Review Moderation</NavLink></li>
                         <li className="nav-item"><NavLink to="/support" className={linkClass}>Support Tickets</NavLink></li>
                         <li className="nav-item"><NavLink to="/notifications" className={linkClass}>Notifications</NavLink></li>
                         {roles.includes("super admin") ? (
