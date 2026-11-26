@@ -321,3 +321,8 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Added Vendor analytics with vendor-scoped paid sales, daily revenue, top products and fulfilment status reporting; all financial values remain separated by currency.
 - Added Admin payment transaction listing, simulated webhook event application and event history, with duplicate event IDs protected by transaction locking.
 - Corrected vendor finance summaries and payout requests to calculate and reserve balances per currency rather than mixing different currencies.
+
+### Implementation progress — customer reviews and notification preferences
+
+- Customer review submission now requires a delivered purchase; customers can list, edit and delete their own reviews, and edited reviews return to moderation.
+- Added per-user in-app notification preferences for orders, payments, shipping, refunds, returns, reviews, support, finance, catalog and marketing. Customer, Vendor and Admin notification centres expose the preference controls, and disabled categories are filtered from the in-app feed and unread count.
