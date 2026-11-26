@@ -19,6 +19,7 @@ import VendorFinancePage from "../pages/vendor/VendorFinancePage";
 import PayoutManagementPage from "../pages/finance/PayoutManagementPage";
 import SupportTicketsPage from "../pages/support/SupportTicketsPage";
 import VendorSupportPage from "../pages/vendor/VendorSupportPage";
+import NotificationsPage from "../pages/notifications/NotificationsPage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -33,6 +34,7 @@ export default function Router() {
                 <Route element={<ProtectedRoute roles={["Admin", "Super Admin"]}><DashboardLayout /></ProtectedRoute>}>
                     <Route index element={<Dashboard />} />
                     <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/customers" element={<CustomersPage />} />
                     <Route path="/users/create" element={<CreateUserPage />} />
@@ -46,6 +48,7 @@ export default function Router() {
 
                 <Route element={<ProtectedRoute roles={["Vendor"]}><DashboardLayout /></ProtectedRoute>}>
                     <Route path="/vendor" element={<VendorDashboard />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/vendor/products" element={<VendorProductsPage />} />
                     <Route path="/vendor/orders" element={<VendorOrdersPage />} />
                     <Route path="/vendor/store" element={<VendorStorePage />} />
