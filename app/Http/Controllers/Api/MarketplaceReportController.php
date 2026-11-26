@@ -13,8 +13,11 @@ class MarketplaceReportController extends Controller
     {
         $data = $request->validate([
             'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'to' => ['nullable', 'date'],
         ]);
+        if (!empty($data['from']) && !empty($data['to']) && $data['to'] < $data['from']) {
+            throw ValidationException::withMessages(['to' => ['The end date must be on or after the start date.']]);
+        }
         return [
             $data['from'] ?? now()->subDays(29)->toDateString(),
             $data['to'] ?? now()->toDateString(),
