@@ -154,6 +154,15 @@ class VendorFinanceController extends Controller
             $payout = DB::table('vendor_payout_requests')->where('id', $id)->lockForUpdate()->first();
             abort_unless($payout, 404, 'Payout request not found.');
             abort_unless($payout->status === 'approved', 409, 'Only approved payouts can be processed.');
+            DB::table('users')->where('id', $payout->vendor_id)->lockForUpdate()->first();
+
+            $credits = (float) DB::table('vendor_ledger_entries')->where('vendor_id', $payout->vendor_id)->where('currency', $payout->currency)->where('type', 'sale_credit')->sum('net_amount');
+            $debits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $payout->vendor_id)->where('currency', $payout->currency)->where('type', 'payout_debit')->sum('net_amount'));
+            $refundDebits = abs((float) DB::table('vendor_ledger_entries')->where('vendor_id', $payout->vendor_id)->where('currency', $payout->currency)->where('type', 'refund_debit')->sum('net_amount'));
+            $otherReserved = (float) DB::table('vendor_payout_requests')->where('vendor_id', $payout->vendor_id)->where('currency', $payout->currency)
+                ->whereIn('status', ['pending', 'approved'])->where('id', '<>', $id)->sum('amount');
+            $available = max(0, $credits - $debits - $refundDebits - $otherReserved);
+            abort_if((float) $payout->amount > $available, 409, 'Vendor available balance changed after approval. Review or reject this payout before processing.');
 
             $reference = 'BG-PAYOUT-' . Str::upper(Str::random(14));
             DB::table('vendor_ledger_entries')->insert([
