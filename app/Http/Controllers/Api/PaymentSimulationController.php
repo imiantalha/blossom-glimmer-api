@@ -316,6 +316,7 @@ class PaymentSimulationController extends Controller
                 if ($orderSubtotal <= 0 || $vendorRefundPool <= 0) continue;
                 $vendorId = (int) $orderItem->vendor_id;
                 if ($vendorId <= 0) continue;
+                DB::table('users')->where('id', $vendorId)->lockForUpdate()->first();
                 $profile = DB::table('vendor_profiles')->where('user_id', $vendorId)->whereNull('deleted_at')->first();
                 $commissionType = $profile->commission_type ?? 'percentage';
                 $commissionValue = max(0, (float) ($profile->commission_value ?? 0));
