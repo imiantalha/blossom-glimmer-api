@@ -386,6 +386,24 @@ class PaymentSimulationController extends Controller
         });
     }
 
+    public function adminTransactions(Request $request)
+    {
+        $query = DB::table('payment_transactions as p')
+            ->join('customer_orders as o', 'o.id', '=', 'p.order_id')
+            ->join('users as u', 'u.id', '=', 'p.user_id')
+            ->select('p.*', 'o.number as order_number', 'o.status as order_status', 'u.name as customer_name', 'u.email as customer_email');
+        if ($request->filled('status')) $query->where('p.status', $request->string('status')->toString());
+        if ($request->filled('search')) {
+            $term = '%' . trim((string) $request->input('search')) . '%';
+            $query->where(fn ($q) => $q->where('o.number', 'like', $term)->orWhere('p.reference', 'like', $term)->orWhere('u.email', 'like', $term));
+        }
+        $page = $query->orderByDesc('p.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Payment transactions retrieved.');
+    }
+
     public function webhookEvents(Request $request)
     {
         $query = DB::table('payment_webhook_events as e')
