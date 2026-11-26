@@ -203,6 +203,8 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.id', $orderId);
 
         $this->assertDatabaseCount('customer_orders', 2);
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['order_id' => $orderId, 'status' => 'pending']);
+        $this->assertGreaterThan(0, DB::table('vendor_order_fulfillment_items as fi')->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')->where('oi.order_id', $orderId)->count());
     }
 
     public function test_authenticated_customer_receives_a_persistent_empty_cart(): void
@@ -1536,6 +1538,54 @@ class StorefrontApiTest extends TestCase
 
         $this->actingAs($vendorA, 'sanctum')
             ->getJson('/api/v1/vendor/orders/99999999')
+            ->assertNotFound();
+    }
+
+
+    public function test_vendor_fulfilment_updates_are_isolated_and_cannot_regress(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+
+        $fulfillmentA = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendorA->id)->firstOrFail();
+        $fulfillmentB = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendorB->id)->first();
+
+        if (!$fulfillmentB) {
+            $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
+            $itemId = DB::table('customer_order_items')->insertGetId([
+                'order_id' => $order->id, 'product_id' => $productB->id,
+                'name' => $productB->name, 'product_slug' => $productB->slug,
+                'sku' => $productB->sku, 'quantity' => 1, 'unit_price' => 10,
+                'subtotal' => 10, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $fulfillmentBId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendorB->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('vendor_order_fulfillment_items')->insert([
+                'fulfillment_id' => $fulfillmentBId, 'order_item_id' => $itemId,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $fulfillmentB = DB::table('vendor_order_fulfillments')->find($fulfillmentBId);
+        }
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'processing'])
+            ->assertOk()
+            ->assertJsonPath('data.fulfillment.status', 'processing');
+
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentA->id, 'status' => 'processing']);
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentB->id, 'status' => 'pending']);
+
+        $this->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'pending'])
+            ->assertUnprocessable();
+
+        $this->actingAs($vendorB, 'sanctum')
+            ->patchJson('/api/v1/vendor/orders/99999999/fulfillment', ['status' => 'processing'])
             ->assertNotFound();
     }
 
