@@ -98,8 +98,59 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
 
             DB::table('refund_requests')->updateOrInsert(
                 ['order_id' => $orderId, 'user_id' => $customer->id],
-                ['amount' => min(10, $price), 'reason' => 'Demo return request for refund workflow verification.', 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]
+                ['amount' => min(10, $price), 'reason' => 'Demo refund request for refund workflow verification.', 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]
             );
+
+            // A second delivered order keeps the pending return scenario independent from the pending refund above.
+            $returnProduct = DB::table('products')->where('id', '<>', $product->id)->whereNotNull('vendor_id')
+                ->where('status', 'active')->orderBy('id')->first();
+            if ($returnProduct) {
+                $returnOrderId = DB::table('customer_orders')->where('number', 'BG-DEMO-1004')->value('id');
+                if (!$returnOrderId) {
+                    $returnPrice = (float) ($returnProduct->base_price ?? 25);
+                    $returnOrderId = DB::table('customer_orders')->insertGetId([
+                        'number' => 'BG-DEMO-1004', 'user_id' => $customer->id, 'address_id' => $addressId,
+                        'status' => 'delivered', 'payment_status' => 'paid', 'fulfillment_status' => 'delivered',
+                        'delivered_at' => now()->subDays(2), 'payment_method' => 'mock_card',
+                        'shipping_method_code' => 'standard', 'shipping_method_name' => 'Standard delivery',
+                        'shipping_estimated_delivery' => '3–7 business days', 'currency' => 'USD',
+                        'subtotal' => $returnPrice, 'discount' => 0, 'shipping' => 0, 'tax' => 0, 'total' => $returnPrice,
+                        'shipping_address' => json_encode([
+                            'firstName' => 'Demo', 'lastName' => 'Customer Two', 'address1' => '456 Demo Commerce Avenue',
+                            'city' => 'Lahore', 'state' => 'Punjab', 'postalCode' => '54000', 'country' => 'PK',
+                            'phone' => '+923001234568',
+                        ]),
+                        'created_at' => now()->subDays(5), 'updated_at' => now()->subDays(2),
+                    ]);
+                    $returnItemId = DB::table('customer_order_items')->insertGetId([
+                        'order_id' => $returnOrderId, 'product_id' => $returnProduct->id, 'name' => $returnProduct->name,
+                        'product_slug' => $returnProduct->slug, 'image_url' => data_get(json_decode($returnProduct->metadata ?? '[]', true) ?: [], 'images.0.url'),
+                        'sku' => $returnProduct->sku, 'quantity' => 1, 'unit_price' => $returnPrice, 'subtotal' => $returnPrice,
+                        'created_at' => now()->subDays(5), 'updated_at' => now()->subDays(5),
+                    ]);
+                    $returnFulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                        'order_id' => $returnOrderId, 'vendor_id' => $returnProduct->vendor_id, 'status' => 'delivered',
+                        'carrier' => 'Demo Logistics', 'tracking_number' => 'BG-DEMO-TRACK-1004',
+                        'tracking_url' => 'https://example.com/track/BG-DEMO-TRACK-1004',
+                        'shipped_at' => now()->subDays(3), 'delivered_at' => now()->subDays(2),
+                        'created_at' => now()->subDays(5), 'updated_at' => now()->subDays(2),
+                    ]);
+                    DB::table('vendor_order_fulfillment_items')->updateOrInsert(
+                        ['fulfillment_id' => $returnFulfillmentId, 'order_item_id' => $returnItemId],
+                        ['created_at' => now(), 'updated_at' => now()]
+                    );
+                } else {
+                    $returnItemId = DB::table('customer_order_items')->where('order_id', $returnOrderId)->value('id');
+                }
+                if ($returnItemId && !DB::table('return_requests')->where('order_item_id', $returnItemId)->whereIn('status', ['pending', 'approved', 'received', 'completed'])->exists()) {
+                    DB::table('return_requests')->insert([
+                        'order_id' => $returnOrderId, 'order_item_id' => $returnItemId, 'user_id' => $customer->id,
+                        'quantity' => 1, 'reason' => 'Demo return request for a damaged item.',
+                        'customer_note' => 'Please inspect the item and advise on the return.',
+                        'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
+            }
 
             DB::table('coupons')->updateOrInsert(
                 ['code' => 'WELCOME10'],
