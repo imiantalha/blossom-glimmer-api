@@ -103,7 +103,7 @@ class VendorProductController extends Controller
             'shippingProfile' => ['id' => $shippingProfileId, 'name' => $shippingProfile?->name ?? (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
             'images' => $images, 'variants' => $variants, 'attributes' => $productAttributes,
             'tags' => collect(data_get($product->metadata, 'tags', []))->map(fn ($tag, $index) => ['id' => (string) ($index + 1), 'name' => $tag])->values(),
-            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? '', 'value' => $item['value'] ?? '']),
+            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? $item['name'] ?? $item['label'] ?? '', 'value' => $item['value'] ?? '']),
             'faqs' => collect(data_get($product->metadata, 'faqs', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'question' => $item['question'] ?? '', 'answer' => $item['answer'] ?? '']), 'variantCount' => $variants->count(),
         ];
     }
