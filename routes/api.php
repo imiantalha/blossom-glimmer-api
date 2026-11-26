@@ -120,8 +120,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/reviews/{id}', [ReviewManagementController::class, 'review']);
             Route::get('admin/catalog-settings', [CatalogManagementController::class, 'catalogSettings']);
             Route::post('admin/attributes', [CatalogManagementController::class, 'storeAttribute']);
+            Route::patch('admin/attributes/{id}', [CatalogManagementController::class, 'updateAttribute']);
             Route::patch('admin/attributes/{id}/status', [CatalogManagementController::class, 'updateAttributeStatus']);
             Route::post('admin/tags', [CatalogManagementController::class, 'storeTag']);
+            Route::patch('admin/tags/{id}', [CatalogManagementController::class, 'updateTag']);
             Route::patch('admin/tags/{id}/status', [CatalogManagementController::class, 'updateTagStatus']);
             Route::get('admin/catalog-requests', [CatalogRequestController::class, 'adminIndex']);
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
