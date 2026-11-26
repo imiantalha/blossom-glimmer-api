@@ -109,3 +109,11 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - End-to-end role/permission and ownership-isolation test matrix, API contract tests, malformed-payload UI tests, browser scenarios and seeded multi-role demo data.
 - Verify all route/service contracts in both repositories, including old Next.js `/administrator` and `/vendor` route consolidation.
 - Validate SQL Server and SQLite migrations/queries. No tests, CI, staging or production checks have been run during this continuation.
+
+## Follow-up after Actions were disabled — 2026-11-26
+
+- Corrected the doubled namespace/import separators in `VendorDashboardController.php` that caused the earlier PHP parse failure.
+- Corrected the legacy admin shipment controller guard to allow both Admin and Super Admin, matching the route group's role policy.
+- Re-inspected the newly added PHP controllers and the main new migrations for the same doubled-backslash syntax issue; no further occurrences were found in the inspected files.
+- GitHub Actions remain disabled per the repository owner's confirmation. No workflow was dispatched. The latest backend commit has no status checks because CI is disabled; this is not a passing test result.
+- The feature branches are still not release-ready: payment transaction simulation, refunds/returns, vendor ledger/payouts, notifications, support tickets, remaining vendor/admin screens, demo fixtures and the full local browser/security test matrix remain outstanding. Do not merge or deploy on the basis of these syntax/RBAC corrections alone.
