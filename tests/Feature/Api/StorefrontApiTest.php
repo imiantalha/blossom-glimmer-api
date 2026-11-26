@@ -771,6 +771,11 @@ class StorefrontApiTest extends TestCase
 
         $this->assertNotNull($orderId);
 
+        // Exercise the legacy single-shipment workflow only for an order that
+        // has no vendor-specific fulfilment records. Marketplace orders with
+        // vendor fulfilments are covered by the isolation regression test.
+        DB::table('vendor_order_fulfillments')->where('order_id', $orderId)->delete();
+
         $this->actingAs($customer, 'sanctum')
             ->postJson('/api/v1/admin/orders/' . $orderId . '/shipment', [
                 'status' => 'in_transit',
@@ -1715,7 +1720,7 @@ class StorefrontApiTest extends TestCase
         $created = User::where('email', 'new-vendor-account@gmail.com')->firstOrFail();
         $this->assertTrue($created->hasRole('Vendor'));
 
-        $this->getJson('/api/v1/admin/users')
+        $this->getJson('/api/v1/admin/users?search=new-vendor-account@gmail.com')
             ->assertOk()
             ->assertJsonFragment(['email' => 'new-vendor-account@gmail.com', 'role' => 'vendor']);
     }
