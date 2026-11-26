@@ -16,7 +16,7 @@ const money = (value, currency = "USD") => new Intl.NumberFormat(undefined, {
 export default function CustomersPage() {
     const { user } = useAuth();
     const roles = (user?.roles || []).map((role) => typeof role === "string" ? role.toLowerCase() : role.name?.toLowerCase());
-    const isAdmin = roles.includes("admin") || user?.role?.toLowerCase() === "admin";
+    const isAdmin = roles.includes("admin") || roles.includes("super admin") || ["admin", "super admin"].includes(user?.role?.toLowerCase());
     const [customers, setCustomers] = useState([]);
     const [pagination, setPagination] = useState(null);
     const [search, setSearch] = useState("");
@@ -32,11 +32,12 @@ export default function CustomersPage() {
             setLoading(true);
             setError("");
             try {
-                const response = await api.get("/v1/admin/customers", {
+                const response = await api.get("/admin/customers", {
                     params: { search: search || undefined, page, per_page: 20 },
                 });
                 if (!active) return;
-                setCustomers(response.data.data || []);
+                if (!response?.data?.success || !Array.isArray(response?.data?.data)) throw new Error("The server returned an unexpected customer list format.");
+                setCustomers(response.data.data);
                 setPagination(response.data.pagination || null);
             } catch (exception) {
                 if (active) setError(exception.response?.data?.message || "Unable to load customers.");
@@ -51,7 +52,8 @@ export default function CustomersPage() {
         setSelected(customer);
         setDetail(null);
         try {
-            const response = await api.get(`/v1/admin/customers/${encodeURIComponent(customer.id)}`);
+            const response = await api.get(`/admin/customers/${encodeURIComponent(customer.id)}`);
+            if (!response?.data?.success || !response?.data?.data || typeof response.data.data !== "object") throw new Error("The server returned an unexpected customer detail format.");
             setDetail(response.data.data);
         } catch (exception) {
             setError(exception.response?.data?.message || "Unable to load customer purchase history.");
