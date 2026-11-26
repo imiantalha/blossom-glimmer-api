@@ -21,6 +21,7 @@ const Sidebar = () => {
                     <li className="nav-item"><NavLink to="/vendor/store" className={linkClass}>Store Profile</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/finance" className={linkClass}>Earnings & Payouts</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/support" className={linkClass}>Support</NavLink></li>
+                    <li className="nav-item"><NavLink to="/vendor/reviews" className={linkClass}>Product Reviews</NavLink></li>
                     <li className="nav-item"><NavLink to="/notifications" className={linkClass}>Notifications</NavLink></li>
                 ) : null}
                 {isAdmin ? (
