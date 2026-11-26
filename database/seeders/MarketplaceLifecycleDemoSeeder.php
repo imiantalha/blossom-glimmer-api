@@ -117,6 +117,24 @@ class MarketplaceLifecycleDemoSeeder extends Seeder
                 ]);
             }
 
+            if ($vendor) {
+                $vendorTicketId = DB::table('support_tickets')->where('number', 'BG-SUP-DEMO-VENDOR-1001')->value('id');
+                if (!$vendorTicketId) {
+                    $vendorTicketId = DB::table('support_tickets')->insertGetId([
+                        'number' => 'BG-SUP-DEMO-VENDOR-1001', 'user_id' => $vendor->id,
+                        'subject' => 'Question about vendor payouts', 'category' => 'payment',
+                        'priority' => 'high', 'status' => 'open',
+                        'message' => 'This seeded vendor ticket verifies vendor support and admin assignment workflows.',
+                        'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                    ]);
+                    DB::table('support_ticket_messages')->insert([
+                        'ticket_id' => $vendorTicketId, 'user_id' => $vendor->id,
+                        'message' => 'This seeded vendor ticket verifies vendor support and admin assignment workflows.',
+                        'internal_note' => false, 'created_at' => now()->subHours(2), 'updated_at' => now()->subHours(2),
+                    ]);
+                }
+            }
+
             DB::table('marketplace_notifications')->updateOrInsert(
                 ['user_id' => $customer->id, 'type' => 'demo.order.delivered', 'title' => 'Demo order delivered'],
                 ['message' => 'Your demo order BG-DEMO-1002 has been delivered.', 'action_url' => '/account/orders/' . $orderId,
