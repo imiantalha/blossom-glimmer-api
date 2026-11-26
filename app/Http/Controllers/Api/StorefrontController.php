@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Brand;
 use App\Constants\Role;
@@ -758,6 +759,47 @@ class StorefrontController extends Controller
             }
             throw $exception;
         }
+        // Record the purchase against the order and each purchased product so
+        // admins can trace customer buying activity independently of HTTP logs.
+        AuditLog::create([
+            'actor_user_id' => $userId,
+            'actor_role' => 'Customer',
+            'action' => 'order.placed',
+            'method' => 'POST',
+            'path' => 'api/v1/orders',
+            'subject_type' => 'CustomerOrder',
+            'subject_id' => (string) $order->id,
+            'status_code' => 201,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => [
+                'order_number' => $order->number,
+                'currency' => $order->currency,
+                'total' => (float) $order->total,
+                'payment_method' => $order->payment_method,
+            ],
+        ]);
+
+        foreach ($items as $item) {
+            AuditLog::create([
+                'actor_user_id' => $userId,
+                'actor_role' => 'Customer',
+                'action' => 'product.purchased',
+                'method' => 'POST',
+                'path' => 'api/v1/orders',
+                'subject_type' => 'Product',
+                'subject_id' => (string) $item->product_id,
+                'status_code' => 201,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => [
+                    'order_id' => (int) $order->id,
+                    'quantity' => (int) $item->quantity,
+                    'order_number' => $order->number,
+                ],
+            ]);
+        }
+
         return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
