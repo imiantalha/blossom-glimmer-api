@@ -344,3 +344,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Vendor dashboard and analytics revenue figures now reflect proportional coupon discounts and are filtered to paid orders; dashboard sales remain grouped by currency.
 
 - Vendor finance UI now exposes refund adjustments and any outstanding balance due, alongside available funds and payout reservations.
+
+- Return-linked refund ledger reversals are scoped to the returned order item and its owning vendor; general order refunds continue to allocate product-value adjustments proportionally across all vendors.
