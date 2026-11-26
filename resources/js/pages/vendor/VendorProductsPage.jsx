@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
 
 const blankVariant = () => ({ sku: "", price: "", salePrice: "", stockQuantity: "0", weight: "1", length: "1", width: "1", height: "1", label: "Default", attributeValues: [], images: [] });
-const blankForm = () => ({ id: null, name: "", slug: "", brandId: "", categoryId: "", productType: "Simple", shippingProfileId: "", shortDescription: "", fullDescription: "", featuredImageUrl: "", featuredImageAlt: "", tags: "", intent: "draft", variants: [blankVariant()] });
+const blankForm = () => ({ id: null, name: "", slug: "", brandId: "", categoryId: "", productType: "Simple", shippingProfileId: "", shortDescription: "", fullDescription: "", featuredImageUrl: "", featuredImageAlt: "", tags: "", attributes: [], intent: "draft", variants: [blankVariant()] });
 
 export default function VendorProductsPage() {
     const [products, setProducts] = useState([]);
@@ -32,14 +32,38 @@ export default function VendorProductsPage() {
 
     const change = (key, value) => setForm(current => ({ ...current, [key]: value }));
     const changeVariant = (index, key, value) => setForm(current => ({ ...current, variants: current.variants.map((variant, i) => i === index ? { ...variant, [key]: value } : variant) }));
+    const toggleAttribute = (attribute, checked) => setForm(current => {
+        const defaultValue = attribute.values?.[0]?.value ?? "";
+        const attributes = checked
+            ? [...current.attributes, { name: attribute.name, values: [{ value: defaultValue }] }]
+            : current.attributes.filter(item => item.name !== attribute.name);
+        const variants = current.variants.map(variant => ({
+            ...variant,
+            attributeValues: checked
+                ? [...(variant.attributeValues ?? []), { attributeName: attribute.name, value: defaultValue }]
+                : (variant.attributeValues ?? []).filter(item => item.attributeName !== attribute.name),
+        }));
+        return { ...current, attributes, variants };
+    });
+    const changeVariantAttribute = (index, attributeName, value) => setForm(current => ({
+        ...current,
+        variants: current.variants.map((variant, i) => i === index ? {
+            ...variant,
+            attributeValues: [...(variant.attributeValues ?? []).filter(item => item.attributeName !== attributeName), { attributeName, value }],
+        } : variant),
+    }));
     const startCreate = () => { setForm({ ...blankForm(), brandId: String(options.brands?.[0]?.id ?? ""), categoryId: String(options.categories?.[0]?.id ?? ""), shippingProfileId: String(options.shippingProfiles?.[0]?.id ?? "") }); setEditing(true); setMessage(""); setError(""); };
     const startEdit = (product) => {
         const firstImage = product.images?.[0] ?? {};
+        const selectedAttributes = (product.attributes ?? []).map(attribute => ({
+            name: attribute.attributeName,
+            values: (attribute.values ?? []).map(value => ({ value: typeof value === "string" ? value : value.value })),
+        }));
         const variants = (product.variants ?? []).map(v => ({
             sku: v.sku ?? "", price: String(v.price ?? ""), salePrice: String(v.salePrice ?? ""),
             stockQuantity: String(v.stockQuantity ?? v.inventory ?? 0), weight: String(v.weight ?? 1),
             length: String(v.length ?? 1), width: String(v.width ?? 1), height: String(v.height ?? 1),
-            label: v.label ?? "Default", attributeValues: v.attributeValues ?? [], images: v.images ?? [],
+            label: v.label ?? "Default", attributeValues: (v.attributeValues ?? []).map(value => ({ attributeName: value.attributeName, value: value.attributeValue ?? value.value })), images: v.images ?? [],
         }));
         setForm({
             ...blankForm(), id: product.id, name: product.name ?? "", slug: product.slug ?? "",
@@ -47,7 +71,7 @@ export default function VendorProductsPage() {
             productType: String(product.productTypeId ?? "simple").toLowerCase() === "variable" ? "Variable" : "Simple",
             shippingProfileId: String(product.shippingProfileId ?? ""), shortDescription: product.shortDescription ?? "",
             fullDescription: product.description ?? "", featuredImageUrl: firstImage.url ?? "", featuredImageAlt: firstImage.altText ?? "",
-            tags: (product.tags ?? []).map(t => t.name).join(", "), intent: "draft",
+            tags: (product.tags ?? []).map(t => t.name).join(", "), attributes: selectedAttributes, intent: "draft",
             variants: variants.length ? variants : [blankVariant()],
         });
         setEditing(true); setMessage(""); setError("");
@@ -56,6 +80,11 @@ export default function VendorProductsPage() {
     async function save(event) {
         event.preventDefault(); setSaving(true); setError(""); setMessage("");
         const submitIntent = event.nativeEvent?.submitter?.value === "submit" ? "submit" : "draft";
+        if (form.productType === "Variable" && form.attributes.length === 0) {
+            setError("Select at least one approved variant attribute before creating a variable product.");
+            setSaving(false);
+            return;
+        }
         const payload = {
             name: form.name.trim(), slug: form.slug.trim() || undefined,
             brandId: Number(form.brandId), categoryId: Number(form.categoryId),
@@ -63,7 +92,7 @@ export default function VendorProductsPage() {
             shortDescription: form.shortDescription, fullDescription: form.fullDescription,
             tags: form.tags.split(",").map(tag => tag.trim()).filter(Boolean),
             media: { featuredImage: { url: form.featuredImageUrl.trim(), altText: form.featuredImageAlt.trim() || null }, galleryImages: [] },
-            attributes: [],
+            attributes: form.productType === "Variable" ? form.attributes : [],
             variants: form.variants.map((v, index) => ({
                 sku: v.sku.trim(), price: Number(v.price), salePrice: v.salePrice === "" ? null : Number(v.salePrice),
                 stockQuantity: Number(v.stockQuantity), weight: Number(v.weight), length: Number(v.length),
@@ -124,6 +153,7 @@ export default function VendorProductsPage() {
                     <div className="col-md-4"><label className="form-label" htmlFor="product-category">Category</label><select id="product-category" className="form-select" value={form.categoryId} onChange={e=>change("categoryId",e.target.value)} required><option value="">Select category</option>{options.categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
                     <div className="col-md-4"><label className="form-label" htmlFor="product-shipping">Shipping profile</label><select id="product-shipping" className="form-select" value={form.shippingProfileId} onChange={e=>change("shippingProfileId",e.target.value)} required><option value="">Select shipping</option>{options.shippingProfiles.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
                     <div className="col-md-4"><label className="form-label" htmlFor="product-type">Product type</label><select id="product-type" className="form-select" value={form.productType} onChange={e=>change("productType",e.target.value)}><option value="Simple">Simple</option><option value="Variable">Variable</option></select></div>
+                    {form.productType === "Variable" ? <div className="col-12"><label className="form-label d-block">Variant attributes</label><div className="d-flex flex-wrap gap-3">{(options.attributes ?? []).map(attribute=><label className="form-check-label" key={attribute.id}><input type="checkbox" className="form-check-input me-2" checked={form.attributes.some(item=>item.name===attribute.name)} onChange={event=>toggleAttribute(attribute,event.target.checked)}/>{attribute.name}</label>)}</div><small className="text-muted">Choose approved options such as size, color or material. Set a value for each variant below.</small></div> : null}
                     <div className="col-md-8"><label className="form-label" htmlFor="product-tags">Approved tags (comma separated)</label><input id="product-tags" className="form-control" value={form.tags} onChange={e=>change("tags",e.target.value)} placeholder="e.g. organic, handmade" /></div>
                     <div className="col-md-8"><label className="form-label" htmlFor="product-image">Featured image URL</label><input id="product-image" type="url" className="form-control" value={form.featuredImageUrl} onChange={e=>change("featuredImageUrl",e.target.value)} required /></div>
                     <div className="col-md-4"><label className="form-label" htmlFor="product-image-alt">Image alt text</label><input id="product-image-alt" className="form-control" value={form.featuredImageAlt} onChange={e=>change("featuredImageAlt",e.target.value)} /></div>
@@ -137,6 +167,11 @@ export default function VendorProductsPage() {
                     <div className="col-md-2"><label className="form-label">Sale price</label><input type="number" min="0.01" step="0.01" className="form-control" value={variant.salePrice} onChange={e=>changeVariant(index,"salePrice",e.target.value)} /></div>
                     <div className="col-md-2"><label className="form-label">Stock</label><input type="number" min="0" step="1" className="form-control" value={variant.stockQuantity} onChange={e=>changeVariant(index,"stockQuantity",e.target.value)} required /></div>
                     <div className="col-md-3"><label className="form-label">Variant label</label><input className="form-control" value={variant.label} onChange={e=>changeVariant(index,"label",e.target.value)} /></div>
+                    {form.productType === "Variable" ? form.attributes.map(attribute => {
+                        const option = (options.attributes ?? []).find(item => item.name === attribute.name);
+                        const currentValue = variant.attributeValues?.find(item => item.attributeName === attribute.name)?.value ?? "";
+                        return <div className="col-md-3" key={attribute.name}><label className="form-label">{attribute.name}</label><select className="form-select" value={currentValue} onChange={e=>changeVariantAttribute(index,attribute.name,e.target.value)} required><option value="">Select {attribute.name}</option>{(option?.values ?? []).map(value=><option key={value.id} value={value.value}>{value.value}</option>)}</select></div>;
+                    }) : null}
                     {["weight","length","width","height"].map(key=><div className="col-3 col-md-2" key={key}><label className="form-label text-capitalize">{key}</label><input type="number" min="0" step="0.01" className="form-control" value={variant[key]} onChange={e=>changeVariant(index,key,e.target.value)} required /></div>)}
                 </div></div>)}
                 <div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button type="button" className="btn btn-outline-secondary" onClick={()=>setEditing(false)}>Cancel</button><button type="submit" name="intent" value="draft" className="btn btn-outline-primary" disabled={saving}>{saving?"Saving…":"Save draft"}</button><button type="submit" name="intent" value="submit" className="btn btn-primary" disabled={saving}>Submit for approval</button></div>
