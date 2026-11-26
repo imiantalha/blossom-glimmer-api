@@ -247,26 +247,27 @@ class PaymentSimulationController extends Controller
             'admin_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $refund = DB::table('refund_requests')->where('id', $id)->first();
-        abort_unless($refund, 404, 'Refund request not found.');
-        abort_unless($refund->status === 'pending', 409, 'Only pending refund requests can be reviewed.');
+        return DB::transaction(function () use ($request, $id, $data) {
+            $refund = DB::table('refund_requests')->where('id', $id)->lockForUpdate()->first();
+            abort_unless($refund, 404, 'Refund request not found.');
+            abort_unless($refund->status === 'pending', 409, 'Only pending refund requests can be reviewed.');
 
-        DB::table('refund_requests')->where('id', $id)->update([
-            'status' => $data['decision'] === 'approve' ? 'approved' : 'rejected',
-            'reviewed_by' => $request->user()->id,
-            'admin_note' => $data['admin_note'] ?? null,
-            'reviewed_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('marketplace_notifications')->insert([
-            'user_id' => $refund->user_id, 'type' => 'refund.' . $data['decision'],
-            'title' => $data['decision'] === 'approve' ? 'Refund approved' : 'Refund request declined',
-            'message' => $data['decision'] === 'approve' ? 'Your refund request has been approved and is awaiting simulated processing.' : 'Your refund request was declined. Please review your order or contact support.',
-            'action_url' => '/account/refunds', 'data' => json_encode(['refund_id' => $id, 'order_id' => $refund->order_id]),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-        return ApiResponse::successResponse(DB::table('refund_requests')->where('id', $id)->first(), 'Refund decision recorded.');
+            DB::table('refund_requests')->where('id', $id)->update([
+                'status' => $data['decision'] === 'approve' ? 'approved' : 'rejected',
+                'reviewed_by' => $request->user()->id,
+                'admin_note' => $data['admin_note'] ?? null,
+                'reviewed_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $refund->user_id, 'type' => 'refund.' . $data['decision'],
+                'title' => $data['decision'] === 'approve' ? 'Refund approved' : 'Refund request declined',
+                'message' => $data['decision'] === 'approve' ? 'Your refund request has been approved and is awaiting simulated processing.' : 'Your refund request was declined. Please review your order or contact support.',
+                'action_url' => '/account/refunds', 'data' => json_encode(['refund_id' => $id, 'order_id' => $refund->order_id]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            return ApiResponse::successResponse(DB::table('refund_requests')->where('id', $id)->first(), 'Refund decision recorded.');
+        });
     }
 
     public function processRefund(int $id)
