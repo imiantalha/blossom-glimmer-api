@@ -29,6 +29,7 @@ import AdminStoresPage from "../pages/stores/AdminStoresPage";
 import CatalogManagementPage from "../pages/catalog/CatalogManagementPage";
 import MarketplaceSettingsPage from "../pages/catalog/MarketplaceSettingsPage";
 import CatalogSettingsPage from "../pages/catalog/CatalogSettingsPage";
+import AdminReviewsPage from "../pages/reviews/AdminReviewsPage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -58,6 +59,7 @@ export default function Router() {
                     <Route path="/catalog" element={<CatalogManagementPage />} />
                     <Route path="/marketplace-settings" element={<MarketplaceSettingsPage />} />
                     <Route path="/catalog-settings" element={<CatalogSettingsPage />} />
+                    <Route path="/reviews" element={<AdminReviewsPage />} />
                     <Route path="/support" element={<SupportTicketsPage />} />
                     <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
                     <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
