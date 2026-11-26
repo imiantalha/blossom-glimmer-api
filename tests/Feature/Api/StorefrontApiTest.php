@@ -1548,25 +1548,20 @@ class StorefrontApiTest extends TestCase
         $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
 
         $fulfillmentA = DB::table('vendor_order_fulfillments')
-            ->where('order_id', $order->id)->where('vendor_id', $vendorA->id)->firstOrFail();
+            ->where('order_id', $order->id)->where('vendor_id', $vendorA->id)->first();
+        if (!$fulfillmentA) {
+            $fulfillmentAId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendorA->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $fulfillmentA = DB::table('vendor_order_fulfillments')->find($fulfillmentAId);
+        }
         $fulfillmentB = DB::table('vendor_order_fulfillments')
             ->where('order_id', $order->id)->where('vendor_id', $vendorB->id)->first();
-
         if (!$fulfillmentB) {
-            $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
-            $itemId = DB::table('customer_order_items')->insertGetId([
-                'order_id' => $order->id, 'product_id' => $productB->id,
-                'name' => $productB->name, 'product_slug' => $productB->slug,
-                'sku' => $productB->sku, 'quantity' => 1, 'unit_price' => 10,
-                'subtotal' => 10, 'created_at' => now(), 'updated_at' => now(),
-            ]);
             $fulfillmentBId = DB::table('vendor_order_fulfillments')->insertGetId([
                 'order_id' => $order->id, 'vendor_id' => $vendorB->id,
                 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
-            ]);
-            DB::table('vendor_order_fulfillment_items')->insert([
-                'fulfillment_id' => $fulfillmentBId, 'order_item_id' => $itemId,
-                'created_at' => now(), 'updated_at' => now(),
             ]);
             $fulfillmentB = DB::table('vendor_order_fulfillments')->find($fulfillmentBId);
         }
@@ -1586,7 +1581,6 @@ class StorefrontApiTest extends TestCase
             ->patchJson('/api/v1/vendor/orders/99999999/fulfillment', ['status' => 'processing'])
             ->assertNotFound();
     }
-
 
     public function test_admin_can_list_and_view_all_customer_orders_but_vendor_cannot_access_admin_order_api(): void
     {
