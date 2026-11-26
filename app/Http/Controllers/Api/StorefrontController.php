@@ -1185,7 +1185,7 @@ class StorefrontController extends Controller
             'message' => $data['status'] === 'active'
                 ? 'Your store "' . $profile->name . '" is active and can sell approved products.'
                 : 'Your store "' . $profile->name . '" status is now ' . $data['status'] . '.',
-            'action_url' => '/vendor/store',
+            'action_url' => '/vendor/store/settings',
             'data' => json_encode(['store_id' => $id, 'status' => $data['status']]),
             'created_at' => now(), 'updated_at' => now(),
         ]);
