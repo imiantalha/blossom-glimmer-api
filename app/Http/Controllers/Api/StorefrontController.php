@@ -671,7 +671,7 @@ class StorefrontController extends Controller
 
     public function createOrder(Request $request)
     {
-        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod,mock_card,mock_wallet', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:2000']);
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod,mock_card,mock_wallet', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'coupon_code' => 'nullable|string|max:60', 'notes' => 'nullable|string|max:2000']);
         $userId = $request->user()->id;
         if ($data['payment_method'] === 'cod') abort_unless(config('storefront.cash_on_delivery'), 422, 'Cash on delivery is not enabled.');
         $idempotencyKey = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
@@ -719,9 +719,34 @@ class StorefrontController extends Controller
                 $subtotal += $line;
                 $lines[] = ['item' => $item, 'product' => $product, 'variant' => $variant, 'price' => $price, 'subtotal' => $line, 'inventory' => $inventory];
             }
+            $couponId = null;
+            $discount = 0.0;
+            if (!empty($data['coupon_code'])) {
+                $coupon = DB::table('coupons')->where('code', strtoupper(trim($data['coupon_code'])))->lockForUpdate()->first();
+                abort_unless($coupon && $coupon->is_active, 422, 'This coupon is invalid or inactive.');
+                abort_if($coupon->starts_at && now()->lt($coupon->starts_at), 422, 'This coupon is not active yet.');
+                abort_if($coupon->ends_at && now()->gt($coupon->ends_at), 422, 'This coupon has expired.');
+                abort_if($subtotal < (float) $coupon->minimum_subtotal, 422, 'Your cart does not meet the minimum subtotal for this coupon.');
+                abort_if($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit, 422, 'This coupon has reached its usage limit.');
+                $userUses = DB::table('coupon_redemptions')->where('coupon_id', $coupon->id)->where('user_id', $userId)->count();
+                abort_if($userUses >= (int) $coupon->per_user_limit, 422, 'You have already used this coupon the maximum number of times.');
+                $discount = $coupon->discount_type === 'percentage'
+                    ? $subtotal * min(100, (float) $coupon->discount_value) / 100
+                    : min($subtotal, (float) $coupon->discount_value);
+                if ($coupon->maximum_discount !== null) $discount = min($discount, (float) $coupon->maximum_discount);
+                $discount = round(min($subtotal, max(0, $discount)), 2);
+                $couponId = $coupon->id;
+                DB::table('coupons')->where('id', $couponId)->increment('usage_count');
+            }
             $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
             $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
-            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'address_id' => $address->id, 'status' => $data['payment_method'] === 'cod' ? 'confirmed' : 'pending', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => $data['payment_method'], 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'coupon_id' => $couponId, 'address_id' => $address->id, 'status' => $data['payment_method'] === 'cod' ? 'confirmed' : 'pending', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => $data['payment_method'], 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => $discount, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => max(0, $subtotal - $discount) + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            if ($couponId) {
+                DB::table('coupon_redemptions')->insert([
+                    'coupon_id' => $couponId, 'user_id' => $userId, 'order_id' => $id,
+                    'discount_amount' => $discount, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
             $fulfillmentItemsByVendor = [];
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
