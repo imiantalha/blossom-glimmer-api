@@ -77,6 +77,17 @@ class PaymentSimulationController extends Controller
     {
         $data = $request->validate(['outcome' => ['required', 'in:success,failure,pending']]);
         return DB::transaction(function () use ($request, $id, $data) {
+            $initial = DB::table('payment_transactions')
+                ->where('id', $id)
+                ->where('user_id', $request->user()->id)
+                ->first();
+            abort_unless($initial, 404, 'Payment attempt not found.');
+
+            // Lock the order before the payment row, matching the cancellation lock order.
+            $order = DB::table('customer_orders')->where('id', $initial->order_id)->lockForUpdate()->first();
+            abort_unless($order, 404, 'Order not found.');
+            abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 409, 'This order can no longer accept a payment result.');
+
             $transaction = DB::table('payment_transactions')
                 ->where('id', $id)
                 ->where('user_id', $request->user()->id)
@@ -120,14 +131,13 @@ class PaymentSimulationController extends Controller
             }
 
             if (in_array($status, ['succeeded', 'failed'], true)) {
-                $order = DB::table('customer_orders')->where('id', $transaction->order_id)->first();
                 DB::table('marketplace_notifications')->insert([
                     'user_id' => $transaction->user_id,
                     'type' => 'payment.' . $status,
                     'title' => $status === 'succeeded' ? 'Payment confirmed' : 'Payment failed',
                     'message' => $status === 'succeeded'
-                        ? 'Payment for order ' . ($order->number ?? $transaction->order_id) . ' was confirmed.'
-                        : 'Payment for order ' . ($order->number ?? $transaction->order_id) . ' failed. You can retry from your order details.',
+                        ? 'Payment for order ' . $order->number . ' was confirmed.'
+                        : 'Payment for order ' . $order->number . ' failed. You can retry from your order details.',
                     'action_url' => '/account/orders/' . $transaction->order_id,
                     'data' => json_encode(['order_id' => $transaction->order_id, 'transaction_id' => $id]),
                     'created_at' => now(), 'updated_at' => now(),
