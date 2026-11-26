@@ -45,7 +45,7 @@ class UserService
             // newly created admins, vendors and customers receive the intended
             // authorization boundary instead of silently becoming role-less.
             $role = $data['role'] ?? null;
-            unset($data['role']);
+            unset($data['role'], $data['password_confirmation']);
 
             // Create user
             $user = $this->userRepository->create($data);
@@ -76,7 +76,7 @@ class UserService
             // Extract role
             $roles = $data['role'] ?? null;
 
-            unset($data['role']);
+            unset($data['role'], $data['password_confirmation']);
 
             // Update user
             $user = $this->userRepository->update($user, $data);
