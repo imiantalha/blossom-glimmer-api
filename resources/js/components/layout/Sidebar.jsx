@@ -15,6 +15,7 @@ const Sidebar = () => {
             <h4 className="py-3 text-center">Blossom</h4>
             <ul className="nav flex-column">
                 {isVendor ? (
+                    <>
                     <li className="nav-item"><NavLink to="/vendor" end className={linkClass}>Vendor Dashboard</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/products" className={linkClass}>My Products</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/orders" className={linkClass}>My Orders</NavLink></li>
@@ -23,6 +24,7 @@ const Sidebar = () => {
                     <li className="nav-item"><NavLink to="/vendor/support" className={linkClass}>Support</NavLink></li>
                     <li className="nav-item"><NavLink to="/vendor/reviews" className={linkClass}>Product Reviews</NavLink></li>
                     <li className="nav-item"><NavLink to="/notifications" className={linkClass}>Notifications</NavLink></li>
+                    </>
                 ) : null}
                 {isAdmin ? (
                     <>
