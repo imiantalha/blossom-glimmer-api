@@ -1736,6 +1736,11 @@ class StorefrontApiTest extends TestCase
             'role' => 'Admin',
             'is_active' => false,
         ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/users/' . $admin->id, [
+            'role' => 'Vendor',
+            'is_active' => true,
+        ])->assertUnprocessable();
     }
 
 
