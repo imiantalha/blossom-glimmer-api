@@ -328,3 +328,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Added per-user in-app notification preferences for orders, payments, shipping, refunds, returns, reviews, support, finance, catalog and marketing. Customer, Vendor and Admin notification centres expose the preference controls, and disabled categories are filtered from the in-app feed and unread count.
 
 - Extended the lifecycle demo seeder with a second independent delivered order and pending item-level return request, so return approval/completion can be exercised without colliding with the separate pending refund scenario.
+
+- Refund processing now creates idempotent vendor-ledger reversal entries allocated across order items after discount allocation; affected vendors are notified, and refunded amounts reduce currency-specific available payout balances. Full/partial-refunded orders remain eligible for ledger reconciliation.
