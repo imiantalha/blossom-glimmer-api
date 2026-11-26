@@ -7,12 +7,16 @@ import Button from "../../components/common/form/Button";
 import DataTable from "../../components/common/data-display/DataTable";
 import Pagination from "../../components/common/navigation/Pagination";
 import Alert from "../../components/common/feedback/Alert";
+import useAuth from "../../hooks/useAuth";
 
 const money = (value, currency = "USD") => new Intl.NumberFormat(undefined, {
     style: "currency", currency,
 }).format(Number(value || 0));
 
 export default function CustomersPage() {
+    const { user } = useAuth();
+    const roles = (user?.roles || []).map((role) => typeof role === "string" ? role.toLowerCase() : role.name?.toLowerCase());
+    const isAdmin = roles.includes("admin") || user?.role?.toLowerCase() === "admin";
     const [customers, setCustomers] = useState([]);
     const [pagination, setPagination] = useState(null);
     const [search, setSearch] = useState("");
@@ -63,6 +67,8 @@ export default function CustomersPage() {
         { key: "isActive", label: "Account", render: (row) => row.isActive ? "Active" : "Disabled" },
         { key: "actions", label: "Details", render: (row) => <Button size="sm" onClick={() => openCustomer(row)}>View</Button> },
     ];
+
+    if (!isAdmin) return <Alert variant="danger" message="You do not have permission to view customer records." />;
 
     return (
         <>
