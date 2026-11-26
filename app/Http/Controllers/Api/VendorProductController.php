@@ -484,6 +484,45 @@ class VendorProductController extends Controller
         return ApiResponse::successResponse($this->adminPayload(Product::findOrFail($id)), 'Product retrieved.');
     }
 
+    public function updateAdminProduct(Request $request, int $id)
+    {
+        $product = Product::findOrFail($id);
+        abort_if($product->status === 'archived', 422, 'Archived products must be restored before editing.');
+
+        $data = $this->validateProduct($request, $product->id);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if(Product::where('slug', $slug)->where('id', '<>', $product->id)->exists(), 422, 'This product URL is already taken.');
+
+        $type = strtolower($data['productType']) === 'variable' ? 'variable' : 'simple';
+        $prices = collect($data['variants'])->map(fn ($variant) => (float) ($variant['salePrice'] ?? $variant['price']));
+        $metadata = $this->metadata($data, 'draft');
+        $existingMetadata = $product->metadata ?? [];
+        $approval = strtolower((string) ($existingMetadata['approvalStatus'] ?? ($product->status === 'active' ? 'approved' : 'pending')));
+        $metadata['approvalStatus'] = $approval;
+        if (!empty($existingMetadata['rejectionReason'])) {
+            $metadata['rejectionReason'] = $existingMetadata['rejectionReason'];
+        }
+
+        DB::transaction(function () use ($product, $data, $slug, $type, $prices, $metadata) {
+            $product->update([
+                'brand_id' => $data['brandId'],
+                'name' => $data['name'],
+                'slug' => $slug,
+                'type' => $type,
+                'sku' => $type === 'simple' ? ($data['variants'][0]['sku'] ?? null) : null,
+                'short_description' => $data['shortDescription'] ?? null,
+                'description' => $data['fullDescription'] ?? null,
+                'base_price' => $prices->min(),
+                'metadata' => $metadata,
+            ]);
+            $product->categories()->sync([$data['categoryId']]);
+            $this->saveTags($product, $data['tags'] ?? []);
+            $this->saveInventoryAndVariants($product, $data, $type);
+        });
+
+        return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product updated by administrator.');
+    }
+
     public function updateApproval(Request $request, int $id)
     {
         $data = $request->validate([
