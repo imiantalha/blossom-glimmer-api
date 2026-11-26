@@ -41,17 +41,18 @@ class UserService
             // Hash password
             $data['password'] = Hash::make($data['password']);
 
-            // Extract roles
-            $roles = $data['roles'] ?? [];
-
-            unset($data['roles']);
+            // The request contract accepts one role. Assign it explicitly so
+            // newly created admins, vendors and customers receive the intended
+            // authorization boundary instead of silently becoming role-less.
+            $role = $data['role'] ?? null;
+            unset($data['role']);
 
             // Create user
             $user = $this->userRepository->create($data);
 
-            // Assign roles
-            if (!empty($roles)) {
-                $user->syncRoles($roles);
+            // Assign role
+            if ($role) {
+                $user->syncRoles([$role]);
             }
 
             return $user->load('roles');
