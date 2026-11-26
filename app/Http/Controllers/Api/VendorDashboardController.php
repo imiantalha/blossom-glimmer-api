@@ -87,6 +87,7 @@ class VendorDashboardController extends Controller
             ->join('customer_orders as o', 'o.id', '=', 'oi.order_id')
             ->where('p.vendor_id', $vendorId)
             ->whereNotIn('o.status', ['cancelled', 'refunded'])
+            ->where('o.payment_status', 'paid')
             ->select('o.currency', DB::raw('SUM(oi.subtotal) as gross_subtotal'))
             ->groupBy('o.currency')
             ->get()
