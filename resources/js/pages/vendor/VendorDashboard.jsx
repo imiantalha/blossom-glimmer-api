@@ -1,47 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback,useEffect,useState } from "react";
 import api from "../../api/axios";
 
-export default function VendorDashboard() {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError("");
-        try {
-            const response = await api.get("/vendor/dashboard");
-            const payload = response?.data?.data;
-            if (!response?.data?.success || !payload || typeof payload !== "object") {
-                throw new Error("The server returned an unexpected dashboard response.");
-            }
-            setData(payload);
-        } catch (exception) {
-            setData(null);
-            setError(exception?.response?.data?.message || exception?.message || "Unable to load your vendor dashboard.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { void load(); }, [load]);
-
-    if (loading) return <div className="container py-5 text-center">Loading your store dashboard…</div>;
-    if (error) return <div className="container py-5"><div className="alert alert-danger" role="alert"><strong>Something went wrong.</strong> {error}<button className="btn btn-sm btn-outline-danger ms-3" onClick={() => void load()}>Try again</button></div></div>;
-
-    const metrics = [
-        ["Products", data?.products?.total ?? 0],
-        ["Active products", data?.products?.active ?? 0],
-        ["Orders", data?.orders?.total ?? 0],
-        ["Sales", data?.sales?.grossSubtotal ?? 0],
-    ];
-
-    return <div className="container-fluid py-4">
-        <h1 className="h3 mb-1">Vendor dashboard</h1>
-        <p className="text-muted mb-4">A summary of your store activity.</p>
-        <div className="row g-3">
-            {metrics.map(([label, value]) => <div className="col-sm-6 col-xl-3" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">{label}</div><div className="fs-3 fw-semibold mt-2">{value}</div></div></div></div>)}
-        </div>
-        <div className="card border-0 shadow-sm mt-4"><div className="card-body"><h2 className="h5">Store status</h2><p className="mb-0">{data?.store?.status || "No store profile found"}</p></div></div>
-    </div>;
+export default function VendorDashboard(){
+ const [data,setData]=useState(null);const [loading,setLoading]=useState(true);const [error,setError]=useState("");
+ const load=useCallback(async()=>{setLoading(true);setError("");try{const r=await api.get("/vendor/dashboard");const p=r?.data?.data;if(!r?.data?.success||!p||typeof p!=="object")throw new Error("Unexpected dashboard response.");setData(p);}catch(e){setData(null);setError(e?.response?.data?.message||e?.message||"Unable to load your vendor dashboard.");}finally{setLoading(false);}},[]);
+ useEffect(()=>{void load();},[load]);
+ if(loading)return <div className="container py-5 text-center">Loading your store dashboard…</div>;
+ if(error)return <div className="container py-5"><div className="alert alert-danger" role="alert">{error}<button className="btn btn-sm btn-outline-danger ms-3" onClick={()=>void load()}>Try again</button></div></div>;
+ const money=value=>new Intl.NumberFormat(undefined,{style:"currency",currency:data?.sales?.currency||"USD"}).format(Number(value||0));
+ const metrics=[["Products",data?.products?.total??0],["Active products",data?.products?.active??0],["Pending approval",data?.products?.pending??0],["Orders",data?.orders?.total??0],["Processing",data?.orders?.processing??0],["Shipped",data?.orders?.shipped??0],["Delivered",data?.orders?.delivered??0],["Gross sales",money(data?.sales?.grossSubtotal)]];
+ return <div className="container-fluid py-4"><div className="d-flex justify-content-between align-items-start gap-3 mb-4"><div><h1 className="h3 mb-1">Vendor dashboard</h1><p className="text-muted mb-0">Store performance, fulfilment and inventory overview.</p></div><button className="btn btn-outline-secondary" onClick={()=>void load()}>Refresh</button></div>
+ <div className="row g-3">{metrics.map(([label,value])=><div className="col-6 col-xl-3" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">{label}</div><div className="fs-3 fw-semibold mt-2">{value}</div></div></div>)}</div>
+ <div className="row g-4 mt-1"><div className="col-xl-6"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h2 className="h5">Store health</h2><div className="d-flex justify-content-between border-bottom py-3"><span className="text-muted">Store</span><strong>{data?.store?.name||"Not configured"}</strong></div><div className="d-flex justify-content-between border-bottom py-3"><span className="text-muted">Status</span><span className="badge text-bg-secondary">{data?.store?.status||"Unavailable"}</span></div><div className="d-flex justify-content-between border-bottom py-3"><span className="text-muted">Commission</span><strong>{data?.store?.commissionType==="percentage"?Number(data?.store?.commissionValue||0)+"%":money(data?.store?.commissionValue)}</strong></div><div className="d-flex justify-content-between py-3"><span className="text-muted">Rejected products</span><strong>{data?.products?.rejected??0}</strong></div></div></div></div>
+ <div className="col-xl-6"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h2 className="h5">Low stock alerts</h2>{!data?.lowStockProducts?.length?<p className="text-muted mb-0">No products are currently below their low-stock threshold.</p>:<div className="table-responsive"><table className="table table-sm align-middle mb-0"><thead><tr><th>Product</th><th>Available</th><th>Threshold</th></tr></thead><tbody>{data.lowStockProducts.map(item=><tr key={item.productId}><td>{item.name}<div className="small text-muted">{item.sku||"—"}</div></td><td><span className="text-danger fw-semibold">{item.availableQuantity}</span></td><td>{item.lowStockThreshold}</td></tr>)}</tbody></table></div>}</div></div></div>
+ <div className="col-12"><div className="card border-0 shadow-sm"><div className="card-body"><h2 className="h5">Recent orders</h2>{!data?.recentOrders?.length?<p className="text-muted mb-0">No orders containing your products yet.</p>:<div className="table-responsive"><table className="table align-middle mb-0"><thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Your subtotal</th><th>Fulfilment</th></tr></thead><tbody>{data.recentOrders.map(order=><tr key={order.id}><td className="fw-semibold">{order.number}</td><td>{order.createdAt?new Date(order.createdAt).toLocaleDateString():"—"}</td><td>{order.itemCount}</td><td>{money(order.vendorSubtotal)}</td><td><span className="badge text-bg-secondary">{String(order.status).replaceAll("_"," ")}</span></td></tr>)}</tbody></table></div>}</div></div></div></div></div>;
 }
