@@ -39,7 +39,7 @@ class VendorProductController extends Controller
         ])->all();
         $category = $product->categories->first();
         $variants = $product->variants->map(function ($variant) {
-            $inventory = $variant->inventoryItems->sum(fn ($item) => max(0, $item->stock_quantity - $item->reserved_quantity));
+            $inventory = $variant->inventoryItems->sum(fn ($item) => max(0, $item->stock_quantity));
             $attributes = data_get($variant->metadata, 'attributes', []);
             return [
                 'id' => (string) $variant->id, 'sku' => $variant->sku, 'price' => (string) ($variant->compare_at_price ?? $variant->price),
