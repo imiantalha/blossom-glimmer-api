@@ -307,6 +307,7 @@ class PaymentSimulationController extends Controller
             $orderItems = DB::table('customer_order_items as oi')
                 ->join('products as p', 'p.id', '=', 'oi.product_id')
                 ->where('oi.order_id', $refund->order_id)
+                ->orderBy('p.vendor_id')
                 ->select('oi.id as order_item_id', 'oi.subtotal', 'p.vendor_id')
                 ->get();
             $orderSubtotal = max(0, (float) $order->subtotal);
