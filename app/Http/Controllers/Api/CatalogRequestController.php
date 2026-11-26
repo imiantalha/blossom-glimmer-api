@@ -191,6 +191,16 @@ class CatalogRequestController extends Controller
             return $catalogRequest->fresh(['vendor', 'reviewer']);
         });
 
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $result->vendor_id,
+            'type' => 'catalog_request.' . $result->status,
+            'title' => $result->status === 'approved' ? 'Catalog request approved' : 'Catalog request rejected',
+            'message' => 'Your ' . $result->type . ' request for "' . $result->name . '" was ' . $result->status . '.'
+                . ($result->status === 'rejected' && $result->rejection_reason ? ' Reason: ' . $result->rejection_reason : ''),
+            'action_url' => '/vendor/catalog-requests',
+            'data' => json_encode(['request_id' => $result->id, 'entity_id' => $result->entity_id]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse($this->payload($result, true), 'Catalog request ' . $result->status . '.');
     }
 
