@@ -117,3 +117,11 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Re-inspected the newly added PHP controllers and the main new migrations for the same doubled-backslash syntax issue; no further occurrences were found in the inspected files.
 - GitHub Actions remain disabled per the repository owner's confirmation. No workflow was dispatched. The latest backend commit has no status checks because CI is disabled; this is not a passing test result.
 - The feature branches are still not release-ready: payment transaction simulation, refunds/returns, vendor ledger/payouts, notifications, support tickets, remaining vendor/admin screens, demo fixtures and the full local browser/security test matrix remain outstanding. Do not merge or deploy on the basis of these syntax/RBAC corrections alone.
+
+### Implementation progress — payment/refund backend slice
+
+- Added `payment_transactions` and `refund_requests` persistence with order/customer ownership, unique payment references, status fields, audit timestamps and query indexes.
+- Added customer endpoints to create and inspect local simulated payment attempts, record deterministic success/failure/pending outcomes, and submit/list refund requests.
+- Added Admin/Super Admin endpoints to review and process approved refunds. Processing is explicitly simulated and returns a reference; it does not transfer money.
+- Checkout now accepts `mock_card` and `mock_wallet` as simulation-only methods alongside COD. The API never accepts card PAN/CVV or banking credentials.
+- This slice is committed to the existing backend feature branch. It has not been run against Laravel/PHP or a database; it is not runtime-verified. Frontend checkout wiring, refund UI, test coverage and remaining modules are still outstanding.
