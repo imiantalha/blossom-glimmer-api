@@ -1043,7 +1043,8 @@ class StorefrontController extends Controller
         return [
             'id' => (int) $order->id,
             'number' => $order->number,
-            'status' => $order->status,
+            'status' => $fulfillment->status ?? $order->status,
+            'parentStatus' => $order->status,
             'createdAt' => $order->created_at,
             'currency' => $order->currency,
             'vendorSubtotal' => (float) $items->sum('subtotal'),
