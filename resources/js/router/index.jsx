@@ -11,6 +11,7 @@ import ErrorPage from '../pages/errors/ErrorPage';
 import UsersPage from "../pages/users/UsersPage";
 import CreateUserPage from "../pages/users/CreateUserPage";
 import EditUserPage from "../pages/users/EditUserPage";
+import CustomersPage from "../pages/customers/CustomersPage";
 
 export default function Router() {
     return (
@@ -32,6 +33,7 @@ export default function Router() {
                     <Route index element={<Dashboard />} />
                     <Route path="dashboard" index element={<Dashboard />} />
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/customers" element={<CustomersPage />} />
                     <Route path="/users/create" element={<CreateUserPage />} />
                     <Route path="/users/:id/edit" element={<EditUserPage />} />
                 </Route>
