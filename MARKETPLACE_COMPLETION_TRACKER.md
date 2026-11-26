@@ -371,3 +371,16 @@ The older "Remaining implementation work" bullets above are historical snapshots
 **Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed in this implementation session.
 
 - Added the Next.js Admin audit activity workspace with actor/role, action, path, resource, HTTP status and date/search filters. Added missing Admin Inventory/Audit and Vendor Inventory/Analytics navigation links.
+
+
+### Follow-up implementation pass — listing pagination
+
+- Added explicit server-side pagination controls and page metadata to the Admin returns workspace (20 per page), retaining status filtering and adding search across order number, product name and customer email. The Laravel Admin returns endpoint already supplies paginator metadata and now receives the matching UI parameters.
+- Replaced the Admin brands listing's oversized single-page fetch with 25-item server-side pages and Previous/Next controls driven by the API's `pagination` metadata.
+- Updated the Admin stores query/page to use 25-item server-side pages and actual API pagination metadata instead of inferring a next page from a hard-coded 100-row response.
+- Updated Admin and Vendor order listings to request 20 records per page and render Previous/Next controls from the backend pagination metadata. Search/status filters are retained when paging Admin orders.
+- Added dedicated paginated query helpers for Admin and Vendor product listings (25 records per page) while retaining the full-list vendor product helper for slug lookup compatibility. Connected the Admin products listing to the new paginated helper and backend metadata.
+
+**Still being audited:** Vendor products UI pager hookup; customer orders/returns/refunds/reviews; Admin categories/catalog requests/reviews/coupons/users/finance/support/payment events/audit; Vendor inventory/reviews/support/finance/notifications; public product/search/store/brand/category/collection listings. Every listing will be checked for server pagination, stable filters, and a correct empty/loading/error state. Do not consider implementation complete until this matrix is closed.
+
+No test/build/lint/migration/seeder/CI/deployment action was performed.
