@@ -369,3 +369,5 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Confirm local environment configuration for the supported database drivers. Real payment and payout gateways remain intentionally simulated until provider credentials and an approved integration scope exist; shipment tracking currently supports manually managed carrier/tracking data.
 
 **Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed in this implementation session.
+
+- Added the Next.js Admin audit activity workspace with actor/role, action, path, resource, HTTP status and date/search filters. Added missing Admin Inventory/Audit and Vendor Inventory/Analytics navigation links.
