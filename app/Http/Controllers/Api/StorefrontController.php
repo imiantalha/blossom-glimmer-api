@@ -695,6 +695,10 @@ class StorefrontController extends Controller
             DB::table('vendor_order_fulfillments')->where('order_id', $id)->whereIn('status', ['pending'])->update([
                 'status' => 'cancelled', 'updated_at' => now(),
             ]);
+            if ($order->coupon_id) {
+                DB::table('coupon_redemptions')->where('order_id', $id)->delete();
+                DB::table('coupons')->where('id', $order->coupon_id)->where('usage_count', '>', 0)->decrement('usage_count');
+            }
             DB::table('payment_transactions')->where('order_id', $id)->where('status', 'pending')->update([
                 'status' => 'cancelled', 'updated_at' => now(),
             ]);
