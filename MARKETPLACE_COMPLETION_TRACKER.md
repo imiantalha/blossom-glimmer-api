@@ -381,6 +381,18 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Updated Admin and Vendor order listings to request 20 records per page and render Previous/Next controls from the backend pagination metadata. Search/status filters are retained when paging Admin orders.
 - Added dedicated paginated query helpers for Admin and Vendor product listings (25 records per page) while retaining the full-list vendor product helper for slug lookup compatibility. Connected the Admin products listing to the new paginated helper and backend metadata.
 
-**Still being audited:** Vendor products UI pager hookup; customer orders/returns/refunds/reviews; Admin categories/catalog requests/reviews/coupons/users/finance/support/payment events/audit; Vendor inventory/reviews/support/finance/notifications; public product/search/store/brand/category/collection listings. Every listing will be checked for server pagination, stable filters, and a correct empty/loading/error state. Do not consider implementation complete until this matrix is closed.
+**Pagination audit — implementation pass closed in source (not runtime-verified):**
+- Vendor products: connected the 25-item server-paginated query helper to the page; page links preserve all active product filters.
+- Customer orders, returns, refunds and reviews: confirmed order history was already paginated; added 20-item paging to returns, refunds and review history.
+- Admin users, returns, catalog requests, review moderation, coupons, finance payouts/refunds, support tickets and payment webhook events: connected 20/25-item server pagination and metadata-driven controls. Admin audit logs already used server pagination.
+- Vendor inventory, catalog request history, product reviews, support tickets and payout history: connected server pagination and Previous/Next controls. Vendor orders and product listings are paginated.
+- Admin inventory: connected the marketplace-wide inventory table to paginated product results.
+- Public store, brand and category index pages now request 24 items per page and render API-backed pagination. Public products already use API pagination; store, brand and category detail pages already paginate their product grids. Collection pages are curated/finite content rather than an unbounded product listing; collection product previews remain deliberately capped.
+- Admin category hierarchy is loaded as a complete tree because parent/child relationships must be assembled together; it is not treated as a flat paged table. Address book entries are a per-customer finite set.
+- Customer, Vendor and Admin notification histories now use paginated API reads. Empty API results remain empty instead of incorrectly falling back to sample records on public index pages.
 
-No test/build/lint/migration/seeder/CI/deployment action was performed.
+**API/source audit:** Relevant Laravel return, review, support, vendor finance, payment-event and audit endpoints expose paginator metadata. No database migrations or seeders were executed.
+
+**Remaining non-pagination implementation decisions:** The project still contains both the Next.js portal and the Laravel React dashboard. Keep both intact until the production entry point is explicitly settled; do not remove the Laravel React screens. Real payment/payout gateways and carrier integrations remain intentionally simulated/manual pending credentials and an approved integration scope.
+
+**Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed. The listing pagination changes are committed to the existing frontend feature branch; PRs remain open and unmerged.
