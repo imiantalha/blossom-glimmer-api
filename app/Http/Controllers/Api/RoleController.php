@@ -15,6 +15,11 @@ use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
 {
+    private function isProtectedRole(Role $role): bool
+    {
+        return in_array(strtolower($role->name), ['admin', 'vendor', 'customer', 'super admin'], true);
+    }
+
     public function __construct(
         protected RoleService $roleService
     ) {
@@ -43,6 +48,7 @@ class RoleController extends Controller
     public function store(StoreRoleRequest $request): JsonResponse
     {
         $this->authorize('create', Role::class);
+        abort_if(in_array(strtolower(trim($request->validated('name'))), ['admin', 'vendor', 'customer', 'super admin'], true), 422, 'This role name is reserved by the marketplace.');
 
         $role = $this->roleService->create(
             $request->validated()
@@ -77,6 +83,8 @@ class RoleController extends Controller
         Role $role
     ): JsonResponse {
         $this->authorize('update', $role);
+        abort_if($this->isProtectedRole($role), 422, 'Core marketplace roles cannot be edited.');
+        abort_if(isset($request->validated()['name']) && in_array(strtolower(trim($request->validated()['name'])), ['admin', 'vendor', 'customer', 'super admin'], true), 422, 'This role name is reserved by the marketplace.');
 
         $role = $this->roleService->update(
             $role,
@@ -95,6 +103,7 @@ class RoleController extends Controller
     public function destroy(Role $role): JsonResponse
     {
         $this->authorize('delete', $role);
+        abort_if($this->isProtectedRole($role), 422, 'Core marketplace roles cannot be deleted.');
 
         $this->roleService->delete($role);
 
