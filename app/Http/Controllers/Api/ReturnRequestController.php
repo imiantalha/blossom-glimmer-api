@@ -157,6 +157,36 @@ class ReturnRequestController extends Controller
             $updates = ['status' => $data['status'], 'updated_at' => now()];
             if ($data['status'] === 'received') $updates['received_at'] = now();
             if ($data['status'] === 'completed') $updates['completed_at'] = now();
+
+            $refundId = null;
+            if ($data['status'] === 'completed') {
+                $order = DB::table('customer_orders')->where('id', $return->order_id)->lockForUpdate()->first();
+                $item = DB::table('customer_order_items')->where('id', $return->order_item_id)->first();
+                $refundAmount = round((float) $item->unit_price * (int) $return->quantity, 2);
+                $alreadyRequested = (float) DB::table('refund_requests')->where('order_id', $order->id)
+                    ->whereIn('status', ['pending', 'approved', 'processed'])->sum('amount');
+                abort_if($refundAmount > max(0, (float) $order->total - $alreadyRequested), 422, 'The remaining refundable order balance is lower than the value of this return.');
+                $refundId = DB::table('refund_requests')->insertGetId([
+                    'order_id' => $order->id,
+                    'user_id' => $return->user_id,
+                    'return_request_id' => $id,
+                    'amount' => $refundAmount,
+                    'reason' => 'Return completed: ' . $return->reason,
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $return->user_id,
+                    'type' => 'refund.requested',
+                    'title' => 'Return refund submitted for review',
+                    'message' => 'A refund request of ' . number_format($refundAmount, 2) . ' ' . $order->currency . ' was created after your return was completed.',
+                    'action_url' => '/account/refunds',
+                    'data' => json_encode(['refund_id' => $refundId, 'return_id' => $id, 'order_id' => $order->id]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+
             DB::table('return_requests')->where('id', $id)->update($updates);
 
             DB::table('marketplace_notifications')->insert([
@@ -168,7 +198,10 @@ class ReturnRequestController extends Controller
                 'data' => json_encode(['return_id' => $id, 'order_id' => $return->order_id]),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
-            return ApiResponse::successResponse(DB::table('return_requests')->where('id', $id)->first(), 'Return status updated.');
+            return ApiResponse::successResponse([
+                'return' => DB::table('return_requests')->where('id', $id)->first(),
+                'refund_request_id' => $refundId,
+            ], 'Return status updated.');
         });
     }
 }
