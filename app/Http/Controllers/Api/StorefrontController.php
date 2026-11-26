@@ -755,6 +755,16 @@ class StorefrontController extends Controller
         abort_unless($request->user()->hasRole(Role::ADMIN), 403);
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
         abort_unless($order, 404);
+
+        // Marketplace orders with vendor fulfilments must be updated per vendor.
+        // This legacy parent-order shipment endpoint would otherwise bypass
+        // vendor isolation and could mark the whole order delivered prematurely.
+        abort_if(
+            DB::table('vendor_order_fulfillments')->where('order_id', $orderId)->exists(),
+            409,
+            'This order uses vendor-specific fulfilments. Update each vendor fulfilment instead.'
+        );
+
         $data = $request->validate([
             'carrier' => 'nullable|string|max:120',
             'tracking_number' => 'nullable|string|max:160',
