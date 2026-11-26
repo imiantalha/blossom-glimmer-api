@@ -287,7 +287,7 @@ class PaymentSimulationController extends Controller
             $processedTotal = (float) DB::table('refund_requests')
                 ->where('order_id', $refund->order_id)
                 ->where('status', 'processed')
-                ->sum('amount') + (float) $refund->amount;
+                ->sum('amount');
             $order = DB::table('customer_orders')->where('id', $refund->order_id)->lockForUpdate()->first();
             $paymentStatus = $processedTotal >= (float) $order->total ? 'refunded' : 'partially_refunded';
             DB::table('customer_orders')->where('id', $refund->order_id)->update([
