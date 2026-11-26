@@ -1570,6 +1570,10 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentA->id, 'status' => 'processing']);
         $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentB->id, 'status' => 'pending']);
 
+        // A repeated transition is rejected; state changes must be strictly sequential.
+        $this->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'processing'])
+            ->assertUnprocessable();
+
         $this->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'pending'])
             ->assertUnprocessable();
 
