@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductVariantController;
 use App\Http\Controllers\Api\StorefrontController;
 use App\Http\Controllers\Api\VendorProductController;
+use App\Http\Controllers\Api\VendorDashboardController;
 use App\Http\Controllers\Api\CatalogManagementController;
 use App\Http\Controllers\Api\CatalogRequestController;
 use App\Http\Controllers\Api\ReviewManagementController;
@@ -65,6 +66,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
         Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
+            Route::get('dashboard', [VendorDashboardController::class, 'index']);
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
             Route::get('orders', [StorefrontController::class, 'vendorOrders'])->middleware('permission:orders.view');
             Route::get('orders/{id}', [StorefrontController::class, 'vendorOrder'])->middleware('permission:orders.view');
