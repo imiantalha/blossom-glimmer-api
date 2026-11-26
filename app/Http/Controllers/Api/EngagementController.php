@@ -167,6 +167,15 @@ class EngagementController extends Controller
         ]);
         $ticket = DB::table('support_tickets')->where('id', $id)->first();
         abort_unless($ticket, 404, 'Support ticket not found.');
+        if (array_key_exists('assigned_to', $data) && $data['assigned_to'] !== null) {
+            $isAdministrator = DB::table('model_has_roles as m')
+                ->join('roles as r', 'r.id', '=', 'm.role_id')
+                ->where('m.model_type', 'App\\Models\\User')
+                ->where('m.model_id', $data['assigned_to'])
+                ->whereIn('r.name', ['Admin', 'Super Admin'])
+                ->exists();
+            abort_unless($isAdministrator, 422, 'Support tickets can only be assigned to an Admin or Super Admin.');
+        }
         $updates = array_filter($data, fn ($value) => $value !== null);
         if (isset($updates['status']) && $updates['status'] === 'resolved') $updates['resolved_at'] = now();
         if ($updates) { $updates['updated_at'] = now(); DB::table('support_tickets')->where('id', $id)->update($updates); }
