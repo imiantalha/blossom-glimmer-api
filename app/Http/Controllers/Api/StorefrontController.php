@@ -1110,6 +1110,66 @@ class StorefrontController extends Controller
         );
     }
 
+    public function updateVendorFulfillment(Request $request, int $orderId)
+    {
+        $vendorId = (int) $request->user()->id;
+        $data = $request->validate([
+            'status' => 'required|in:processing,ready_to_ship,shipped',
+            'carrier' => 'required_if:status,shipped|nullable|string|max:120',
+            'tracking_number' => 'required_if:status,shipped|nullable|string|max:160',
+            'tracking_url' => ['nullable', 'url', 'regex:/^https:\\/\\//i'],
+            'estimated_delivery' => 'nullable|date',
+        ]);
+
+        $fulfillment = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $orderId)
+            ->where('vendor_id', $vendorId)
+            ->first();
+        abort_unless($fulfillment, 404, 'Fulfilment not found for this store.');
+
+        $sequence = ['pending' => 0, 'processing' => 1, 'ready_to_ship' => 2, 'shipped' => 3, 'delivered' => 4];
+        $current = $sequence[$fulfillment->status] ?? -1;
+        $next = $sequence[$data['status']] ?? -1;
+        abort_if($next < $current, 422, 'Fulfilment status cannot move backwards.');
+        abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
+
+        DB::transaction(function () use ($data, $fulfillment, $orderId) {
+            DB::table('vendor_order_fulfillments')->where('id', $fulfillment->id)->update([
+                'status' => $data['status'],
+                'carrier' => $data['carrier'] ?? $fulfillment->carrier,
+                'tracking_number' => $data['tracking_number'] ?? $fulfillment->tracking_number,
+                'tracking_url' => $data['tracking_url'] ?? $fulfillment->tracking_url,
+                'estimated_delivery' => isset($data['estimated_delivery'])
+                    ? \\Illuminate\\Support\\Carbon::parse($data['estimated_delivery'])->toDateString()
+                    : $fulfillment->estimated_delivery,
+                'shipped_at' => $data['status'] === 'shipped' ? ($fulfillment->shipped_at ?: now()) : $fulfillment->shipped_at,
+                'updated_at' => now(),
+            ]);
+
+            $remaining = DB::table('vendor_order_fulfillments')
+                ->where('order_id', $orderId)
+                ->whereNotIn('status', ['shipped', 'delivered'])
+                ->count();
+            if ($remaining === 0) {
+                $undelivered = DB::table('vendor_order_fulfillments')
+                    ->where('order_id', $orderId)
+                    ->where('status', '<>', 'delivered')
+                    ->count();
+                DB::table('customer_orders')->where('id', $orderId)->update([
+                    'status' => $undelivered === 0 ? 'delivered' : 'shipped',
+                    'fulfillment_status' => $undelivered === 0 ? 'delivered' : 'shipped',
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $order = DB::table('customer_orders')->where('id', $orderId)->first();
+        return ApiResponse::successResponse(
+            $this->vendorOrderPayload($order, $vendorId),
+            'Your store fulfilment was updated.'
+        );
+    }
+
     private function adminOrderPayload(object $order): array
     {
         $user = DB::table('users')->where('id', $order->user_id)->first();
