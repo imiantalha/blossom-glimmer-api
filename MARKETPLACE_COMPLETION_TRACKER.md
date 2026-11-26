@@ -163,3 +163,21 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Admin shipping/tracking, promotions reporting, marketplace settings, order/fulfillment, inventory and moderation workflows: audit all screens against the backend route contracts and complete missing actions.
 - Seeded multi-role demo dataset, schema compatibility verification (MySQL and SQL Server), API ownership/RBAC tests, frontend type/lint/build checks and full browser login/logout + purchase-to-delivery/refund/payout scenarios.
 - Review idempotency and coupon lifecycle edge cases (failed/cancelled payment redemptions, coupon edits after usage, and order retry semantics) during the comprehensive verification phase.
+
+### Implementation progress — admin marketplace operations
+
+- Added admin order search/filter/detail UI and per-vendor fulfilment advancement, including carrier/tracking capture before shipment.
+- Added admin product moderation UI for pending approval/rejection, product activation/deactivation and featured status.
+- Added admin vendor-store queue with approve/activate, suspend, pending status and commission controls.
+- Added admin brand/category CRUD screens, including root/child category selection and active/inactive status.
+- Registered all new admin routes in the role-protected React dashboard and updated sidebar navigation.
+- Corrected the vendor sidebar conditional to use a fragment around its multiple navigation items; the earlier incremental navigation insertions had produced invalid JSX.
+- No local build, PHP syntax run, migrations, automated tests or browser verification have been performed because no non-billable runtime is connected. GitHub Actions remain disabled as requested.
+
+### Remaining work — focus areas
+
+- Complete remaining marketplace settings (collections, shipping methods, attributes/tags) UI and admin review moderation screens.
+- Customer order cancellation and return eligibility/state transitions, plus shipment tracking display and notifications on payment/refund/order changes.
+- Vendor store profile editing and order detail/fulfilment UX; customer order details and order history consistency.
+- Verify admin/vendor/customer navigation and role isolation, especially separate route groups and permission seeding.
+- Finish seeded data and comprehensive tests only after implementation scope is complete.
