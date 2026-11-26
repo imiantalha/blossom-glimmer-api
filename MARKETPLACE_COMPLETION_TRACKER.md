@@ -346,3 +346,5 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Vendor finance UI now exposes refund adjustments and any outstanding balance due, alongside available funds and payout reservations.
 
 - Return-linked refund ledger reversals are scoped to the returned order item and its owning vendor; general order refunds continue to allocate product-value adjustments proportionally across all vendors.
+
+- Customer payment confirmation and Admin webhook simulation now lock the order before the payment transaction, matching cancellation's lock order and preventing a late simulated success from resurrecting a cancelled order.
