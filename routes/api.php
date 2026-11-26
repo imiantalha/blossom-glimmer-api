@@ -64,8 +64,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::patch('users/me/addresses/{id}', [StorefrontController::class, 'updateAddress']);
         Route::delete('users/me/addresses/{id}', [StorefrontController::class, 'deleteAddress']);
 
-        Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
-        Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
+        Route::middleware('role:Customer')->group(function () {
+            Route::post('shipping/quote', [StorefrontController::class, 'shippingQuote']);
+            Route::post('inventory/validate', [StorefrontController::class, 'validateInventory']);
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
@@ -103,8 +104,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('wishlist/{id}', [StorefrontController::class, 'deleteWishlist']);
         Route::post('reviews', [StorefrontController::class, 'createReview']);
 
+        });
+
         Route::middleware('role:Admin|Super Admin')->group(function () {
             Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::post('admin/orders/{orderId}/shipment', [StorefrontController::class, 'upsertShipment']);
             Route::get('admin/audit-logs', [AuditLogController::class, 'index']);
             Route::get('admin/brands', [CatalogManagementController::class, 'brands']);
             Route::post('admin/brands', [CatalogManagementController::class, 'storeBrand']);
