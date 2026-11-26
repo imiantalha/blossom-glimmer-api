@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\EngagementController;
 use App\Http\Controllers\Api\VendorReviewController;
 use App\Http\Controllers\Api\CouponManagementController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\ReturnRequestController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -135,6 +136,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('payments/transactions', [PaymentSimulationController::class, 'customerTransactions']);
             Route::post('refunds', [PaymentSimulationController::class, 'requestRefund']);
             Route::get('refunds', [PaymentSimulationController::class, 'customerRefunds']);
+            Route::get('returns', [ReturnRequestController::class, 'customerIndex']);
+            Route::post('returns', [ReturnRequestController::class, 'create']);
 
         });
 
@@ -178,6 +181,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/orders', [StorefrontController::class, 'adminOrders']);
             Route::get('admin/refunds', [PaymentSimulationController::class, 'adminRefunds']);
+            Route::get('admin/returns', [ReturnRequestController::class, 'adminIndex']);
+            Route::patch('admin/returns/{id}/review', [ReturnRequestController::class, 'review']);
+            Route::patch('admin/returns/{id}/status', [ReturnRequestController::class, 'updateStatus']);
             Route::get('admin/support/tickets', [EngagementController::class, 'adminTickets']);
             Route::get('admin/support/tickets/{id}', [EngagementController::class, 'adminShowTicket']);
             Route::post('admin/support/tickets/{id}/messages', [EngagementController::class, 'adminReplyTicket']);
