@@ -85,7 +85,7 @@ class PermissionController extends Controller
     ): JsonResponse {
 
         $this->authorize('update', $permission);
-        abort_if($this->isVendorCorePermission($permission), 422, 'Core marketplace permissions cannot be renamed.');
+        abort_if($this->isCoreMarketplacePermission($permission), 422, 'Core marketplace permissions cannot be renamed.');
 
         $permission = $this->permissionService->update(
             $permission,
@@ -106,7 +106,7 @@ class PermissionController extends Controller
     ): JsonResponse {
 
         $this->authorize('delete', $permission);
-        abort_if($this->isVendorCorePermission($permission), 422, 'Core marketplace permissions cannot be deleted.');
+        abort_if($this->isCoreMarketplacePermission($permission), 422, 'Core marketplace permissions cannot be deleted.');
 
         $this->permissionService->delete($permission);
 
