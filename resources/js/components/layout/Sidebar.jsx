@@ -29,7 +29,7 @@ const Sidebar = () => {
                                 <li className="nav-item"><NavLink to="/permissions" className={linkClass}>Permissions</NavLink></li>
                             </>
                         ) : null}
-                        <li className="nav-item"><NavLink to="/request-logs" className={linkClass}>Request Logs</NavLink></li>
+
                     </>
                 ) : null}
             </ul>
