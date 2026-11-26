@@ -55,6 +55,7 @@ export default function VendorProductsPage() {
 
     async function save(event) {
         event.preventDefault(); setSaving(true); setError(""); setMessage("");
+        const submitIntent = event.nativeEvent?.submitter?.value === "submit" ? "submit" : "draft";
         const payload = {
             name: form.name.trim(), slug: form.slug.trim() || undefined,
             brandId: Number(form.brandId), categoryId: Number(form.categoryId),
@@ -69,14 +70,14 @@ export default function VendorProductsPage() {
                 width: Number(v.width), height: Number(v.height), label: v.label.trim() || (form.productType === "Simple" ? "Default" : `Variant ${index + 1}`),
                 attributeValues: v.attributeValues ?? [], images: v.images ?? [],
             })),
-            specifications: [], faqs: [], intent: form.intent,
+            specifications: [], faqs: [], intent: submitIntent,
         };
         try {
             const response = form.id
                 ? await api.patch(`/vendor/products/${form.id}`, payload)
                 : await api.post("/vendor/products", payload);
             if (!response?.data?.success) throw new Error(response?.data?.message || "Unable to save product.");
-            setEditing(false); setMessage(form.intent === "submit" ? "Product submitted for administrator approval." : "Product draft saved.");
+            setEditing(false); setMessage(submitIntent === "submit" ? "Product submitted for administrator approval." : "Product draft saved.");
             await load();
         } catch (exception) {
             const errors = exception?.response?.data?.errors;
@@ -138,7 +139,7 @@ export default function VendorProductsPage() {
                     <div className="col-md-3"><label className="form-label">Variant label</label><input className="form-control" value={variant.label} onChange={e=>changeVariant(index,"label",e.target.value)} /></div>
                     {["weight","length","width","height"].map(key=><div className="col-3 col-md-2" key={key}><label className="form-label text-capitalize">{key}</label><input type="number" min="0" step="0.01" className="form-control" value={variant[key]} onChange={e=>changeVariant(index,key,e.target.value)} required /></div>)}
                 </div></div>)}
-                <div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button type="button" className="btn btn-outline-secondary" onClick={()=>setEditing(false)}>Cancel</button><button type="submit" className="btn btn-outline-primary" disabled={saving}>{saving?"Saving…":"Save draft"}</button><button type="button" className="btn btn-primary" disabled={saving} onClick={()=>change("intent","submit") || document.getElementById("vendor-product-submit")?.click()}>Submit for approval</button><button id="vendor-product-submit" type="submit" hidden /></div>
+                <div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button type="button" className="btn btn-outline-secondary" onClick={()=>setEditing(false)}>Cancel</button><button type="submit" name="intent" value="draft" className="btn btn-outline-primary" disabled={saving}>{saving?"Saving…":"Save draft"}</button><button type="submit" name="intent" value="submit" className="btn btn-primary" disabled={saving}>Submit for approval</button></div>
             </form>
         </div></div> : null}
         <div className="card border-0 shadow-sm"><div className="table-responsive"><table className="table align-middle mb-0">
