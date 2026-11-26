@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Constants\Role;
+use Illuminate\Support\Facades\DB;
 use App\Support\ApiResponse;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
