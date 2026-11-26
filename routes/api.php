@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\VendorFinanceController;
 use App\Http\Controllers\Api\EngagementController;
 use App\Http\Controllers\Api\VendorReviewController;
 use App\Http\Controllers\Api\CouponManagementController;
+use App\Http\Controllers\Api\AdminDashboardController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -138,6 +139,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         });
 
         Route::middleware('role:Admin|Super Admin')->group(function () {
+            Route::get('admin/dashboard', [AdminDashboardController::class, 'index']);
             Route::get('dashboard', [DashboardController::class, 'index']);
             Route::post('admin/orders/{orderId}/shipment', [StorefrontController::class, 'upsertShipment']);
             Route::get('admin/audit-logs', [AuditLogController::class, 'index']);
