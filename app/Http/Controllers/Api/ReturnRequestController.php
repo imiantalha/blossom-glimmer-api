@@ -44,7 +44,8 @@ class ReturnRequestController extends Controller
                 ->first();
             abort_unless($order, 404, 'Order not found.');
             abort_unless($order->status === 'delivered' || $order->fulfillment_status === 'delivered', 422, 'Only delivered orders can be returned.');
-            abort_if(now()->diffInDays($order->created_at) > 30, 422, 'The 30-day return window has expired.');
+            $deliveredAt = $order->delivered_at ?: $order->updated_at;
+            abort_if(now()->greaterThan(\\Illuminate\\Support\\Carbon::parse($deliveredAt)->addDays(30)), 422, 'The 30-day return window has expired.');
 
             $item = DB::table('customer_order_items')
                 ->where('id', $data['order_item_id'])
