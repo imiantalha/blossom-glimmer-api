@@ -1174,6 +1174,32 @@ class StorefrontController extends Controller
     private function adminOrderPayload(object $order): array
     {
         $user = DB::table('users')->where('id', $order->user_id)->first();
+        $fulfillments = DB::table('vendor_order_fulfillments as f')
+            ->join('users as u', 'u.id', '=', 'f.vendor_id')
+            ->where('f.order_id', $order->id)
+            ->orderBy('f.id')
+            ->get()
+            ->map(function ($fulfillment) {
+                $items = DB::table('vendor_order_fulfillment_items as fi')
+                    ->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')
+                    ->where('fi.fulfillment_id', $fulfillment->id)
+                    ->select('oi.id', 'oi.name', 'oi.sku', 'oi.quantity', 'oi.subtotal')
+                    ->get();
+                return [
+                    'id' => (int) $fulfillment->id,
+                    'vendorId' => (int) $fulfillment->vendor_id,
+                    'vendorName' => $fulfillment->name,
+                    'status' => $fulfillment->status,
+                    'carrier' => $fulfillment->carrier,
+                    'trackingNumber' => $fulfillment->tracking_number,
+                    'trackingUrl' => $fulfillment->tracking_url,
+                    'estimatedDelivery' => $fulfillment->estimated_delivery,
+                    'shippedAt' => $fulfillment->shipped_at,
+                    'deliveredAt' => $fulfillment->delivered_at,
+                    'items' => $items,
+                ];
+            })->values();
+
         return array_merge($this->orderPayload($order), [
             'customer' => $user ? [
                 'id' => (int) $user->id,
@@ -1181,6 +1207,7 @@ class StorefrontController extends Controller
                 'email' => $user->email,
                 'phone' => $user->phone,
             ] : null,
+            'vendorFulfillments' => $fulfillments,
         ]);
     }
 
