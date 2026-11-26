@@ -35,9 +35,12 @@ class EngagementController extends Controller
     {
         $categories = ['orders', 'payments', 'shipping', 'refunds', 'returns', 'reviews', 'support', 'finance', 'catalog', 'marketing'];
         $saved = DB::table('marketplace_notification_preferences')->where('user_id', $request->user()->id)->get()->keyBy('category');
-        return ApiResponse::successResponse(collect($categories)->mapWithKeys(fn ($category) => [
-            $category => (bool) ($saved->get($category)->in_app_enabled ?? true),
-        ])->all(), 'Notification preferences retrieved.');
+        $preferences = [];
+        foreach ($categories as $category) {
+            $preference = $saved->get($category);
+            $preferences[$category] = $preference ? (bool) $preference->in_app_enabled : true;
+        }
+        return ApiResponse::successResponse($preferences, 'Notification preferences retrieved.');
     }
 
     public function updateNotificationPreferences(Request $request)
