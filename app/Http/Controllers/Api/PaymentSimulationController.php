@@ -338,6 +338,16 @@ class PaymentSimulationController extends Controller
             $transaction = DB::table('payment_transactions')->where('id', $data['transaction_id'])->lockForUpdate()->first();
             abort_unless($transaction, 404, 'Payment transaction not found.');
 
+            // Recheck after acquiring the transaction lock to make concurrent retries idempotent.
+            $existing = DB::table('payment_webhook_events')->where('event_id', $data['event_id'])->first();
+            if ($existing) {
+                return ApiResponse::successResponse([
+                    'event' => $existing,
+                    'duplicate' => true,
+                    'notice' => 'This event ID was already received; no second state change was applied.',
+                ], 'Previously received payment event returned.');
+            }
+
             $eventStatus = 'ignored';
             $processedAt = now();
             if ($transaction->status === 'pending') {
