@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\PaymentSimulationController;
 use App\Http\Controllers\Api\VendorFinanceController;
 use App\Http\Controllers\Api\EngagementController;
 use App\Http\Controllers\Api\VendorReviewController;
+use App\Http\Controllers\Api\CouponManagementController;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', fn () => response()->json(['success' => true, 'message' => 'API is healthy.', 'data' => ['version' => 'v1']]));
@@ -105,6 +106,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         });
 
         Route::middleware('role:Customer')->group(function () {
+        Route::post('coupons/validate', [StorefrontController::class, 'validateCoupon']);
         Route::get('cart', [StorefrontController::class, 'cart']);
         Route::post('cart/merge', [StorefrontController::class, 'mergeCart']);
         Route::post('cart', [StorefrontController::class, 'addCartItem']);
@@ -138,6 +140,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('dashboard', [DashboardController::class, 'index']);
             Route::post('admin/orders/{orderId}/shipment', [StorefrontController::class, 'upsertShipment']);
             Route::get('admin/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('admin/coupons', [CouponManagementController::class, 'index']);
+            Route::post('admin/coupons', [CouponManagementController::class, 'store']);
+            Route::patch('admin/coupons/{id}', [CouponManagementController::class, 'update']);
+            Route::patch('admin/coupons/{id}/status', [CouponManagementController::class, 'updateStatus']);
+            Route::delete('admin/coupons/{id}', [CouponManagementController::class, 'destroy']);
             Route::get('admin/brands', [CatalogManagementController::class, 'brands']);
             Route::post('admin/brands', [CatalogManagementController::class, 'storeBrand']);
             Route::get('admin/brands/{id}', [CatalogManagementController::class, 'brand']);
