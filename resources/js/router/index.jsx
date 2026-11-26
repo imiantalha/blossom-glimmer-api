@@ -15,6 +15,8 @@ import VendorDashboard from "../pages/vendor/VendorDashboard";
 import VendorProductsPage from "../pages/vendor/VendorProductsPage";
 import VendorOrdersPage from "../pages/vendor/VendorOrdersPage";
 import VendorStorePage from "../pages/vendor/VendorStorePage";
+import VendorFinancePage from "../pages/vendor/VendorFinancePage";
+import PayoutManagementPage from "../pages/finance/PayoutManagementPage";
 import RolesPage from "../pages/roles/RolesPage";
 import PermissionsPage from "../pages/permissions/PermissionsPage";
 
@@ -34,6 +36,7 @@ export default function Router() {
                     <Route path="/users/create" element={<CreateUserPage />} />
                     <Route path="/users/:id/edit" element={<EditUserPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
+                    <Route path="/payouts" element={<PayoutManagementPage />} />
                     <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
                     <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
                 </Route>
@@ -43,6 +46,7 @@ export default function Router() {
                     <Route path="/vendor/products" element={<VendorProductsPage />} />
                     <Route path="/vendor/orders" element={<VendorOrdersPage />} />
                     <Route path="/vendor/store" element={<VendorStorePage />} />
+                    <Route path="/vendor/finance" element={<VendorFinancePage />} />
                 </Route>
 
                 <Route path="*" element={<ErrorPage code="404" title="Page Not Found" description="The page you are looking for does not exist." />} />
