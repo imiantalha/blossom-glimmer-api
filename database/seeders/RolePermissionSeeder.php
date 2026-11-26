@@ -33,6 +33,8 @@ class RolePermissionSeeder extends Seeder
             'brands.manage',
             'categories.manage',
             'inventory.update',
+            'reviews.view',
+            'reviews.update',
 
             'roles.view',
             'roles.create',
@@ -76,6 +78,8 @@ class RolePermissionSeeder extends Seeder
             'inventory.update',
             'orders.view',
             'orders.update',
+            'reviews.view',
+            'reviews.update',
         ]);
 
         $customer->syncPermissions([]);
