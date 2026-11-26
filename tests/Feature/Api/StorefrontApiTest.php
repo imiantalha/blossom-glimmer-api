@@ -1679,4 +1679,20 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseHas('roles', ['id' => $vendorRole->id, 'name' => 'Vendor']);
     }
 
+
+    public function test_core_vendor_permissions_cannot_be_renamed_or_deleted(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $permission = DB::table('permissions')->where('name', 'products.create')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/permissions/' . $permission->id, ['name' => 'products.create.custom'])
+            ->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/permissions/' . $permission->id)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('permissions', ['id' => $permission->id, 'name' => 'products.create']);
+    }
+
 }
