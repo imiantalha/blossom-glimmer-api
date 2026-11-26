@@ -411,29 +411,25 @@ class PaymentSimulationController extends Controller
         return DB::transaction(function () use ($request, $data) {
             $existing = DB::table('payment_webhook_events')->where('event_id', $data['event_id'])->first();
             if ($existing) {
-                return ApiResponse::successResponse([
-                    'event' => $existing,
-                    'duplicate' => true,
-                    'notice' => 'This event ID was already received; no second state change was applied.',
-                ], 'Previously received payment event returned.');
+                return ApiResponse::successResponse(['event' => $existing, 'duplicate' => true, 'notice' => 'This event ID was already received; no second state change was applied.'], 'Previously received payment event returned.');
             }
 
+            $initial = DB::table('payment_transactions')->where('id', $data['transaction_id'])->first();
+            abort_unless($initial, 404, 'Payment transaction not found.');
+            // Keep the same order -> transaction lock order used by cancellation and customer confirmation.
+            $order = DB::table('customer_orders')->where('id', $initial->order_id)->lockForUpdate()->first();
+            abort_unless($order, 404, 'Order not found.');
             $transaction = DB::table('payment_transactions')->where('id', $data['transaction_id'])->lockForUpdate()->first();
             abort_unless($transaction, 404, 'Payment transaction not found.');
 
-            // Recheck after acquiring the transaction lock to make concurrent retries idempotent.
             $existing = DB::table('payment_webhook_events')->where('event_id', $data['event_id'])->first();
             if ($existing) {
-                return ApiResponse::successResponse([
-                    'event' => $existing,
-                    'duplicate' => true,
-                    'notice' => 'This event ID was already received; no second state change was applied.',
-                ], 'Previously received payment event returned.');
+                return ApiResponse::successResponse(['event' => $existing, 'duplicate' => true, 'notice' => 'This event ID was already received; no second state change was applied.'], 'Previously received payment event returned.');
             }
 
             $eventStatus = 'ignored';
             $processedAt = now();
-            if ($transaction->status === 'pending') {
+            if ($transaction->status === 'pending' && !in_array($order->status, ['cancelled', 'refunded'], true)) {
                 $status = $data['outcome'] === 'success' ? 'succeeded' : 'failed';
                 DB::table('payment_transactions')->where('id', $transaction->id)->update([
                     'status' => $status,
@@ -451,7 +447,7 @@ class PaymentSimulationController extends Controller
                     'user_id' => $transaction->user_id,
                     'type' => 'payment.' . $status,
                     'title' => $status === 'succeeded' ? 'Payment confirmed' : 'Payment failed',
-                    'message' => 'Payment for order ' . $transaction->order_id . ($status === 'succeeded' ? ' was confirmed.' : ' failed. You can retry from your order details.'),
+                    'message' => 'Payment for order ' . $order->number . ($status === 'succeeded' ? ' was confirmed.' : ' failed. You can retry from your order details.'),
                     'action_url' => '/account/orders/' . $transaction->order_id,
                     'data' => json_encode(['order_id' => $transaction->order_id, 'transaction_id' => $transaction->id, 'event_id' => $data['event_id']]),
                     'created_at' => now(), 'updated_at' => now(),
@@ -475,7 +471,7 @@ class PaymentSimulationController extends Controller
                 'duplicate' => false,
                 'simulated' => true,
                 'notice' => 'No real payment was collected.',
-            ], $eventStatus === 'processed' ? 'Simulated payment event applied.' : 'Event recorded but ignored because the transaction was already finalized.');
+            ], $eventStatus === 'processed' ? 'Simulated payment event applied.' : 'Event recorded but ignored because the transaction or order was already finalized.');
         });
     }
 
