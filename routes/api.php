@@ -48,7 +48,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('forgot-password', 'forgotPassword');
         Route::post('reset-password', 'resetPassword');
         Route::post('login', 'login');
-        Route::middleware('auth:sanctum')->group(function () {
+        Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
             Route::get('me', 'me');
             Route::post('logout', 'logout');
         });
