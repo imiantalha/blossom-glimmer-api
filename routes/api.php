@@ -68,6 +68,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
             Route::get('orders', [StorefrontController::class, 'vendorOrders'])->middleware('permission:orders.view');
             Route::get('orders/{id}', [StorefrontController::class, 'vendorOrder'])->middleware('permission:orders.view');
+            Route::patch('orders/{orderId}/fulfillment', [StorefrontController::class, 'updateVendorFulfillment'])->middleware('permission:orders.update');
             Route::post('store', [StorefrontController::class, 'createStore'])->middleware('permission:stores.manage');
             Route::patch('store', [StorefrontController::class, 'updateMyStore'])->middleware('permission:stores.manage');
             Route::get('catalog-requests', [CatalogRequestController::class, 'vendorIndex'])->middleware('permission:products.view');
