@@ -154,6 +154,14 @@ class VendorFinanceController extends Controller
                 'updated_at' => now(),
             ]);
 
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $payout->vendor_id, 'type' => 'payout.processed',
+                'title' => 'Payout recorded',
+                'message' => 'Your simulated payout of ' . number_format((float) $payout->amount, 2) . ' ' . $payout->currency . ' was recorded. No real funds were transferred.',
+                'action_url' => '/vendor/finance',
+                'data' => json_encode(['payout_id' => $id, 'reference' => $reference]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
             return ApiResponse::successResponse([
                 'id' => $id,
                 'reference' => $reference,
