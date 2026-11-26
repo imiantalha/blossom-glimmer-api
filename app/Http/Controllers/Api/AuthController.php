@@ -6,6 +6,7 @@ use App\Constants\Role;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Models\AuditLog;
 use App\Support\ApiResponse;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
@@ -28,10 +29,12 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
         if (!$user || !Hash::check($credentials['password'], $user->password) || !$user->is_active) {
+            $this->recordAuthActivity($request, $user, 'auth.login.failed', 401);
             return ApiResponse::unauthorizedResponse('Invalid email or password.');
         }
         $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
         $token = $user->createToken('storefront', ['*'], $expiresAt)->plainTextToken;
+        $this->recordAuthActivity($request, $user, 'auth.login', 200);
 
         return ApiResponse::successResponse([
             'user' => new UserResource($user),
@@ -59,6 +62,7 @@ class AuthController extends Controller
             'password' => $data['password'],
         ]);
         $user->assignRole(Role::CUSTOMER);
+        $this->recordAuthActivity($request, $user, 'auth.register', 201);
 
         $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
         $token = $user->createToken('storefront', ['*'], $expiresAt)->plainTextToken;
@@ -89,6 +93,7 @@ class AuthController extends Controller
             'password' => $data['password'],
         ]);
         $user->assignRole(Role::VENDOR);
+        $this->recordAuthActivity($request, $user, 'auth.vendor_register', 201);
 
         $expiresAt = now()->addMinutes((int) config('sanctum.expiration', 10080));
         $token = $user->createToken('storefront-vendor', ['*'], $expiresAt)->plainTextToken;
@@ -108,6 +113,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        $this->recordAuthActivity($request, $request->user(), 'auth.logout', 200);
         $request->user()->currentAccessToken()?->delete();
         return ApiResponse::successResponse(null, 'Logout successful.');
     }
@@ -153,6 +159,25 @@ class AuthController extends Controller
         }
 
         return ApiResponse::successResponse(null, __($status));
+    }
+
+    private function recordAuthActivity(Request $request, ?User $user, string $action, int $status): void
+    {
+        try {
+            AuditLog::create([
+                'actor_user_id' => $user?->id,
+                'actor_role' => $user?->getRoleNames()->first() ?? 'Guest',
+                'action' => $action,
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'status_code' => $status,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => ['outcome' => $status >= 400 ? 'failed' : 'succeeded'],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     public function changePassword(Request $request)
