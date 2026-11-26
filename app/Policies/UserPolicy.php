@@ -14,7 +14,7 @@ class UserPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole(Role::ADMIN);
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]);
     }
 
     /**
@@ -22,7 +22,7 @@ class UserPolicy
      */
     public function view(User $user, User $model): bool
     {
-        return $user->id === $model->id || $user->hasRole(Role::ADMIN) || $user->can('users.view');
+        return $user->id === $model->id || $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.view');
     }
 
     /**
