@@ -29,6 +29,7 @@ class UpdateUserRequest extends FormRequest
             'password'  => ['sometimes', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols() /**->uncompromised() */ ],
             'password_confirmation' => ['sometimes'],
             'role' => ['required', 'exists:roles,name'],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 }
