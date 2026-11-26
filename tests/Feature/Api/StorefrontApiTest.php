@@ -1331,4 +1331,92 @@ class StorefrontApiTest extends TestCase
         $settings->assertJsonFragment(['code' => 'admin-test-express']);
     }
 
+    public function test_admin_can_edit_store_profile_without_changing_approval_or_commission(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $profile = DB::table('vendor_profiles')->where('slug', 'atelier-lane')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id, [
+                'name' => 'Atelier Lane Updated',
+                'slug' => 'atelier-lane-updated',
+                'description' => 'Updated by marketplace administration.',
+                'logo' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+                'banner' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200',
+                'email' => 'store-updated@example.test',
+                'phone' => '+1-555-0100',
+            ])->assertOk()
+            ->assertJsonPath('data.name', 'Atelier Lane Updated')
+            ->assertJsonPath('data.slug', 'atelier-lane-updated');
+
+        $this->assertDatabaseHas('vendor_profiles', [
+            'id' => $profile->id,
+            'name' => 'Atelier Lane Updated',
+            'slug' => 'atelier-lane-updated',
+            'status' => $profile->status,
+            'commission_type' => $profile->commission_type,
+            'commission_value' => $profile->commission_value,
+        ]);
+    }
+
+    public function test_admin_can_edit_product_without_resetting_its_approval_or_publication_state(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('type', 'simple')->where('status', 'active')->firstOrFail();
+        $categoryId = $product->categories()->value('categories.id');
+        $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->first();
+        $shippingCode = DB::table('shipping_methods')->where('is_active', true)->value('code');
+        $brand = DB::table('brands')->where('id', $product->brand_id)->where('status', 'active')->first();
+
+        $this->assertNotNull($categoryId);
+        $this->assertNotNull($inventory);
+        $this->assertNotNull($shippingCode);
+        $this->assertNotNull($brand);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id, [
+                'name' => $product->name . ' Admin Edited',
+                'slug' => $product->slug . '-admin-edited',
+                'brandId' => $brand->id,
+                'categoryId' => $categoryId,
+                'productType' => 'Simple',
+                'shippingProfileId' => $shippingCode,
+                'shortDescription' => 'Edited by marketplace administration.',
+                'fullDescription' => $product->description ?? 'Updated product description.',
+                'tags' => [],
+                'attributes' => [],
+                'media' => [
+                    'featuredImage' => [
+                        'url' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+                        'altText' => 'Updated product image',
+                    ],
+                    'galleryImages' => [],
+                ],
+                'variants' => [[
+                    'label' => 'Default',
+                    'sku' => $product->sku ?: 'ADMIN-EDIT-' . $product->id,
+                    'price' => max(0.01, (float) ($product->base_price ?? 25)),
+                    'stockQuantity' => (int) $inventory->stock_quantity,
+                    'weight' => 1,
+                    'length' => 1,
+                    'width' => 1,
+                    'height' => 1,
+                    'images' => [],
+                    'attributeValues' => [],
+                ]],
+                'specifications' => [],
+                'faqs' => [],
+                'intent' => 'draft',
+            ])->assertOk()
+            ->assertJsonPath('data.name', $product->name . ' Admin Edited')
+            ->assertJsonPath('data.approvalStatus', 'APPROVED')
+            ->assertJsonPath('data.status', 'ACTIVE');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'name' => $product->name . ' Admin Edited',
+            'status' => 'active',
+        ]);
+    }
+
 }
