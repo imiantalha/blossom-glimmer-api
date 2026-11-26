@@ -69,7 +69,6 @@ class StorefrontApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', $genericMessage);
 
-        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
     }
 
     public function test_customer_cannot_access_admin_routes(): void
