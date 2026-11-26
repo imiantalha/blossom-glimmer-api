@@ -279,6 +279,9 @@ class PaymentSimulationController extends Controller
             $refund = DB::table('refund_requests')->where('id', $id)->lockForUpdate()->first();
             abort_unless($refund, 404, 'Refund request not found.');
             abort_unless($refund->status === 'approved', 409, 'Only approved refunds can be processed.');
+            // Serialize refund processing per order before calculating cumulative refunded value.
+            $order = DB::table('customer_orders')->where('id', $refund->order_id)->lockForUpdate()->first();
+            abort_unless($order, 404, 'Order not found.');
 
             $reference = 'BG-REF-' . Str::upper(Str::random(14));
             DB::table('refund_requests')->where('id', $id)->update([
@@ -292,7 +295,6 @@ class PaymentSimulationController extends Controller
                 ->where('order_id', $refund->order_id)
                 ->where('status', 'processed')
                 ->sum('amount');
-            $order = DB::table('customer_orders')->where('id', $refund->order_id)->lockForUpdate()->first();
             $paymentStatus = $processedTotal >= (float) $order->total ? 'refunded' : 'partially_refunded';
             DB::table('customer_orders')->where('id', $refund->order_id)->update([
                 'payment_status' => $paymentStatus,
