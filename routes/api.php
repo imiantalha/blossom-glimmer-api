@@ -140,6 +140,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/stores/{id}', [StorefrontController::class, 'updateAdminStore']);
             Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
             Route::patch('admin/stores/{id}/commission', [StorefrontController::class, 'updateStoreCommission']);
+            Route::get('admin/customers', [UserController::class, 'customers']);
+            Route::get('admin/customers/{user}', [UserController::class, 'customer']);
             Route::get('admin/users/options', [UserController::class, 'options']);
             Route::apiResource('admin/users', UserController::class);
             Route::get('roles/options', [RoleController::class, 'options']);
