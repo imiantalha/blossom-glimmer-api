@@ -1589,4 +1589,27 @@ class StorefrontApiTest extends TestCase
             ->assertNotFound();
     }
 
+
+    public function test_admin_can_list_and_view_all_customer_orders_but_vendor_cannot_access_admin_order_api(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/orders')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => [['id', 'number', 'customer', 'items', 'total']]]);
+
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $this->getJson('/api/v1/admin/orders/' . $order->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $order->id)
+            ->assertJsonStructure(['data' => ['customer' => ['id', 'name', 'email'], 'items']]);
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/admin/orders')
+            ->assertForbidden();
+    }
+
 }
