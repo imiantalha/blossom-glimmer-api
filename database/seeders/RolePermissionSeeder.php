@@ -72,6 +72,7 @@ class RolePermissionSeeder extends Seeder
             'stores.manage',
             'inventory.update',
             'orders.view',
+            'orders.update',
         ]);
 
         $customer->syncPermissions([]);
