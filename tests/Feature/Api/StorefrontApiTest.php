@@ -1604,4 +1604,40 @@ class StorefrontApiTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_admin_can_update_a_specific_vendor_fulfilment_record(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $fulfillmentId = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendor->id)->value('id');
+
+        if (!$fulfillmentId) {
+            $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendor->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+                'status' => 'processing',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.vendorFulfillments.0.status', 'processing');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+                'status' => 'ready_to_ship',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('vendor_order_fulfillments', [
+            'id' => $fulfillmentId,
+            'vendor_id' => $vendor->id,
+            'status' => 'processing',
+        ]);
+    }
+
 }
