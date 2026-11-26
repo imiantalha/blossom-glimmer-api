@@ -696,6 +696,17 @@ class StorefrontController extends Controller
             foreach ($items as $item) {
                 $product = Product::where('id', $item->product_id)->where('status', 'active')->lockForUpdate()->first();
                 if (!$product) throw ValidationException::withMessages(['cart' => ['A product is no longer available.']]);
+
+                // A cart can outlive a store suspension. Re-check seller eligibility
+                // at checkout so a hidden/suspended store cannot continue taking orders.
+                if ($product->vendor_id && !DB::table('vendor_profiles')
+                    ->where('user_id', $product->vendor_id)
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')
+                    ->exists()) {
+                    throw ValidationException::withMessages(['cart' => ["{$product->name} is currently unavailable from this store."]]);
+                }
+
                 $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($item->variant_id && !$variant) throw ValidationException::withMessages(['cart' => ['A selected variant is no longer available.']]);
                 $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant?->id ?? $product->id)->lockForUpdate()->first();
