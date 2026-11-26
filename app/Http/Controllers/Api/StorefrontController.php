@@ -1369,6 +1369,15 @@ class StorefrontController extends Controller
                     'updated_at' => now(),
                 ]);
             }
+            $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $customerOrder->user_id, 'type' => 'order.fulfilment.' . $data['status'],
+                'title' => 'Order fulfilment updated',
+                'message' => 'A store updated order ' . $customerOrder->number . ' to ' . str_replace('_', ' ', $data['status']) . '.',
+                'action_url' => '/account/orders/' . $orderId,
+                'data' => json_encode(['order_id' => $orderId, 'fulfilment_status' => $data['status']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
         });
 
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
@@ -1426,6 +1435,15 @@ class StorefrontController extends Controller
                     'updated_at' => now(),
                 ]);
             }
+            $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $customerOrder->user_id, 'type' => 'order.fulfilment.' . $data['status'],
+                'title' => 'Order fulfilment updated',
+                'message' => 'The marketplace updated order ' . $customerOrder->number . ' to ' . str_replace('_', ' ', $data['status']) . '.',
+                'action_url' => '/account/orders/' . $orderId,
+                'data' => json_encode(['order_id' => $orderId, 'fulfilment_status' => $data['status']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
         });
 
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
