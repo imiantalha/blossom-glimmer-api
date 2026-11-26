@@ -912,6 +912,35 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]), 'Store retrieved.');
     }
 
+    public function updateAdminStore(Request $request, int $id)
+    {
+        $profile = DB::table('vendor_profiles')->where('id', $id)->whereNull('deleted_at')->first();
+        abort_unless($profile, 404);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|alpha_dash|unique:vendor_profiles,slug,' . $id,
+            'description' => 'nullable|string|max:5000',
+            'logo' => 'nullable|url|max:500',
+            'banner' => 'nullable|url|max:500',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+        ]);
+
+        DB::table('vendor_profiles')->where('id', $id)->update([
+            'name' => $data['name'],
+            'slug' => $data['slug'],
+            'description' => $data['description'] ?? null,
+            'image_url' => $data['logo'] ?? null,
+            'banner_url' => $data['banner'] ?? null,
+            'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'updated_at' => now(),
+        ]);
+
+        return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store profile updated by administrator.');
+    }
+
     public function updateStoreStatus(Request $request, int $id)
     {
         $data = $request->validate(['status' => 'required|in:active,suspended,pending']);
