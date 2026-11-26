@@ -44,6 +44,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             StorefrontDemoSeeder::class,
             StorefrontScenarioSeeder::class,
+            MarketplaceLifecycleDemoSeeder::class,
         ]);
 
         User::firstOrCreate(
