@@ -669,6 +669,43 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->orderPayload($order), 'Order retrieved.');
     }
 
+    public function validateCoupon(Request $request)
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:60']]);
+        $cart = $this->currentCart($request);
+        $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
+        abort_if($items->isEmpty(), 422, 'Add products to your cart before applying a coupon.');
+        $subtotal = 0.0;
+        foreach ($items as $item) {
+            $product = Product::where('id', $item->product_id)->where('status', 'active')->first();
+            abort_unless($product, 422, 'A product in your cart is no longer available.');
+            $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->first() : null;
+            abort_if($item->variant_id && !$variant, 422, 'A selected product variant is no longer available.');
+            $subtotal += (float) ($variant->price ?? $product->base_price ?? 0) * (int) $item->quantity;
+        }
+
+        $coupon = DB::table('coupons')->where('code', strtoupper(trim($data['code'])))->first();
+        abort_unless($coupon && $coupon->is_active, 422, 'This coupon is invalid or inactive.');
+        abort_if($coupon->starts_at && now()->lt($coupon->starts_at), 422, 'This coupon is not active yet.');
+        abort_if($coupon->ends_at && now()->gt($coupon->ends_at), 422, 'This coupon has expired.');
+        abort_if($subtotal < (float) $coupon->minimum_subtotal, 422, 'Your cart does not meet the minimum subtotal for this coupon.');
+        abort_if($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit, 422, 'This coupon has reached its usage limit.');
+        $uses = DB::table('coupon_redemptions')->where('coupon_id', $coupon->id)->where('user_id', $request->user()->id)->count();
+        abort_if($uses >= (int) $coupon->per_user_limit, 422, 'You have already used this coupon the maximum number of times.');
+
+        $discount = $coupon->discount_type === 'percentage'
+            ? $subtotal * min(100, (float) $coupon->discount_value) / 100
+            : min($subtotal, (float) $coupon->discount_value);
+        if ($coupon->maximum_discount !== null) $discount = min($discount, (float) $coupon->maximum_discount);
+        $discount = round(min($subtotal, max(0, $discount)), 2);
+
+        return ApiResponse::successResponse([
+            'code' => $coupon->code, 'name' => $coupon->name, 'discount_type' => $coupon->discount_type,
+            'subtotal' => round($subtotal, 2), 'discount_amount' => $discount,
+            'discounted_subtotal' => round(max(0, $subtotal - $discount), 2), 'currency' => $cart->currency,
+        ], 'Coupon applied to your cart.');
+    }
+
     public function createOrder(Request $request)
     {
         $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod,mock_card,mock_wallet', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'coupon_code' => 'nullable|string|max:60', 'notes' => 'nullable|string|max:2000']);
