@@ -28,7 +28,7 @@ class PaymentSimulationController extends Controller
             ->first();
 
         abort_unless($order, 404, 'Order not found.');
-        abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order cannot be paid.');
+        abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 422, 'This order cannot be paid.');\n        abort_unless($order->payment_method === $data['method'], 422, 'The payment method does not match the selected checkout method.');
 
         $key = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
         if ($key) {
