@@ -106,6 +106,7 @@ class VendorDashboardController extends Controller
                     ->first();
                 $items = DB::table('customer_order_items as oi')
                     ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->join('customer_orders as order_totals', 'order_totals.id', '=', 'oi.order_id')
                     ->where('oi.order_id', $order->id)
                     ->where('p.vendor_id', $vendorId);
                 return [
@@ -115,7 +116,7 @@ class VendorDashboardController extends Controller
                     'createdAt' => $order->created_at,
                     'currency' => $order->currency,
                     'itemCount' => (int) (clone $items)->sum('oi.quantity'),
-                    'vendorSubtotal' => (float) (clone $items)->sum('oi.subtotal'),
+                    'vendorSubtotal' => (float) (clone $items)->sum(DB::raw('CASE WHEN order_totals.subtotal > 0 THEN oi.subtotal * ((order_totals.subtotal - order_totals.discount) / order_totals.subtotal) ELSE 0 END')),
                 ];
             });
 
