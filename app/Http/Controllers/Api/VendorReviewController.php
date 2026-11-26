@@ -32,7 +32,7 @@ class VendorReviewController extends Controller
             ->join('products as p', 'p.id', '=', 'r.product_id')
             ->where('r.id', $id)
             ->where('p.vendor_id', $request->user()->id)
-            ->select('r.id', 'r.user_id', 'r.status', 'r.vendor_reply', 'p.name as product_name')
+            ->select('r.id', 'r.user_id', 'r.status', 'r.vendor_reply', 'p.name as product_name', 'p.slug as product_slug')
             ->first();
         abort_unless($review, 404, 'Review not found.');
         abort_unless($review->status === 'approved', 422, 'Only approved customer reviews can receive a public vendor reply.');
@@ -45,7 +45,7 @@ class VendorReviewController extends Controller
                 'user_id' => $review->user_id, 'type' => 'review.vendor_reply',
                 'title' => 'A store replied to your review',
                 'message' => 'The store replied to your review of ' . $review->product_name . '.',
-                'action_url' => '/products', 'data' => json_encode(['review_id' => $review->id]),
+                'action_url' => '/product/' . $review->product_slug, 'data' => json_encode(['review_id' => $review->id]),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         });
