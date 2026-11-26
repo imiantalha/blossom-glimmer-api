@@ -127,6 +127,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::patch('admin/catalog-requests/{id}', [CatalogRequestController::class, 'review']);
             Route::get('admin/stores', [StorefrontController::class, 'adminStores']);
             Route::get('admin/stores/{id}', [StorefrontController::class, 'adminStore']);
+            Route::patch('admin/stores/{id}', [StorefrontController::class, 'updateAdminStore']);
             Route::patch('admin/stores/{id}/status', [StorefrontController::class, 'updateStoreStatus']);
             Route::patch('admin/stores/{id}/commission', [StorefrontController::class, 'updateStoreCommission']);
             Route::get('admin/users/options', [UserController::class, 'options']);
@@ -143,6 +144,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('admin/products/options', [VendorProductController::class, 'options']);
             Route::get('admin/products', [VendorProductController::class, 'adminIndex']);
             Route::get('admin/products/{id}', [VendorProductController::class, 'adminShow']);
+            Route::patch('admin/products/{id}', [VendorProductController::class, 'updateAdminProduct']);
             Route::patch('admin/products/{id}/approval', [VendorProductController::class, 'updateApproval']);
             Route::patch('admin/products/{id}/status', [VendorProductController::class, 'updateAdminStatus']);
             Route::patch('admin/products/{id}/featured', [VendorProductController::class, 'updateFeatured']);
