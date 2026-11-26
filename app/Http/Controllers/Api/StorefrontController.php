@@ -891,6 +891,14 @@ class StorefrontController extends Controller
                         'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $vendorId, 'type' => 'order.created',
+                    'title' => 'New customer order',
+                    'message' => 'Order ' . $number . ' includes products assigned to your store.',
+                    'action_url' => '/vendor/orders',
+                    'data' => json_encode(['order_id' => $id, 'fulfillment_id' => $fulfillmentId]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
                 return DB::table('customer_orders')->find($id);
@@ -902,6 +910,15 @@ class StorefrontController extends Controller
             }
             throw $exception;
         }
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $userId, 'type' => 'order.placed',
+            'title' => 'Order placed successfully',
+            'message' => 'Your order ' . $order->number . ' has been placed.',
+            'action_url' => '/account/orders/' . $order->id,
+            'data' => json_encode(['order_id' => $order->id]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         // Record the purchase against the order and each purchased product so
         // admins can trace customer buying activity independently of HTTP logs.
         AuditLog::create([
