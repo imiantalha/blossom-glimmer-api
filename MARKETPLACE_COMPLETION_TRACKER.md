@@ -293,3 +293,5 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Added a seeded pending customer review on the second customer account so Admin review moderation and Vendor review inboxes have realistic pending content alongside the approved review.
 
 - Audited notification destinations and corrected support replies to open the correct Customer or Vendor support workspace, store approval notifications to open vendor store settings, and vendor review replies to open the reviewed product.
+
+- Demo orders now decrement managed inventory when first seeded, so the pending cancellation scenario can restore stock without inflating inventory; shipped and delivered scenarios also reserve their units.
