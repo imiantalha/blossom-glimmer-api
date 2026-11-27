@@ -52,6 +52,16 @@ class VendorFinanceController extends Controller
         ], 'Vendor finance summary retrieved.');
     }
 
+    public function ledger(Request $request)
+    {
+        $page = DB::table('vendor_ledger_entries')->where('vendor_id', $request->user()->id)
+            ->orderByDesc('id')->paginate(min(max($request->integer('per_page', 25), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Vendor earnings ledger retrieved.');
+    }
+
     public function payouts(Request $request)
     {
         $items = DB::table('vendor_payout_requests')->where('vendor_id', $request->user()->id)->orderByDesc('id')->paginate(min(max($request->integer('per_page', 20), 1), 100));
