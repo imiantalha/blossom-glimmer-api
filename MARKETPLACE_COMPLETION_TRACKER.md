@@ -396,3 +396,17 @@ The older "Remaining implementation work" bullets above are historical snapshots
 **Remaining non-pagination implementation decisions:** The project still contains both the Next.js portal and the Laravel React dashboard. Keep both intact until the production entry point is explicitly settled; do not remove the Laravel React screens. Real payment/payout gateways and carrier integrations remain intentionally simulated/manual pending credentials and an approved integration scope.
 
 **Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed. The listing pagination changes are committed to the existing frontend feature branch; PRs remain open and unmerged.
+
+
+### Further RBAC and workspace implementation pass — 27 Nov 2026
+
+- The Next.js customer account layout now requires the Customer role, not merely any authenticated session. Vendor, Admin and Super Admin sessions are redirected to their own workspace instead of being allowed to open customer-only account screens and then encountering API authorization failures.
+- The shared protected-route component supports an optional required role and routes authenticated users who lack that role to the correct role home. Existing login redirects and loading states remain intact.
+- Vendor navigation was decoupled so finance, support and notifications are not accidentally hidden behind the `orders.view` permission. Reviews now follow `reviews.view`; orders and analytics remain gated by their relevant permission.
+- Customer notifications now request 20 records for the selected server page and consume API pagination metadata; read/unread actions reload the current page.
+- Reviewed the Admin marketplace settings contract: collections and shipping methods are read together through the settings endpoint, with create/update/activate/deactivate actions backed by their dedicated API routes. Category hierarchy is intentionally loaded as a tree rather than paged flat.
+- Reconfirmed that Super Admin role/permission routes are isolated behind the Super Admin API middleware, and the Next.js role-management page checks the session role before rendering controls.
+
+**Still open for implementation closeout:** continue auditing every action and API contract across all route families, including customer checkout/cart/wishlist/account, vendor product variants/inventory/store/fulfilment, Admin store/product/catalog/user/finance/support controls, and public product/store/brand/category/collection flows. Confirm that each mutation has a corresponding backend route and that the frontend refreshes or navigates using the authoritative response. Resolve the single production portal entry point while preserving the Laravel React dashboard until its intended role is settled. Do not call the implementation complete based on this partial audit.
+
+**Test phase remains deferred:** no builds, lint, tests, browser checks, migrations, seeders, CI, merges or deployments were run as part of this implementation pass.
