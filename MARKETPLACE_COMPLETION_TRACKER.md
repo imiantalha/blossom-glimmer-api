@@ -102,7 +102,7 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Added role-aware React dashboard routing/navigation, vendor dashboard, vendor order fulfilment page, vendor store profile page, and vendor product/inventory list.
 - Added defensive Next.js API envelope/pagination parsing and invalid-JSON handling, plus route/root error recovery screens. Added a React dashboard error boundary.
 
-### Still outstanding — do not mark complete
+### Historical outstanding list from 2026-11-26 — superseded by later implementation entries
 
 - Full vendor product create/edit experience in the Laravel React dashboard; vendor analytics, earnings, commission ledger, payout requests, notifications and support.
 - Admin React pages and workflows for marketplace products, categories, brands, stores, orders, inventory, reviews, shipping, settings, reports, refunds, returns, promotions/coupons, support and financial operations.
@@ -118,7 +118,7 @@ The bullets in this historical baseline were progressively addressed by the impl
 - Corrected the legacy admin shipment controller guard to allow both Admin and Super Admin, matching the route group's role policy.
 - Re-inspected the newly added PHP controllers and the main new migrations for the same doubled-backslash syntax issue; no further occurrences were found in the inspected files.
 - GitHub Actions remain disabled per the repository owner's confirmation. No workflow was dispatched. The latest backend commit has no status checks because CI is disabled; this is not a passing test result.
-- The feature branches are still not release-ready: payment transaction simulation, refunds/returns, vendor ledger/payouts, notifications, support tickets, remaining vendor/admin screens, demo fixtures and the full local browser/security test matrix remain outstanding. Do not merge or deploy on the basis of these syntax/RBAC corrections alone.
+- At this point in the 2026-11-26 history, payment simulation, refunds/returns, vendor ledger/payouts, notifications, support tickets, remaining vendor/admin screens and demo fixtures were still outstanding. The implementation entries below supersede those module statuses; the local browser/security test and release gate remains deferred.
 
 ### Implementation progress — payment/refund backend slice
 
