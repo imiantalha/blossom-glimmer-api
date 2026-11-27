@@ -484,3 +484,9 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Corrected the Next.js marketplace-settings query/page contract to pass independent collection and shipping page numbers and consume both pagination metadata objects. Source inspection caught and corrected an earlier partial signature update before any runtime validation.
 - Updated Vendor/Admin/public product and store/brand/category detail queries so only a genuine 404 is treated as a missing record. Authentication, permission, server and network errors now propagate instead of being silently rendered as empty/missing data.
 - No builds, lint, tests, migrations, seeders, CI dispatches, merges or deployments were run.
+
+
+### Collection merchandising query parity — 27 Nov 2026
+
+- Corrected public collection product queries to include both configured category hierarchies and configured featured-store slugs. Collections with only featured stores now return those vendors' active products instead of an empty result; category-based and mixed collections retain both sources.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
