@@ -422,3 +422,11 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Added deterministic secondary ID ordering to prevent duplicate/omitted rows when names or sort positions tie.
 - The API continues returning the same `success/message/data/pagination` envelope and honours the existing `page` and `per_page` query contract.
 - Source change committed to the existing backend feature branch. Runtime and SQL Server compatibility remain unverified because the user has deferred the test phase.
+
+
+### Follow-up Customer role isolation and storefront catalogue query pass — 27 Nov 2026
+
+- Restricted the standalone `/orders` route group to Customer accounts, matching the existing Customer-only account layout and Customer-only Laravel order APIs.
+- Updated the shared Next.js commerce provider so Vendor, Admin and Super Admin sessions do not call Customer-only cart or wishlist APIs. Their storefront cart/wishlist state remains local; Customer sessions continue using the authenticated Laravel cart/wishlist and guest-item merge flow.
+- Confirmed cart, wishlist, address, checkout, order, payment, refund and return endpoint paths are represented in the Laravel v1 route group; the role boundary now also matches those Customer-only commerce endpoints.
+- This is a source-level implementation correction only. No build, lint, test, browser, migration, seeder, CI, merge or deployment was run.
