@@ -441,3 +441,15 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - The frontend `/orders` route now has the same Customer role restriction as the account and checkout routes; shared commerce state avoids Customer-only cart/wishlist API calls for other roles.
 - Public category, brand and vendor index endpoints now use database-backed pagination, with stable ordering and aggregate product counts.
 - These are source/documentation changes only. All runtime checks, builds, migrations, seeders, CI, merges and deployments remain deferred.
+
+
+### Cross-portal pagination and API contract alignment — 27 Nov 2026
+
+- Added pagination to the Laravel React Admin product, store, order, review, support, coupon, payout, and role/permission listing workspaces; Vendor product, order, review, support, and payout-history lists now expose pagination controls.
+- Corrected the Laravel React Admin review moderation page to consume the direct data + pagination response emitted by ReviewManagementController. Vendor review, support, coupon, payout and notification consumers retain the nested ApiResponse envelope where their controllers use ApiResponse::successResponse.
+- Role assignment now fetches the full permission option set from the dedicated /permissions/options endpoint while the role and permission management lists use their paginated index endpoints.
+- Vendor finance UI now selects among the currencies returned by the finance summary and uses the selected currency for available-balance limits and payout requests.
+- Customer wishlist now consumes server-side paginated wishlist data and exposes page navigation. Local guest/non-customer wishlists remain local and are not sent to Customer-only APIs.
+- Public collections directory and collection product pages now use server-side pagination. Existing category hierarchy/tree and small account address/cart views remain unpaginated by design; account order, return, refund, review, notification, public product/brand/store/category and vendor/admin order lists use paginated data.
+- Confirmed the backend wishlist endpoint already returns data and pagination metadata and the collection products endpoint already returns the same direct pagination contract; added pagination to the public collection directory endpoint.
+- No builds, lint, automated tests, browser tests, migrations, seeders, CI runs, merges or deployments were performed.
