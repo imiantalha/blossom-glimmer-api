@@ -299,16 +299,21 @@ class StorefrontController extends Controller
         ]]);
     }
 
-    public function collections()
+    public function collections(Request $request)
     {
-        $items = DB::table('collections')->where('is_active', true)->orderBy('sort_order')->get()
-            ->map(fn ($c) => [
-                'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
-                'description' => $c->description, 'heroImage' => $c->image_url,
-                'categories' => json_decode($c->category_slugs, true) ?: [],
-                'featuredStores' => json_decode($c->featured_stores, true) ?: [],
-            ]);
-        return ApiResponse::successResponse($items, 'Collections retrieved.');
+        $page = DB::table('collections')->where('is_active', true)->orderBy('sort_order')
+            ->paginate(min(max($request->integer('per_page', 24), 1), 100));
+        $items = $page->getCollection()->map(fn ($c) => [
+            'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
+            'description' => $c->description, 'heroImage' => $c->image_url,
+            'categories' => json_decode($c->category_slugs, true) ?: [],
+            'featuredStores' => json_decode($c->featured_stores, true) ?: [],
+        ])->values();
+        return response()->json(['success' => true, 'message' => 'Collections retrieved.', 'data' => $items, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $items->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(),
+            'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
     }
 
     public function collection(string $slug)
