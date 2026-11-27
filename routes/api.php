@@ -84,7 +84,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
 
         Route::middleware('role:Vendor')->prefix('vendor')->group(function () {
             Route::get('dashboard', [VendorDashboardController::class, 'index']);
-            Route::get('analytics', [MarketplaceReportController::class, 'vendor']);
+            Route::get('analytics', [MarketplaceReportController::class, 'vendor'])->middleware('permission:orders.view');
             Route::get('reviews', [VendorReviewController::class, 'index'])->middleware('permission:reviews.view');
             Route::patch('reviews/{id}/reply', [VendorReviewController::class, 'reply'])->middleware('permission:reviews.update');
             Route::get('support/tickets', [EngagementController::class, 'tickets']);
