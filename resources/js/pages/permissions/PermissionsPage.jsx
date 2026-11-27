@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
+import Pagination from "../../components/common/navigation/Pagination";
 
 export default function PermissionsPage() {
     const [permissions, setPermissions] = useState([]);
+    const [page, setPage] = useState(1);
+    const [pagination, setPagination] = useState(null);
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -12,12 +15,13 @@ export default function PermissionsPage() {
     const load = useCallback(async () => {
         setLoading(true); setError("");
         try {
-            const response = await api.get("/permissions");
+            const response = await api.get("/permissions", { params: { page, per_page: 25 } });
             if (!response?.data?.success || !Array.isArray(response?.data?.data)) throw new Error("The server returned an unexpected permissions format.");
             setPermissions(response.data.data);
+            setPagination(response.data.pagination ?? null);
         } catch (exception) { setError(exception?.response?.data?.message || exception?.message || "Unable to load permissions."); }
         finally { setLoading(false); }
-    }, []);
+    }, [page]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -51,5 +55,6 @@ export default function PermissionsPage() {
             <thead><tr><th>Permission</th><th>Assigned roles</th><th>Actions</th></tr></thead>
             <tbody>{loading ? <tr><td colSpan="3" className="text-center py-4">Loading permissions…</td></tr> : permissions.length ? permissions.map((permission) => <tr key={permission.id}><td className="fw-semibold">{permission.name}</td><td>{permission.roles_count ?? permission.roles?.length ?? 0}</td><td><button className="btn btn-sm btn-outline-danger" onClick={() => void remove(permission)}>Delete</button></td></tr>) : <tr><td colSpan="3" className="text-center text-muted py-4">No permissions found.</td></tr>}</tbody>
         </table></div></div>
+        {pagination && <Pagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={setPage} />}
     </div>;
 }
