@@ -453,3 +453,11 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Public collections directory and collection product pages now use server-side pagination. Existing category hierarchy/tree and small account address/cart views remain unpaginated by design; account order, return, refund, review, notification, public product/brand/store/category and vendor/admin order lists use paginated data.
 - Confirmed the backend wishlist endpoint already returns data and pagination metadata and the collection products endpoint already returns the same direct pagination contract; added pagination to the public collection directory endpoint.
 - No builds, lint, automated tests, browser tests, migrations, seeders, CI runs, merges or deployments were performed.
+
+
+### Vendor API route and page-level permission alignment — 27 Nov 2026
+
+- Corrected both Next.js and Laravel React Vendor support clients to use the existing vendor-scoped /vendor/support/tickets API family. Customer support continues to use /support/tickets; Admin support continues to use /admin/support/tickets.
+- Added server-rendered page guards for Vendor product view/create/edit, inventory, catalog requests, order list/detail, analytics, reviews, and store management routes. Added shared products.view and reviews.view permission constants to match the seeded backend permission names.
+- Added the matching orders.view permission middleware to the Vendor analytics API endpoint. Vendor review API already requires reviews.view; Vendor products, inventory, orders, store and catalog request endpoints already enforce their granular permission middleware.
+- Both repositories' automated workflows are now manual-dispatch only on these feature branches, preserving the requested pause on automatic CI triggers. No workflow was dispatched and no tests/builds/lint/migrations/seeders/merges/deployments were run.
