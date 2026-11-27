@@ -469,3 +469,11 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Corrected the Next.js Vendor finance workspace's missing selected-currency balance derivation; the selected currency now drives the available-balance and payout amount validation.
 - Tightened address-book fallback behavior: saved sample/local addresses are used only when the API is unavailable, not for authorization or other API errors. Checkout now respects a successful empty server address book instead of reintroducing stale local/demo addresses.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+
+### Catalog and marketplace settings list pagination — 27 Nov 2026
+
+- Catalog attributes and tags now have independent backend pagination parameters and metadata. Both Next.js Admin and the preserved Laravel React Admin dashboard expose separate page controls for each list.
+- Marketplace collections and shipping methods now have independent backend pagination parameters and metadata. Both Admin portals expose separate page controls while preserving the active tab and the other list's current page.
+- The legacy Admin brand management list now uses 25-record server pagination; the category hierarchy remains a tree response because flattening/paginating it would break parent-child selection and display semantics.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
