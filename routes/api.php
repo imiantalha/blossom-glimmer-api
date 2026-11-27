@@ -92,6 +92,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
             Route::get('support/tickets/{id}', [EngagementController::class, 'showTicket']);
             Route::post('support/tickets/{id}/messages', [EngagementController::class, 'replyTicket']);
             Route::get('finance/summary', [VendorFinanceController::class, 'summary']);
+            Route::get('finance/ledger', [VendorFinanceController::class, 'ledger']);
             Route::get('finance/payouts', [VendorFinanceController::class, 'payouts']);
             Route::post('finance/payouts', [VendorFinanceController::class, 'requestPayout']);
             Route::get('store/me', [StorefrontController::class, 'myStore'])->middleware('permission:stores.manage');
