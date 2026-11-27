@@ -516,3 +516,5 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Public product review API now returns server-paginated review rows plus product-wide aggregate average, count and rating distribution, so pagination does not distort the displayed rating summary.
 - Next.js product detail review section now loads ten reviews per page, exposes Previous/Next controls, retains sorting within the current page, and uses the product-wide aggregate summary. API errors are shown rather than silently presenting an empty review list.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+- Corrected the shared product-form options query to route both Admin and Super Admin sessions to the Admin catalog-options API; previously only the literal Admin role selected that route.
