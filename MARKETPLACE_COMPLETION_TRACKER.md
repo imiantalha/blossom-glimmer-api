@@ -13,6 +13,8 @@
 
 A module is implementation-complete only when its UI, API, validation, authorization, persistence, loading/empty/error states, and action-to-API contract are implemented. A route existing or a page rendering is not sufficient. A separate release-verification status is granted only after the authorized test/build/browser and database compatibility phase passes.
 
+**Tracker chronology note:** This document preserves historical progress snapshots. Any earlier heading or bullet labelled “Remaining work” describes the state at that timestamp; use the latest dated implementation entries and the current release-verification gate as the source of truth.
+
 ## Customer storefront — Next.js
 
 - Authentication: registration, login/logout, vendor application submission, forgot/reset password, session expiry and protected routes.
