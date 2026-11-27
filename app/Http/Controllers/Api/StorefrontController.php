@@ -642,8 +642,8 @@ class StorefrontController extends Controller
         }
         $summaryTotal = (clone $summaryQuery)->count();
         $summaryAverage = (float) ((clone $summaryQuery)->avg('rating') ?? 0);
-        $distributionRows = (clone $summaryQuery)->select('rating', DB::raw('COUNT(*) as count'))->groupBy('rating')->get()->keyBy('rating');
-        $distribution = collect([5, 4, 3, 2, 1])->map(fn ($rating) => ['rating' => $rating, 'count' => (int) ($distributionRows[$rating]->count ?? 0)])->values();
+        $distributionRows = (clone $summaryQuery)->select('rating', DB::raw('COUNT(*) as review_count'))->groupBy('rating')->get()->keyBy('rating');
+        $distribution = collect([5, 4, 3, 2, 1])->map(fn ($rating) => ['rating' => $rating, 'count' => (int) ($distributionRows[$rating]->review_count ?? 0)])->values();
         $rows = $q->select('r.*', 'u.name as user_name')->latest('r.created_at')->paginate(min(max($request->integer('per_page', 10), 1), 100));
         $data = $rows->getCollection()->map(fn ($r) => ['id' => $r->id, 'productId' => $r->product_id, 'rating' => $r->rating, 'title' => $r->title, 'body' => $r->body, 'vendorReply' => $r->vendor_reply, 'vendorRepliedAt' => $r->vendor_replied_at, 'user' => ['id' => $r->user_id, 'name' => $r->user_name], 'createdAt' => $r->created_at]);
         return response()->json(['success' => true, 'message' => 'Reviews retrieved.', 'data' => $data, 'summary' => ['total' => $summaryTotal, 'average' => $summaryAverage, 'distribution' => $distribution], 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
