@@ -11,7 +11,7 @@
 
 ## Completion standard
 
-A module is complete only when its UI, API, validation, authorization, persistence, loading/empty/error states, and tests are implemented. A route existing or a page rendering is not sufficient.
+A module is implementation-complete only when its UI, API, validation, authorization, persistence, loading/empty/error states, and action-to-API contract are implemented. A route existing or a page rendering is not sufficient. A separate release-verification status is granted only after the authorized test/build/browser and database compatibility phase passes.
 
 ## Customer storefront — Next.js
 
