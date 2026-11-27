@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
+import Pagination from "../../components/common/navigation/Pagination";
 
 export default function VendorOrdersPage() {
     const [orders, setOrders] = useState([]);
+    const [page, setPage] = useState(1);
+    const [pagination, setPagination] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
@@ -10,12 +13,13 @@ export default function VendorOrdersPage() {
     const load = useCallback(async () => {
         setLoading(true); setError("");
         try {
-            const response = await api.get("/vendor/orders", { params: { per_page: 50 } });
+            const response = await api.get("/vendor/orders", { params: { page, per_page: 25 } });
             if (!response?.data?.success || !Array.isArray(response?.data?.data)) throw new Error("The server returned an unexpected orders format.");
             setOrders(response.data.data);
+            setPagination(response.data.pagination ?? null);
         } catch (exception) { setError(exception?.response?.data?.message || exception?.message || "Unable to load your orders."); }
         finally { setLoading(false); }
-    }, []);
+    }, [page]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -58,5 +62,6 @@ export default function VendorOrdersPage() {
                 </tr>;
             }) : <tr><td colSpan="6" className="text-center text-muted py-5">No vendor orders yet.</td></tr>}</tbody>
         </table></div></div>
+        {pagination && <Pagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={setPage} />}
     </div>;
 }
