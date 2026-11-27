@@ -22,7 +22,7 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Checkout: server-calculated totals, address validation, shipping quote, discounts, payment selection, idempotent order placement and confirmation.
 - Post-purchase: order tracking, cancellation/return request eligibility, reviews, notifications and support contact/tickets.
 
-## Vendor dashboard — Laravel React app
+## Vendor dashboard — canonical Next.js portal; Laravel React legacy surface
 
 - Vendor application and approval state; store creation/profile/media/settings.
 - Product CRUD, variants/media/pricing, approval feedback and product status.
@@ -32,7 +32,7 @@ A module is complete only when its UI, API, validation, authorization, persisten
 - Sales/product analytics, review responses, notifications and support tickets.
 - Every query and mutation must be scoped to the authenticated vendor and its store.
 
-## Admin dashboard — Laravel React app
+## Admin dashboard — canonical Next.js portal; Laravel React legacy surface
 
 - Dashboard KPIs and reports.
 - Vendor onboarding, store approval/suspension/reactivation and commission configuration.
@@ -64,14 +64,15 @@ A module is complete only when its UI, API, validation, authorization, persisten
 
 ## Test and release requirements
 
+- The Next.js app is the canonical Customer, Vendor, Admin and Super Admin portal. The Laravel React dashboard is preserved as a legacy/internal staff portal; do not delete it or require it to duplicate every Next.js workflow.
 - Seed local demo data: multiple customers, vendors/stores, products of different types, variants, inventory, addresses, orders, reviews, coupons, payment outcomes, refunds and payouts. Use safe demo images.
 - API feature tests for role access, ownership isolation, validation, state transitions, idempotency, malformed payloads and simulated provider outcomes.
 - Frontend tests for loading/empty/error states, invalid response shapes, retry, auth/login/logout, cart/checkout, vendor workflows and admin workflows.
 - Browser tests for customer, vendor and admin scenarios against local services only.
 - Verify SQLite and SQL Server compatibility where supported.
 - Do not access staging/production or third-party databases during this work.
-- Avoid GitHub Actions runs because the monthly minutes budget is nearly exhausted. Do not claim tests passed unless actually executed locally and recorded.
-- Keep work on the existing feature branches/PRs. Do not merge or deploy until implementation and local verification are complete and the user explicitly approves.
+- Automatic GitHub Actions triggers are manual-dispatch only on the current feature branches. Do not dispatch workflows or claim tests passed unless actually executed locally and recorded.
+- Keep work on the existing feature branches/PRs. Do not merge or deploy until implementation is complete, the user authorizes the test phase, and the user separately approves merge/deployment.
 
 ## Initial gaps identified in the 2026-11-26 baseline audit
 
@@ -394,7 +395,7 @@ The older "Remaining implementation work" bullets above are historical snapshots
 
 **API/source audit:** Relevant Laravel return, review, support, vendor finance, payment-event and audit endpoints expose paginator metadata. No database migrations or seeders were executed.
 
-**Remaining non-pagination implementation decisions:** The project still contains both the Next.js portal and the Laravel React dashboard. Keep both intact until the production entry point is explicitly settled; do not remove the Laravel React screens. Real payment/payout gateways and carrier integrations remain intentionally simulated/manual pending credentials and an approved integration scope.
+**Remaining non-pagination implementation decisions:** Portal ownership is resolved: Next.js is canonical and Laravel React is preserved as a legacy/internal staff portal. Real payment/payout gateways and carrier integrations remain intentionally simulated/manual pending credentials and an approved integration scope.
 
 **Test phase remains deferred by explicit instruction:** no migration execution, seeder execution, API tests, frontend build/lint, browser tests, CI runs, staging or production verification have been performed. The listing pagination changes are committed to the existing frontend feature branch; PRs remain open and unmerged.
 
@@ -408,9 +409,9 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Reviewed the Admin marketplace settings contract: collections and shipping methods are read together through the settings endpoint, with create/update/activate/deactivate actions backed by their dedicated API routes. Category hierarchy is intentionally loaded as a tree rather than paged flat.
 - Reconfirmed that Super Admin role/permission routes are isolated behind the Super Admin API middleware, and the Next.js role-management page checks the session role before rendering controls.
 
-**Still open for implementation closeout:** continue auditing every action and API contract across all route families, including customer checkout/cart/wishlist/account, vendor product variants/inventory/store/fulfilment, Admin store/product/catalog/user/finance/support controls, and public product/store/brand/category/collection flows. Confirm that each mutation has a corresponding backend route and that the frontend refreshes or navigates using the authoritative response. Resolve the single production portal entry point while preserving the Laravel React dashboard until its intended role is settled. Do not call the implementation complete based on this partial audit.
+**Historical closeout checklist:** the route-family and portal-ownership bullets above were a partial snapshot on 27 Nov and have been superseded by the later implementation entries below, which record the customer commerce boundary, vendor variants/inventory/store/fulfilment, Admin catalog/user/finance/support, public catalogue, settings, pagination and API response-alignment passes. Do not interpret this historical block as a current list of unimplemented modules.
 
-**Test phase remains deferred:** no builds, lint, tests, browser checks, migrations, seeders, CI, merges or deployments were run as part of this implementation pass.
+**Test phase remains deferred by explicit instruction:** no builds, lint, automated tests, browser checks, migrations, seeders, CI dispatches, merges or deployments have been run for the latest implementation commits.
 
 - Extended the Customer-role boundary to checkout: authenticated Vendor/Admin/Super Admin users are redirected to their own workspace and do not trigger customer checkout-summary API reads. Guest carts remain preserved while unauthenticated visitors are sent to sign in.
 
