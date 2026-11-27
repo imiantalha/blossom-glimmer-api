@@ -501,3 +501,10 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
 
 - Vendor product creation/editing and inventory pages now require the corresponding read permission as well as create/update/inventory permissions because their forms also load product and catalog option data. This aligns the page guard with the actual API calls made during page render.
+
+
+### Server-side Customer route boundary — 27 Nov 2026
+
+- Added a reusable server-side Customer role guard and applied it before rendering account, order-history and checkout route trees. Existing client-side ProtectedRoute and checkout role checks remain as defense in depth; guest cart and wishlist pages remain accessible.
+- This prevents non-Customer role sessions from rendering Customer server page trees and relying only on a client redirect or API 403 response.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
