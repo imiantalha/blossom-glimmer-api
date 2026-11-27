@@ -155,9 +155,14 @@ class CatalogManagementController extends Controller
     }
 
 
-    public function catalogSettings()
+    public function catalogSettings(Request $request)
     {
-        $attributes = CatalogAttribute::query()->with('values')->orderBy('name')->get()->map(fn (CatalogAttribute $attribute) => [
+        $perPage = min(max($request->integer('per_page', 25), 1), 100);
+        $attributesPage = CatalogAttribute::query()->with('values')->orderBy('name')
+            ->paginate($perPage, ['*'], 'attributes_page', max(1, $request->integer('attributes_page', 1)));
+        $tagsPage = Tag::query()->orderBy('name')
+            ->paginate($perPage, ['*'], 'tags_page', max(1, $request->integer('tags_page', 1)));
+        $attributes = $attributesPage->getCollection()->map(fn (CatalogAttribute $attribute) => [
             'id' => (string) $attribute->id,
             'name' => $attribute->name,
             'slug' => $attribute->slug,
@@ -166,11 +171,19 @@ class CatalogManagementController extends Controller
             'status' => strtoupper($attribute->status ?? 'active'),
             'values' => $attribute->values->map(fn (AttributeValue $value) => ['id' => (string) $value->id, 'value' => $value->value, 'slug' => $value->slug])->values(),
         ])->values();
-        $tags = Tag::query()->orderBy('name')->get()->map(fn (Tag $tag) => [
+        $tags = $tagsPage->getCollection()->map(fn (Tag $tag) => [
             'id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug, 'status' => strtoupper($tag->status ?? 'active'),
         ])->values();
+        $meta = fn ($page) => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(),
+            'total' => $page->total(), 'count' => $page->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(),
+            'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ];
 
-        return ApiResponse::successResponse(['attributes' => $attributes, 'tags' => $tags], 'Catalog settings retrieved.');
+        return ApiResponse::successResponse([
+            'attributes' => $attributes, 'attributePagination' => $meta($attributesPage),
+            'tags' => $tags, 'tagPagination' => $meta($tagsPage),
+        ], 'Catalog settings retrieved.');
     }
 
     public function storeAttribute(Request $request)
