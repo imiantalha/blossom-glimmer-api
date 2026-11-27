@@ -508,3 +508,10 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Added a reusable server-side Customer role guard and applied it before rendering account, order-history and checkout route trees. Existing client-side ProtectedRoute and checkout role checks remain as defense in depth; guest cart and wishlist pages remain accessible.
 - This prevents non-Customer role sessions from rendering Customer server page trees and relying only on a client redirect or API 403 response.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+
+### Public product review pagination and aggregate integrity — 27 Nov 2026
+
+- Public product review API now returns server-paginated review rows plus product-wide aggregate average, count and rating distribution, so pagination does not distort the displayed rating summary.
+- Next.js product detail review section now loads ten reviews per page, exposes Previous/Next controls, retains sorting within the current page, and uses the product-wide aggregate summary. API errors are shown rather than silently presenting an empty review list.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
