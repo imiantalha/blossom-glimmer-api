@@ -522,3 +522,12 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Corrected the shared product-form options query to route both Admin and Super Admin sessions to the Admin catalog-options API; previously only the literal Admin role selected that route.
 
 - Product listing/detail rating values now derive only from approved review records, matching the paginated review API aggregate. Legacy metadata no longer creates a displayed review count or average without corresponding review rows.
+
+
+### Current implementation closeout status — 27 Nov 2026
+
+- Source-level implementation pass now covers the previously listed Customer, Vendor, Admin, Super Admin, and public storefront gaps: route/API boundaries, core workflows, granular authorization, pagination, response-envelope alignment, fallback behavior, finance ledger/payouts, catalog settings, support, reviews, returns/refunds and operational notifications.
+- Next.js is the canonical role-aware website. The Laravel React dashboard is preserved as a legacy/internal staff portal and has not been removed.
+- Payment and payout processing remain explicitly simulated; shipping carrier tracking is manual. Real gateway/carrier providers require credentials and a separately approved integration scope.
+- Release verification remains intentionally pending: no builds, lint, tests, browser runs, migrations, seeders, CI dispatches, staging/production checks, merges or deployments have been performed on the latest commits.
+- Frontend PR #57 and backend PR #47 remain open. The backend PR is currently mergeable; GitHub currently reports the frontend PR as dirty, so it has not been merged. Recheck mergeability before any future merge approval.
