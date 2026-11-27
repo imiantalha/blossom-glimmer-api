@@ -518,3 +518,5 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
 
 - Corrected the shared product-form options query to route both Admin and Super Admin sessions to the Admin catalog-options API; previously only the literal Admin role selected that route.
+
+- Product listing/detail rating values now derive only from approved review records, matching the paginated review API aggregate. Legacy metadata no longer creates a displayed review count or average without corresponding review rows.
