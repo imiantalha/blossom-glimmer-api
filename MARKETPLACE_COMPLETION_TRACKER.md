@@ -477,3 +477,10 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Marketplace collections and shipping methods now have independent backend pagination parameters and metadata. Both Admin portals expose separate page controls while preserving the active tab and the other list's current page.
 - The legacy Admin brand management list now uses 25-record server pagination; the category hierarchy remains a tree response because flattening/paginating it would break parent-child selection and display semantics.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+
+### Server query error handling and settings contract reconciliation — 27 Nov 2026
+
+- Corrected the Next.js marketplace-settings query/page contract to pass independent collection and shipping page numbers and consume both pagination metadata objects. Source inspection caught and corrected an earlier partial signature update before any runtime validation.
+- Updated Vendor/Admin/public product and store/brand/category detail queries so only a genuine 404 is treated as a missing record. Authentication, permission, server and network errors now propagate instead of being silently rendered as empty/missing data.
+- No builds, lint, tests, migrations, seeders, CI dispatches, merges or deployments were run.
