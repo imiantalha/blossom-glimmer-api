@@ -499,3 +499,5 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Vendor order fulfilment controls are shown only to users with orders.update, while order details remain available to orders.view users.
 - Vendor product detail actions now respect products.update, products.create and products.delete independently; corresponding server actions and API middleware remain the enforcement boundary.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+- Vendor product creation/editing and inventory pages now require the corresponding read permission as well as create/update/inventory permissions because their forms also load product and catalog option data. This aligns the page guard with the actual API calls made during page render.
