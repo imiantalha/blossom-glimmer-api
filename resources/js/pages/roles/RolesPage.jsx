@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
+import Pagination from "../../components/common/navigation/Pagination";
 
 export default function RolesPage() {
     const [roles, setRoles] = useState([]);
+    const [page, setPage] = useState(1);
+    const [pagination, setPagination] = useState(null);
     const [permissions, setPermissions] = useState([]);
     const [editing, setEditing] = useState(null);
     const [name, setName] = useState("");
@@ -15,16 +18,17 @@ export default function RolesPage() {
     const load = useCallback(async () => {
         setLoading(true); setError("");
         try {
-            const [roleResponse, permissionResponse] = await Promise.all([api.get("/roles"), api.get("/permissions")]);
+            const [roleResponse, permissionResponse] = await Promise.all([api.get("/roles", { params: { page, per_page: 25 } }), api.get("/permissions/options")]);
             if (!roleResponse?.data?.success || !Array.isArray(roleResponse?.data?.data) || !permissionResponse?.data?.success || !Array.isArray(permissionResponse?.data?.data)) {
                 throw new Error("The server returned an unexpected roles or permissions format.");
             }
             setRoles(roleResponse.data.data);
+            setPagination(roleResponse.data.pagination ?? null);
             setPermissions(permissionResponse.data.data);
         } catch (exception) {
             setError(exception?.response?.data?.message || exception?.message || "Unable to load roles.");
         } finally { setLoading(false); }
-    }, []);
+    }, [page]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -94,6 +98,7 @@ export default function RolesPage() {
                         }) : <tr><td colSpan="3" className="text-center text-muted py-4">No roles found.</td></tr>}</tbody>
                     </table></div>
                 </div>
+                {pagination && <Pagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={setPage} />}
             </div>
         </div>
     </div>;
