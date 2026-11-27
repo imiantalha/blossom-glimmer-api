@@ -333,9 +333,18 @@ class StorefrontController extends Controller
         $collection = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
         abort_unless($collection, 404);
         $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
-        $query = $this->productQuery();
-        if ($categorySlugs) $query->where(fn ($q) => $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs)));
-        else $query->whereRaw('1 = 0');
+        $storeSlugs = json_decode($collection->featured_stores, true) ?: [];
+        $query = $this->productQuery()->where(function ($q) use ($categorySlugs, $storeSlugs) {
+            if ($categorySlugs) {
+                $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))
+                    ->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs));
+            }
+            if ($storeSlugs) {
+                $method = $categorySlugs ? 'orWhereHas' : 'whereHas';
+                $q->{$method}('vendor.vendorProfile', fn ($vendor) => $vendor->whereIn('slug', $storeSlugs)->where('status', 'active')->whereNull('deleted_at'));
+            }
+            if (!$categorySlugs && !$storeSlugs) $q->whereRaw('1 = 0');
+        });
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
         $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
         return response()->json(['success' => true, 'message' => 'Collection products retrieved.', 'data' => $data, 'pagination' => [
