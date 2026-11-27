@@ -310,9 +310,14 @@ class CatalogManagementController extends Controller
     }
 
 
-    public function marketplaceSettings()
+    public function marketplaceSettings(Request $request)
     {
-        $collections = DB::table('collections')->orderBy('sort_order')->orderBy('name')->get()->map(fn ($item) => [
+        $perPage = min(max($request->integer('per_page', 25), 1), 100);
+        $collectionsPage = DB::table('collections')->orderBy('sort_order')->orderBy('name')
+            ->paginate($perPage, ['*'], 'collections_page', max(1, $request->integer('collections_page', 1)));
+        $shippingPage = DB::table('shipping_methods')->orderBy('sort_order')->orderBy('name')
+            ->paginate($perPage, ['*'], 'shipping_page', max(1, $request->integer('shipping_page', 1)));
+        $collections = $collectionsPage->getCollection()->map(fn ($item) => [
             'id' => (string) $item->id,
             'name' => $item->name,
             'slug' => $item->slug,
@@ -324,7 +329,7 @@ class CatalogManagementController extends Controller
             'isActive' => (bool) $item->is_active,
             'sortOrder' => (int) $item->sort_order,
         ])->values();
-        $shippingMethods = DB::table('shipping_methods')->orderBy('sort_order')->orderBy('name')->get()->map(fn ($item) => [
+        $shippingMethods = $shippingPage->getCollection()->map(fn ($item) => [
             'id' => (string) $item->id,
             'code' => $item->code,
             'name' => $item->name,
@@ -336,8 +341,16 @@ class CatalogManagementController extends Controller
             'isActive' => (bool) $item->is_active,
             'sortOrder' => (int) $item->sort_order,
         ])->values();
+        $meta = fn ($page) => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(),
+            'total' => $page->total(), 'count' => $page->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(),
+            'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ];
 
-        return ApiResponse::successResponse(['collections' => $collections, 'shippingMethods' => $shippingMethods], 'Marketplace settings retrieved.');
+        return ApiResponse::successResponse([
+            'collections' => $collections, 'collectionPagination' => $meta($collectionsPage),
+            'shippingMethods' => $shippingMethods, 'shippingPagination' => $meta($shippingPage),
+        ], 'Marketplace settings retrieved.');
     }
 
     public function storeCollection(Request $request)
