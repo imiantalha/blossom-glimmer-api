@@ -2,10 +2,11 @@
 
 ## Architecture decisions
 
-- The Next.js repository (`imiantalha/blossom-glimmer`) owns the customer-facing storefront and customer account/checkout experience.
-- The Laravel repository (`imiantalha/blossom-glimmer-api`) owns the API, database, business rules, and the React admin/vendor dashboard.
-- The Laravel React dashboard must not duplicate customer storefront pages or customer shopping flows.
-- Existing Next.js `/administrator` and `/vendor` routes are legacy/overlapping dashboard surfaces. Audit their imports, auth and navigation before redirecting/removing them; do not delete blindly.
+- The Next.js repository (`imiantalha/blossom-glimmer`) is the canonical public website and the single production entry point for all marketplace roles: Customers use the storefront/account/checkout routes, Admin and Super Admin use `/administrator`, and Vendors use `/vendor`.
+- The Laravel repository (`imiantalha/blossom-glimmer-api`) owns the API, database, business rules, server-side authorization, and the preserved React staff dashboard.
+- The Laravel React dashboard remains available as a legacy/internal staff portal at the Laravel application origin. It is not the canonical public website and must not be deleted or silently replaced; retirement requires separate approval.
+- Production DNS should route the public website domain to Next.js and configure `NEXT_PUBLIC_API_URL` to the Laravel API origin. Keep the Laravel dashboard origin separate from the public website domain.
+- Next.js Admin/Vendor routes are active canonical role workspaces, not redirects to the Laravel dashboard. Keep their role guards aligned with Laravel API authorization.
 - Payment, payout, shipping and notification providers may be simulated locally. All mock operations must be clearly labelled as simulated and must never claim that real money was charged or transferred.
 
 ## Completion standard
@@ -430,3 +431,13 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Updated the shared Next.js commerce provider so Vendor, Admin and Super Admin sessions do not call Customer-only cart or wishlist APIs. Their storefront cart/wishlist state remains local; Customer sessions continue using the authenticated Laravel cart/wishlist and guest-item merge flow.
 - Confirmed cart, wishlist, address, checkout, order, payment, refund and return endpoint paths are represented in the Laravel v1 route group; the role boundary now also matches those Customer-only commerce endpoints.
 - This is a source-level implementation correction only. No build, lint, test, browser, migration, seeder, CI, merge or deployment was run.
+
+
+### Production portal decision and additional source correction — 27 Nov 2026
+
+- Resolved portal ownership: Next.js is the canonical public website and unified role-aware entry point (`/`, `/administrator`, `/vendor`). Laravel remains the API/business-rule authority. The existing Laravel React dashboard is preserved as an internal/legacy staff portal on the Laravel application origin and is not deleted or silently replaced.
+- Updated both repositories' README/architecture documentation to make the domain split explicit: public website domain -> Next.js; `NEXT_PUBLIC_API_URL` -> Laravel API origin; Laravel React dashboard remains separately reachable on its own application origin.
+- Corrected the Customer address book so a successful empty Laravel response remains empty. It no longer replaces an empty server address list with demo fixture addresses. Explicit preview fallback remains available through the service's unavailable-API behavior.
+- The frontend `/orders` route now has the same Customer role restriction as the account and checkout routes; shared commerce state avoids Customer-only cart/wishlist API calls for other roles.
+- Public category, brand and vendor index endpoints now use database-backed pagination, with stable ordering and aggregate product counts.
+- These are source/documentation changes only. All runtime checks, builds, migrations, seeders, CI, merges and deployments remain deferred.
