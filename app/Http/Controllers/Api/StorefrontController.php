@@ -634,10 +634,19 @@ class StorefrontController extends Controller
     public function reviews(Request $request)
     {
         $q = DB::table('product_reviews as r')->join('users as u', 'u.id', '=', 'r.user_id')->where('r.status', 'approved');
-        if ($request->filled('product_id')) $q->where('r.product_id', $request->integer('product_id'));
-        $rows = $q->select('r.*', 'u.name as user_name')->latest('r.created_at')->paginate(min((int) $request->input('per_page', 10), 100));
+        $summaryQuery = DB::table('product_reviews')->where('status', 'approved');
+        if ($request->filled('product_id')) {
+            $productId = $request->integer('product_id');
+            $q->where('r.product_id', $productId);
+            $summaryQuery->where('product_id', $productId);
+        }
+        $summaryTotal = (clone $summaryQuery)->count();
+        $summaryAverage = (float) ((clone $summaryQuery)->avg('rating') ?? 0);
+        $distributionRows = (clone $summaryQuery)->select('rating', DB::raw('COUNT(*) as count'))->groupBy('rating')->get()->keyBy('rating');
+        $distribution = collect([5, 4, 3, 2, 1])->map(fn ($rating) => ['rating' => $rating, 'count' => (int) ($distributionRows[$rating]->count ?? 0)])->values();
+        $rows = $q->select('r.*', 'u.name as user_name')->latest('r.created_at')->paginate(min(max($request->integer('per_page', 10), 1), 100));
         $data = $rows->getCollection()->map(fn ($r) => ['id' => $r->id, 'productId' => $r->product_id, 'rating' => $r->rating, 'title' => $r->title, 'body' => $r->body, 'vendorReply' => $r->vendor_reply, 'vendorRepliedAt' => $r->vendor_replied_at, 'user' => ['id' => $r->user_id, 'name' => $r->user_name], 'createdAt' => $r->created_at]);
-        return response()->json(['success' => true, 'message' => 'Reviews retrieved.', 'data' => $data, 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
+        return response()->json(['success' => true, 'message' => 'Reviews retrieved.', 'data' => $data, 'summary' => ['total' => $summaryTotal, 'average' => $summaryAverage, 'distribution' => $distribution], 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
     }
 
     public function createReview(Request $request)
