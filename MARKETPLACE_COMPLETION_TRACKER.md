@@ -412,3 +412,13 @@ The older "Remaining implementation work" bullets above are historical snapshots
 **Test phase remains deferred:** no builds, lint, tests, browser checks, migrations, seeders, CI, merges or deployments were run as part of this implementation pass.
 
 - Extended the Customer-role boundary to checkout: authenticated Vendor/Admin/Super Admin users are redirected to their own workspace and do not trigger customer checkout-summary API reads. Guest carts remain preserved while unauthenticated visitors are sent to sign in.
+
+
+### Public catalogue pagination hardening — 27 Nov 2026
+
+- Replaced collection-wide in-memory slicing for public category, brand and store indexes with database-backed Laravel pagination.
+- Category index pagination keeps each root category's active child tree intact, so parent/child navigation is not split across unrelated flat pages.
+- Brand active-product counts are loaded with aggregate counts; vendor active-product counts use a correlated aggregate instead of per-vendor count queries.
+- Added deterministic secondary ID ordering to prevent duplicate/omitted rows when names or sort positions tie.
+- The API continues returning the same `success/message/data/pagination` envelope and honours the existing `page` and `per_page` query contract.
+- Source change committed to the existing backend feature branch. Runtime and SQL Server compatibility remain unverified because the user has deferred the test phase.
