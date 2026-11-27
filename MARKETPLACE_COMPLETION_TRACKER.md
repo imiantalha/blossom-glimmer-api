@@ -490,3 +490,12 @@ The older "Remaining implementation work" bullets above are historical snapshots
 
 - Corrected public collection product queries to include both configured category hierarchies and configured featured-store slugs. Collections with only featured stores now return those vendors' active products instead of an empty result; category-based and mixed collections retain both sources.
 - No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
+
+
+### Vendor granular action visibility — 27 Nov 2026
+
+- Vendor catalog requests now show the submission form only to users with products.create while retaining read access for products.view.
+- Vendor review replies are shown only to users with reviews.update; review viewing remains independently guarded by reviews.view.
+- Vendor order fulfilment controls are shown only to users with orders.update, while order details remain available to orders.view users.
+- Vendor product detail actions now respect products.update, products.create and products.delete independently; corresponding server actions and API middleware remain the enforcement boundary.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
