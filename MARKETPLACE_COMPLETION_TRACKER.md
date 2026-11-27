@@ -461,3 +461,11 @@ The older "Remaining implementation work" bullets above are historical snapshots
 - Added server-rendered page guards for Vendor product view/create/edit, inventory, catalog requests, order list/detail, analytics, reviews, and store management routes. Added shared products.view and reviews.view permission constants to match the seeded backend permission names.
 - Added the matching orders.view permission middleware to the Vendor analytics API endpoint. Vendor review API already requires reviews.view; Vendor products, inventory, orders, store and catalog request endpoints already enforce their granular permission middleware.
 - Both repositories' automated workflows are now manual-dispatch only on these feature branches, preserving the requested pause on automatic CI triggers. No workflow was dispatched and no tests/builds/lint/migrations/seeders/merges/deployments were run.
+
+
+### Finance ledger and address fallback hardening — 27 Nov 2026
+
+- Added a Vendor-owned paginated earnings ledger API and connected both the Next.js Vendor finance workspace and preserved Laravel React Vendor finance page to its page controls. Payout history and ledger pages now maintain separate pagination state.
+- Corrected the Next.js Vendor finance workspace's missing selected-currency balance derivation; the selected currency now drives the available-balance and payout amount validation.
+- Tightened address-book fallback behavior: saved sample/local addresses are used only when the API is unavailable, not for authorization or other API errors. Checkout now respects a successful empty server address book instead of reintroducing stale local/demo addresses.
+- No tests, builds, lint, migrations, seeders, CI dispatches, merges or deployments were run.
