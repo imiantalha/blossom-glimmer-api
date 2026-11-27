@@ -19,27 +19,26 @@ use Illuminate\Validation\ValidationException;
 class StorefrontController extends Controller
 {
 
-    private function paginatedPayload($items, Request $request, int $defaultPerPage = 24)
+    private function paginatedQueryPayload($query, Request $request, callable $transform, int $defaultPerPage = 24)
     {
         $perPage = min(max($request->integer('per_page', $defaultPerPage), 1), 100);
-        $page = max($request->integer('page', 1), 1);
-        $total = $items->count();
-        $data = $items->forPage($page, $perPage)->values();
+        $page = $query->paginate($perPage, ['*'], 'page', max($request->integer('page', 1), 1));
+        $data = $page->getCollection()->map($transform)->values();
 
         return response()->json([
             'success' => true,
             'message' => 'Resources retrieved.',
             'data' => $data,
             'pagination' => [
-                'current_page' => $page,
-                'last_page' => max(1, (int) ceil($total / $perPage)),
-                'per_page' => $perPage,
-                'total' => $total,
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
                 'count' => $data->count(),
-                'from' => $data->isEmpty() ? null : (($page - 1) * $perPage) + 1,
-                'to' => $data->isEmpty() ? null : (($page - 1) * $perPage) + $data->count(),
-                'has_previous' => $page > 1,
-                'has_next' => $page * $perPage < $total,
+                'from' => $page->firstItem(),
+                'to' => $page->lastItem(),
+                'has_previous' => $page->currentPage() > 1,
+                'has_next' => $page->hasMorePages(),
             ],
         ]);
     }
@@ -186,18 +185,23 @@ class StorefrontController extends Controller
 
     public function categories(Request $request)
     {
-        $query = Category::where('status', 'active')->with(['children' => fn ($q) => $q->where('status', 'active')->orderBy('sort_order')])
-            ->whereNull('parent_id')->orderBy('sort_order');
+        $activeProducts = fn ($q) => $q->where('status', 'active');
+        $query = Category::where('status', 'active')
+            ->with(['children' => fn ($q) => $q->where('status', 'active')->withCount(['products' => $activeProducts])->orderBy('sort_order')])
+            ->withCount(['products' => $activeProducts])
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($c) => [
+
+        return $this->paginatedQueryPayload($query, $request, fn ($c) => [
             'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
-            'productCount' => $c->products()->where('status', 'active')->count(),
+            'productCount' => (int) $c->products_count,
             'children' => $c->children->map(fn ($child) => [
                 'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description, 'imageUrl' => $child->image_url,
-                'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => $child->products()->where('status', 'active')->count(),
+                'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => (int) $child->products_count,
             ])->values(),
         ]);
-        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function category(string $slug)
@@ -219,10 +223,16 @@ class StorefrontController extends Controller
 
     public function brands(Request $request)
     {
-        $query = Brand::where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->orderBy('name');
+        $query = Brand::where('status', 'active')
+            ->withCount(['products' => fn ($q) => $q->where('status', 'active')])
+            ->orderBy('name')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'imageUrl' => $b->image_url, 'productCount' => $b->products_count]);
-        return $this->paginatedPayload($items, $request, 100);
+
+        return $this->paginatedQueryPayload($query, $request, fn ($b) => [
+            'id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description,
+            'imageUrl' => $b->image_url, 'productCount' => (int) $b->products_count,
+        ]);
     }
 
     public function brand(string $slug)
@@ -239,19 +249,27 @@ class StorefrontController extends Controller
 
     public function vendors(Request $request)
     {
-        $query = \App\Models\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->orderBy('name');
+        $query = \App\Models\User::role(Role::VENDOR)
+            ->whereHas('vendorProfile', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))
+            ->with('vendorProfile')
+            ->addSelect(['active_products_count' => DB::table('products')
+                ->selectRaw('COUNT(*)')
+                ->whereColumn('products.vendor_id', 'users.id')
+                ->where('products.status', 'active')])
+            ->orderBy('name')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(function ($v) {
+
+        return $this->paginatedQueryPayload($query, $request, function ($v) {
             $profile = $v->vendorProfile;
             return [
                 'id' => $v->id, 'name' => $v->name, 'slug' => $profile?->slug ?? Str::slug($v->name),
                 'description' => $profile?->description, 'imageUrl' => $profile?->image_url,
                 'rating' => $profile?->rating ? (float) $profile->rating : null,
                 'reviewCount' => $profile?->review_count ?? 0,
-                'productCount' => DB::table('products')->where('vendor_id', $v->id)->where('status', 'active')->count(),
+                'productCount' => (int) ($v->active_products_count ?? 0),
             ];
         });
-        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function vendor(string $slug)
