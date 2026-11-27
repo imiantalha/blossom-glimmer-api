@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "../../api/axios";
+import Pagination from "../../components/common/navigation/Pagination";
 
 const blankVariant = () => ({ sku: "", price: "", salePrice: "", stockQuantity: "0", weight: "1", length: "1", width: "1", height: "1", label: "Default", attributeValues: [], images: [] });
 const blankForm = () => ({ id: null, name: "", slug: "", brandId: "", categoryId: "", productType: "Simple", shippingProfileId: "", shortDescription: "", fullDescription: "", featuredImageUrl: "", featuredImageAlt: "", tags: "", attributes: [], intent: "draft", variants: [blankVariant()] });
 
 export default function VendorProductsPage() {
     const [products, setProducts] = useState([]);
+    const [page, setPage] = useState(1);
+    const [pagination, setPagination] = useState(null);
     const [options, setOptions] = useState({ brands: [], categories: [], shippingProfiles: [], productTypes: [] });
     const [form, setForm] = useState(blankForm());
     const [editing, setEditing] = useState(false);
@@ -18,15 +21,16 @@ export default function VendorProductsPage() {
         setLoading(true); setError("");
         try {
             const [productsResponse, optionsResponse] = await Promise.all([
-                api.get("/vendor/products", { params: { per_page: 100 } }),
+                api.get("/vendor/products", { params: { page, per_page: 25 } }),
                 api.get("/vendor/products/options"),
             ]);
             if (!productsResponse?.data?.success || !Array.isArray(productsResponse?.data?.data) || !optionsResponse?.data?.success) throw new Error("The server returned an unexpected catalogue response.");
             setProducts(productsResponse.data.data);
+            setPagination(productsResponse.data.pagination ?? null);
             setOptions(optionsResponse.data.data ?? { brands: [], categories: [], shippingProfiles: [], productTypes: [] });
         } catch (exception) { setError(exception?.response?.data?.message || exception?.message || "Unable to load your catalogue."); }
         finally { setLoading(false); }
-    }, []);
+    }, [page]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -210,5 +214,6 @@ export default function VendorProductsPage() {
                 <td><div className="d-flex gap-1"><button className="btn btn-sm btn-outline-primary" onClick={()=>startEdit(product)}>Edit</button><button className="btn btn-sm btn-outline-danger" onClick={()=>void archive(product)}>Archive</button></div></td>
             </tr>) : <tr><td colSpan="7" className="text-center text-muted py-5">You haven’t added any products yet.</td></tr>}</tbody>
         </table></div></div>
+        {pagination && <Pagination currentPage={pagination.current_page} lastPage={pagination.last_page} onPageChange={setPage} />}
     </div>;
 }
