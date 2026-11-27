@@ -106,6 +106,12 @@ class StorefrontScenarioSeeder extends Seeder
                         'sku' => $simple->sku, 'quantity' => 1,
                         'unit_price' => $price, 'subtotal' => $price, 'created_at' => now(), 'updated_at' => now(),
                     ]);
+                    $inventory = DB::table('inventory_items')->where('product_id', $simple->id)->whereNull('variant_id')->lockForUpdate()->first();
+                    if ($inventory && $inventory->manage_inventory) {
+                        DB::table('inventory_items')->where('id', $inventory->id)->update([
+                            'stock_quantity' => max(0, (int) $inventory->stock_quantity - 1), 'updated_at' => now(),
+                        ]);
+                    }
                 }
                 $shipmentId = DB::table('shipments')->where('order_id', $orderId)->value('id');
                 if (!$shipmentId) {
@@ -119,6 +125,48 @@ class StorefrontScenarioSeeder extends Seeder
                         'shipment_id' => $shipmentId, 'status' => 'in_transit', 'description' => 'Demo parcel is in transit.',
                         'location' => 'Lahore', 'occurred_at' => now()->subHours(8), 'created_at' => now(), 'updated_at' => now(),
                     ]);
+                }
+
+                // Keep demo orders compatible with the vendor-specific fulfilment model.
+                $vendorItems = DB::table('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->where('oi.order_id', $orderId)
+                    ->whereNotNull('p.vendor_id')
+                    ->select('oi.id as order_item_id', 'p.vendor_id')
+                    ->get()
+                    ->groupBy('vendor_id');
+
+                foreach ($vendorItems as $vendorId => $items) {
+                    $fulfillmentId = DB::table('vendor_order_fulfillments')
+                        ->where('order_id', $orderId)
+                        ->where('vendor_id', $vendorId)
+                        ->value('id');
+
+                    if (!$fulfillmentId) {
+                        $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                            'order_id' => $orderId, 'vendor_id' => $vendorId, 'status' => 'shipped',
+                            'carrier' => 'Demo Logistics', 'tracking_number' => 'BG-DEMO-TRACK-1001',
+                            'tracking_url' => 'https://example.com/track/BG-DEMO-TRACK-1001',
+                            'estimated_delivery' => now()->addDays(3)->toDateString(),
+                            'shipped_at' => now()->subDay(),
+                            'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    } else {
+                        DB::table('vendor_order_fulfillments')->where('id', $fulfillmentId)->update([
+                            'status' => 'shipped', 'carrier' => 'Demo Logistics',
+                            'tracking_number' => 'BG-DEMO-TRACK-1001',
+                            'tracking_url' => 'https://example.com/track/BG-DEMO-TRACK-1001',
+                            'estimated_delivery' => now()->addDays(3)->toDateString(),
+                            'shipped_at' => now()->subDay(), 'updated_at' => now(),
+                        ]);
+                    }
+
+                    foreach ($items as $item) {
+                        DB::table('vendor_order_fulfillment_items')->updateOrInsert(
+                            ['fulfillment_id' => $fulfillmentId, 'order_item_id' => $item->order_item_id],
+                            ['created_at' => now(), 'updated_at' => now()]
+                        );
+                    }
                 }
             }
         });

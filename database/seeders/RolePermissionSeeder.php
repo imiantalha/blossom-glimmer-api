@@ -33,6 +33,8 @@ class RolePermissionSeeder extends Seeder
             'brands.manage',
             'categories.manage',
             'inventory.update',
+            'reviews.view',
+            'reviews.update',
 
             'roles.view',
             'roles.create',
@@ -54,6 +56,8 @@ class RolePermissionSeeder extends Seeder
             'name' => 'Admin'
         ]);
 
+        $superAdmin = Role::firstOrCreate(['name' => 'Super Admin']);
+
         $vendor = Role::firstOrCreate([
             'name' => 'Vendor'
         ]);
@@ -63,6 +67,7 @@ class RolePermissionSeeder extends Seeder
         ]);
 
         $admin->syncPermissions(Permission::all());
+        $superAdmin->syncPermissions(Permission::all());
 
         $vendor->syncPermissions([
             'products.view',
@@ -72,6 +77,9 @@ class RolePermissionSeeder extends Seeder
             'stores.manage',
             'inventory.update',
             'orders.view',
+            'orders.update',
+            'reviews.view',
+            'reviews.update',
         ]);
 
         $customer->syncPermissions([]);

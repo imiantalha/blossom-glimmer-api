@@ -3,16 +3,13 @@ import useAuth from "../../hooks/useAuth";
 import Loader from "../common/feedback/Loader";
 
 const GuestRoute = ({ children }) => {
-    const { initializing, isAuthenticated } = useAuth();
+    const { initializing, isAuthenticated, user } = useAuth();
 
-    if (initializing) {
-        return <Loader />;
-    }
-
+    if (initializing) return <Loader />;
     if (isAuthenticated) {
-        return <Navigate to="/" replace />;
+        const roles = (user?.roles ?? []).map((role) => String(typeof role === "object" ? role.name : role).toLowerCase());
+        return <Navigate to={roles.includes("vendor") ? "/vendor" : "/dashboard"} replace />;
     }
-
     return children;
 };
 

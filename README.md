@@ -1,6 +1,6 @@
 # Blossom Glimmer API
 
-Laravel 12 backend for the Blossom Glimmer marketplace. It provides a versioned JSON API, Sanctum authentication, role-based administration, catalog and commerce workflows, vendor operations, shipment tracking, and the existing AI product assistant.
+Laravel 12 backend for the Blossom Glimmer marketplace. The canonical public website and role-aware production entry point is the separate Next.js application (`imiantalha/blossom-glimmer`): Customers use the storefront/account routes, Admin and Super Admin use `/administrator`, and Vendors use `/vendor`. This Laravel application provides the REST API, persistence, authorization and business rules. Its existing React dashboard is preserved as a legacy/internal staff portal at the Laravel application origin; do not delete or silently replace it. Production DNS should route the public website domain to Next.js and configure `NEXT_PUBLIC_API_URL` to this Laravel API origin. It provides a versioned JSON API, Sanctum authentication, role-based administration, catalog and commerce workflows, vendor operations, shipment tracking, and the existing AI product assistant.
 
 ## Stack
 

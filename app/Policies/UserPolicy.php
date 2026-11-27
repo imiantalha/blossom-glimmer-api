@@ -14,7 +14,7 @@ class UserPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole(Role::ADMIN);
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]);
     }
 
     /**
@@ -22,7 +22,7 @@ class UserPolicy
      */
     public function view(User $user, User $model): bool
     {
-        return $user->id === $model->id || $user->hasRole(Role::ADMIN) || $user->can('users.view');
+        return $user->id === $model->id || $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.view');
     }
 
     /**
@@ -30,7 +30,7 @@ class UserPolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasRole(Role::ADMIN) || $user->can('users.create') || Auth::guest();
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.create') || Auth::guest();
     }
 
     /**
@@ -38,7 +38,7 @@ class UserPolicy
      */
     public function update(User $user, User $model): bool
     {
-        return $user->id === $model->id || $user->hasRole(Role::ADMIN) || $user->can('users.update');
+        return $user->id === $model->id || $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.update');
     }
 
     /**
@@ -46,7 +46,12 @@ class UserPolicy
      */
     public function delete(User $user, User $model): bool
     {
-        return $user->id === $model->id || $user->hasRole(Role::ADMIN) || $user->can('users.delete');
+        // Only a super admin may remove privileged accounts, and never itself.
+        if ($model->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN])) {
+            return $user->hasRole(Role::SUPER_ADMIN) && $user->id !== $model->id;
+        }
+
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]) || $user->can('users.delete');
     }
 
     /**
@@ -54,7 +59,7 @@ class UserPolicy
      */
     public function restore(User $user, User $model): bool
     {
-        return $user->hasRole(Role::ADMIN);
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]);
     }
 
     /**
@@ -62,6 +67,6 @@ class UserPolicy
      */
     public function forceDelete(User $user, User $model): bool
     {
-        return $user->hasRole(Role::ADMIN);
+        return $user->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]);
     }
 }

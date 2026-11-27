@@ -15,6 +15,7 @@ class Attribute extends Model
         'slug',
         'type',
         'is_variant_attribute',
+        'status',
     ];
 
     protected function casts(): array

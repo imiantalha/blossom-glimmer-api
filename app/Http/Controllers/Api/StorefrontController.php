@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Brand;
 use App\Constants\Role;
@@ -18,27 +19,26 @@ use Illuminate\Validation\ValidationException;
 class StorefrontController extends Controller
 {
 
-    private function paginatedPayload($items, Request $request, int $defaultPerPage = 24)
+    private function paginatedQueryPayload($query, Request $request, callable $transform, int $defaultPerPage = 24)
     {
         $perPage = min(max($request->integer('per_page', $defaultPerPage), 1), 100);
-        $page = max($request->integer('page', 1), 1);
-        $total = $items->count();
-        $data = $items->forPage($page, $perPage)->values();
+        $page = $query->paginate($perPage, ['*'], 'page', max($request->integer('page', 1), 1));
+        $data = $page->getCollection()->map($transform)->values();
 
         return response()->json([
             'success' => true,
             'message' => 'Resources retrieved.',
             'data' => $data,
             'pagination' => [
-                'current_page' => $page,
-                'last_page' => max(1, (int) ceil($total / $perPage)),
-                'per_page' => $perPage,
-                'total' => $total,
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
                 'count' => $data->count(),
-                'from' => $data->isEmpty() ? null : (($page - 1) * $perPage) + 1,
-                'to' => $data->isEmpty() ? null : (($page - 1) * $perPage) + $data->count(),
-                'has_previous' => $page > 1,
-                'has_next' => $page * $perPage < $total,
+                'from' => $page->firstItem(),
+                'to' => $page->lastItem(),
+                'has_previous' => $page->currentPage() > 1,
+                'has_next' => $page->hasMorePages(),
             ],
         ]);
     }
@@ -46,6 +46,7 @@ class StorefrontController extends Controller
     private function productQuery()
     {
         return Product::query()->where('status', 'active')
+            ->whereHas('vendor.vendorProfile', fn ($vendor) => $vendor->where('status', 'active')->whereNull('deleted_at'))
             ->with(['brand', 'vendor.vendorProfile', 'categories.parent', 'tags', 'featureMedia', 'media', 'variants.options.attribute', 'variants.attributeValues', 'variants.inventoryItems', 'inventoryItems']);
     }
 
@@ -80,8 +81,8 @@ class StorefrontController extends Controller
             'subcategory' => ($category && $category->parent) ? ['id' => $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'brand' => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name, 'slug' => $p->brand->slug] : null,
             'vendor' => $p->vendor ? ['id' => $p->vendor->id, 'name' => $p->vendor->name, 'slug' => $p->vendor->vendorProfile?->slug ?? Str::slug($p->vendor->name), 'rating' => $p->vendor->vendorProfile?->rating !== null ? (float) $p->vendor->vendorProfile->rating : null, 'reviewCount' => (int) ($p->vendor->vendorProfile?->review_count ?? 0)] : null,
-            'rating' => (float) (DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating') ?? data_get($p->metadata, 'rating', 0)),
-            'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count() ?: (int) data_get($p->metadata, 'review_count', 0),
+            'rating' => (float) (DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->avg('rating') ?? 0),
+            'reviewCount' => DB::table('product_reviews')->where('product_id', $p->id)->where('status', 'approved')->count(),
             'soldCount' => (int) $p->sold_count,
             'badges' => data_get($p->metadata, 'badges', []),
             'season' => data_get($p->metadata, 'season', []), 'occasion' => data_get($p->metadata, 'occasion', []),
@@ -184,18 +185,23 @@ class StorefrontController extends Controller
 
     public function categories(Request $request)
     {
-        $query = Category::where('status', 'active')->with(['children' => fn ($q) => $q->where('status', 'active')->orderBy('sort_order')])
-            ->whereNull('parent_id')->orderBy('sort_order');
+        $activeProducts = fn ($q) => $q->where('status', 'active');
+        $query = Category::where('status', 'active')
+            ->with(['children' => fn ($q) => $q->where('status', 'active')->withCount(['products' => $activeProducts])->orderBy('sort_order')])
+            ->withCount(['products' => $activeProducts])
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($c) => [
+
+        return $this->paginatedQueryPayload($query, $request, fn ($c) => [
             'id' => $c->id, 'name' => $c->name, 'slug' => $c->slug, 'description' => $c->description, 'imageUrl' => $c->image_url,
-            'productCount' => $c->products()->where('status', 'active')->count(),
+            'productCount' => (int) $c->products_count,
             'children' => $c->children->map(fn ($child) => [
                 'id' => $child->id, 'name' => $child->name, 'slug' => $child->slug, 'description' => $child->description, 'imageUrl' => $child->image_url,
-                'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => $child->products()->where('status', 'active')->count(),
+                'parentId' => $c->id, 'parentSlug' => $c->slug, 'productCount' => (int) $child->products_count,
             ])->values(),
         ]);
-        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function category(string $slug)
@@ -217,10 +223,16 @@ class StorefrontController extends Controller
 
     public function brands(Request $request)
     {
-        $query = Brand::where('status', 'active')->withCount(['products' => fn ($q) => $q->where('status', 'active')])->orderBy('name');
+        $query = Brand::where('status', 'active')
+            ->withCount(['products' => fn ($q) => $q->where('status', 'active')])
+            ->orderBy('name')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description, 'imageUrl' => $b->image_url, 'productCount' => $b->products_count]);
-        return $this->paginatedPayload($items, $request, 100);
+
+        return $this->paginatedQueryPayload($query, $request, fn ($b) => [
+            'id' => $b->id, 'name' => $b->name, 'slug' => $b->slug, 'description' => $b->description,
+            'imageUrl' => $b->image_url, 'productCount' => (int) $b->products_count,
+        ]);
     }
 
     public function brand(string $slug)
@@ -237,19 +249,27 @@ class StorefrontController extends Controller
 
     public function vendors(Request $request)
     {
-        $query = \App\Models\User::role(Role::VENDOR)->whereHas('vendorProfile', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))->with('vendorProfile')->orderBy('name');
+        $query = \App\Models\User::role(Role::VENDOR)
+            ->whereHas('vendorProfile', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))
+            ->with('vendorProfile')
+            ->addSelect(['active_products_count' => DB::table('products')
+                ->selectRaw('COUNT(*)')
+                ->whereColumn('products.vendor_id', 'users.id')
+                ->where('products.status', 'active')])
+            ->orderBy('name')
+            ->orderBy('id');
         if ($search = $request->string('search')->trim()->toString()) $query->where('name', 'like', "%{$search}%");
-        $items = $query->get()->map(function ($v) {
+
+        return $this->paginatedQueryPayload($query, $request, function ($v) {
             $profile = $v->vendorProfile;
             return [
                 'id' => $v->id, 'name' => $v->name, 'slug' => $profile?->slug ?? Str::slug($v->name),
                 'description' => $profile?->description, 'imageUrl' => $profile?->image_url,
                 'rating' => $profile?->rating ? (float) $profile->rating : null,
                 'reviewCount' => $profile?->review_count ?? 0,
-                'productCount' => DB::table('products')->where('vendor_id', $v->id)->where('status', 'active')->count(),
+                'productCount' => (int) ($v->active_products_count ?? 0),
             ];
         });
-        return $this->paginatedPayload($items, $request, 100);
     }
 
     public function vendor(string $slug)
@@ -279,16 +299,21 @@ class StorefrontController extends Controller
         ]]);
     }
 
-    public function collections()
+    public function collections(Request $request)
     {
-        $items = DB::table('collections')->where('is_active', true)->orderBy('sort_order')->get()
-            ->map(fn ($c) => [
-                'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
-                'description' => $c->description, 'heroImage' => $c->image_url,
-                'categories' => json_decode($c->category_slugs, true) ?: [],
-                'featuredStores' => json_decode($c->featured_stores, true) ?: [],
-            ]);
-        return ApiResponse::successResponse($items, 'Collections retrieved.');
+        $page = DB::table('collections')->where('is_active', true)->orderBy('sort_order')
+            ->paginate(min(max($request->integer('per_page', 24), 1), 100));
+        $items = $page->getCollection()->map(fn ($c) => [
+            'id' => $c->id, 'slug' => $c->slug, 'title' => $c->name, 'eyebrow' => $c->eyebrow,
+            'description' => $c->description, 'heroImage' => $c->image_url,
+            'categories' => json_decode($c->category_slugs, true) ?: [],
+            'featuredStores' => json_decode($c->featured_stores, true) ?: [],
+        ])->values();
+        return response()->json(['success' => true, 'message' => 'Collections retrieved.', 'data' => $items, 'pagination' => [
+            'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(),
+            'count' => $items->count(), 'from' => $page->firstItem(), 'to' => $page->lastItem(),
+            'has_previous' => $page->currentPage() > 1, 'has_next' => $page->hasMorePages(),
+        ]]);
     }
 
     public function collection(string $slug)
@@ -308,9 +333,18 @@ class StorefrontController extends Controller
         $collection = DB::table('collections')->where('slug', $slug)->where('is_active', true)->first();
         abort_unless($collection, 404);
         $categorySlugs = json_decode($collection->category_slugs, true) ?: [];
-        $query = $this->productQuery();
-        if ($categorySlugs) $query->where(fn ($q) => $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs)));
-        else $query->whereRaw('1 = 0');
+        $storeSlugs = json_decode($collection->featured_stores, true) ?: [];
+        $query = $this->productQuery()->where(function ($q) use ($categorySlugs, $storeSlugs) {
+            if ($categorySlugs) {
+                $q->whereHas('categories', fn ($category) => $category->whereIn('slug', $categorySlugs))
+                    ->orWhereHas('categories.parent', fn ($parent) => $parent->whereIn('slug', $categorySlugs));
+            }
+            if ($storeSlugs) {
+                $method = $categorySlugs ? 'orWhereHas' : 'whereHas';
+                $q->{$method}('vendor.vendorProfile', fn ($vendor) => $vendor->whereIn('slug', $storeSlugs)->where('status', 'active')->whereNull('deleted_at'));
+            }
+            if (!$categorySlugs && !$storeSlugs) $q->whereRaw('1 = 0');
+        });
         $page = $query->paginate(min(max($request->integer('per_page', 24), 1), 100));
         $data = $page->getCollection()->map(fn ($p) => $this->productPayload($p));
         return response()->json(['success' => true, 'message' => 'Collection products retrieved.', 'data' => $data, 'pagination' => [
@@ -600,20 +634,83 @@ class StorefrontController extends Controller
     public function reviews(Request $request)
     {
         $q = DB::table('product_reviews as r')->join('users as u', 'u.id', '=', 'r.user_id')->where('r.status', 'approved');
-        if ($request->filled('product_id')) $q->where('r.product_id', $request->integer('product_id'));
-        $rows = $q->select('r.*', 'u.name as user_name')->latest('r.created_at')->paginate(min((int) $request->input('per_page', 10), 100));
-        $data = $rows->getCollection()->map(fn ($r) => ['id' => $r->id, 'productId' => $r->product_id, 'rating' => $r->rating, 'title' => $r->title, 'body' => $r->body, 'user' => ['id' => $r->user_id, 'name' => $r->user_name], 'createdAt' => $r->created_at]);
-        return response()->json(['success' => true, 'message' => 'Reviews retrieved.', 'data' => $data, 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
+        $summaryQuery = DB::table('product_reviews')->where('status', 'approved');
+        if ($request->filled('product_id')) {
+            $productId = $request->integer('product_id');
+            $q->where('r.product_id', $productId);
+            $summaryQuery->where('product_id', $productId);
+        }
+        $summaryTotal = (clone $summaryQuery)->count();
+        $summaryAverage = (float) ((clone $summaryQuery)->avg('rating') ?? 0);
+        $distributionRows = (clone $summaryQuery)->select('rating', DB::raw('COUNT(*) as review_count'))->groupBy('rating')->get()->keyBy('rating');
+        $distribution = collect([5, 4, 3, 2, 1])->map(fn ($rating) => ['rating' => $rating, 'count' => (int) ($distributionRows[$rating]->review_count ?? 0)])->values();
+        $rows = $q->select('r.*', 'u.name as user_name')->latest('r.created_at')->paginate(min(max($request->integer('per_page', 10), 1), 100));
+        $data = $rows->getCollection()->map(fn ($r) => ['id' => $r->id, 'productId' => $r->product_id, 'rating' => $r->rating, 'title' => $r->title, 'body' => $r->body, 'vendorReply' => $r->vendor_reply, 'vendorRepliedAt' => $r->vendor_replied_at, 'user' => ['id' => $r->user_id, 'name' => $r->user_name], 'createdAt' => $r->created_at]);
+        return response()->json(['success' => true, 'message' => 'Reviews retrieved.', 'data' => $data, 'summary' => ['total' => $summaryTotal, 'average' => $summaryAverage, 'distribution' => $distribution], 'pagination' => ['current_page' => $rows->currentPage(), 'last_page' => $rows->lastPage(), 'per_page' => $rows->perPage(), 'total' => $rows->total(), 'count' => $data->count(), 'from' => $rows->firstItem(), 'to' => $rows->lastItem(), 'has_previous' => $rows->currentPage() > 1, 'has_next' => $rows->hasMorePages()]]);
     }
 
     public function createReview(Request $request)
     {
         $data = $request->validate(['product_id' => 'required|integer|exists:products,id', 'rating' => 'required|integer|min:1|max:5', 'title' => 'nullable|string|max:180', 'body' => 'required|string|max:5000']);
-        DB::table('product_reviews')->updateOrInsert(['product_id' => $data['product_id'], 'user_id' => $request->user()->id], ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now(), 'created_at' => now()]);
+        $verifiedPurchase = DB::table('customer_order_items as i')
+            ->join('customer_orders as o', 'o.id', '=', 'i.order_id')
+            ->where('o.user_id', $request->user()->id)
+            ->where('o.status', 'delivered')
+            ->where('i.product_id', $data['product_id'])
+            ->exists();
+        abort_unless($verifiedPurchase, 422, 'You can review a product after it has been delivered in one of your orders.');
+        $existingReview = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
+        $reviewValues = ['rating' => $data['rating'], 'title' => $data['title'] ?? null, 'body' => $data['body'], 'status' => 'pending', 'updated_at' => now()];
+        if ($existingReview) {
+            DB::table('product_reviews')->where('id', $existingReview->id)->update($reviewValues);
+        } else {
+            DB::table('product_reviews')->insert($reviewValues + ['product_id' => $data['product_id'], 'user_id' => $request->user()->id, 'created_at' => now()]);
+        }
         $review = DB::table('product_reviews')->where('product_id', $data['product_id'])->where('user_id', $request->user()->id)->first();
         return ApiResponse::createdResponse(['id' => $review->id, 'productId' => $review->product_id, 'rating' => $review->rating, 'title' => $review->title, 'body' => $review->body, 'user' => ['id' => $request->user()->id, 'name' => $request->user()->name], 'createdAt' => $review->created_at], 'Review submitted for moderation.');
     }
 
+
+    public function myReviews(Request $request)
+    {
+        $page = DB::table('product_reviews as r')
+            ->join('products as p', 'p.id', '=', 'r.product_id')
+            ->where('r.user_id', $request->user()->id)
+            ->orderByDesc('r.updated_at')
+            ->select('r.*', 'p.name as product_name', 'p.slug as product_slug')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        return ApiResponse::successResponse([
+            'data' => $page->items(),
+            'pagination' => ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total()],
+        ], 'Your product reviews retrieved.');
+    }
+
+    public function updateReview(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:180'],
+            'body' => ['required', 'string', 'min:3', 'max:5000'],
+        ]);
+        $review = DB::table('product_reviews')->where('id', $id)->where('user_id', $request->user()->id)->first();
+        abort_unless($review, 404, 'Review not found.');
+        $verifiedPurchase = DB::table('customer_order_items as i')
+            ->join('customer_orders as o', 'o.id', '=', 'i.order_id')
+            ->where('o.user_id', $request->user()->id)
+            ->where('o.status', 'delivered')
+            ->where('i.product_id', $review->product_id)
+            ->exists();
+        abort_unless($verifiedPurchase, 403, 'A delivered purchase is required to update this review.');
+        DB::table('product_reviews')->where('id', $id)->update($data + ['status' => 'pending', 'updated_at' => now()]);
+        return ApiResponse::successResponse(DB::table('product_reviews')->where('id', $id)->first(), 'Review updated and submitted for moderation.');
+    }
+
+    public function deleteReview(Request $request, int $id)
+    {
+        $deleted = DB::table('product_reviews')->where('id', $id)->where('user_id', $request->user()->id)->delete();
+        abort_unless($deleted, 404, 'Review not found.');
+        return ApiResponse::deletedResponse('Your review was deleted.');
+    }
 
     public function updateProfile(Request $request)
     {
@@ -631,12 +728,35 @@ class StorefrontController extends Controller
             'variant' => $i->variant_id ? ['id' => $i->variant_id, 'sku' => $i->sku] : null,
         ])->values();
         $address = $order->shipping_address ? json_decode($order->shipping_address, true) : null;
+        $vendorFulfillments = DB::table('vendor_order_fulfillments as f')
+            ->join('users as u', 'u.id', '=', 'f.vendor_id')
+            ->where('f.order_id', $order->id)
+            ->orderBy('f.id')
+            ->get()
+            ->map(function ($fulfillment) {
+                $items = DB::table('vendor_order_fulfillment_items as fi')
+                    ->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')
+                    ->where('fi.fulfillment_id', $fulfillment->id)
+                    ->get(['oi.id', 'oi.name', 'oi.quantity']);
+                return [
+                    'id' => (int) $fulfillment->id,
+                    'vendorName' => $fulfillment->name,
+                    'status' => $fulfillment->status,
+                    'carrier' => $fulfillment->carrier,
+                    'trackingNumber' => $fulfillment->tracking_number,
+                    'trackingUrl' => $fulfillment->tracking_url,
+                    'estimatedDelivery' => $fulfillment->estimated_delivery,
+                    'shippedAt' => $fulfillment->shipped_at,
+                    'deliveredAt' => $fulfillment->delivered_at,
+                    'items' => $items,
+                ];
+            })->values();
         return ['id' => $order->id, 'number' => $order->number, 'status' => $order->status, 'paymentStatus' => $order->payment_status,
             'fulfillmentStatus' => $order->fulfillment_status, 'currency' => $order->currency, 'subtotal' => (float) $order->subtotal,
             'discount' => (float) $order->discount, 'shipping' => (float) $order->shipping, 'tax' => (float) $order->tax,
             'total' => (float) $order->total, 'createdAt' => $order->created_at, 'shippingAddress' => $address,
             'shippingMethod' => $order->shipping_method_code ? ['id' => $order->shipping_method_code, 'name' => $order->shipping_method_name, 'price' => (float) $order->shipping, 'estimatedDelivery' => $order->shipping_estimated_delivery] : null,
-            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $this->shipmentPayload($order->id)];
+            'paymentMethod' => $order->payment_method, 'items' => $items, 'shipment' => $vendorFulfillments->isEmpty() ? $this->shipmentPayload($order->id) : null, 'vendorFulfillments' => $vendorFulfillments];
     }
 
     private function shipmentPayload(int $orderId): ?array
@@ -660,6 +780,64 @@ class StorefrontController extends Controller
             'count' => $data->count(), 'from' => $orders->firstItem(), 'to' => $orders->lastItem(), 'has_previous' => $orders->currentPage() > 1, 'has_next' => $orders->hasMorePages()]]);
     }
 
+    public function cancelOrder(Request $request, int $id)
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:1000']]);
+
+        return DB::transaction(function () use ($request, $id, $data) {
+            $order = DB::table('customer_orders')
+                ->where('id', $id)
+                ->where('user_id', $request->user()->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($order, 404, 'Order not found.');
+            abort_if(in_array($order->status, ['cancelled', 'refunded'], true), 409, 'This order has already been cancelled or refunded.');
+            abort_unless(in_array($order->status, ['pending', 'confirmed', 'payment_failed'], true), 422, 'This order can no longer be cancelled. Contact support to request a return or refund.');
+            abort_unless(in_array($order->payment_status, ['pending', 'failed', 'unpaid'], true) || $order->payment_method === 'cod', 422, 'Paid orders must go through the refund process instead of cancellation.');
+            abort_unless($order->fulfillment_status === 'pending', 422, 'Cancellation is no longer available after fulfilment has started.');
+            abort_if(DB::table('vendor_order_fulfillments')->where('order_id', $id)->where('status', '<>', 'pending')->exists(), 422, 'Cancellation is no longer available after a vendor has started fulfilment.');
+
+            $items = DB::table('customer_order_items')->where('order_id', $id)->get();
+            foreach ($items as $item) {
+                $inventoryQuery = DB::table('inventory_items');
+                if ($item->variant_id) {
+                    $inventoryQuery->where('variant_id', $item->variant_id);
+                } else {
+                    $inventoryQuery->where('product_id', $item->product_id)->whereNull('variant_id');
+                }
+                $inventory = $inventoryQuery->lockForUpdate()->first();
+                if ($inventory && $inventory->manage_inventory) {
+                    DB::table('inventory_items')->where('id', $inventory->id)->increment('stock_quantity', (int) $item->quantity);
+                }
+            }
+
+            DB::table('vendor_order_fulfillments')->where('order_id', $id)->whereIn('status', ['pending'])->update([
+                'status' => 'cancelled', 'updated_at' => now(),
+            ]);
+            if ($order->coupon_id) {
+                DB::table('coupon_redemptions')->where('order_id', $id)->delete();
+                DB::table('coupons')->where('id', $order->coupon_id)->where('usage_count', '>', 0)->decrement('usage_count');
+            }
+            DB::table('payment_transactions')->where('order_id', $id)->where('status', 'pending')->update([
+                'status' => 'cancelled', 'updated_at' => now(),
+            ]);
+            DB::table('customer_orders')->where('id', $id)->update([
+                'status' => 'cancelled', 'fulfillment_status' => 'cancelled',
+                'notes' => trim((string) ($order->notes ?? '')) . "\nCancellation reason: " . trim($data['reason']),
+                'updated_at' => now(),
+            ]);
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $request->user()->id, 'type' => 'order.cancelled',
+                'title' => 'Your order was cancelled',
+                'message' => 'Order ' . $order->number . ' has been cancelled.',
+                'action_url' => '/account/orders/' . $id, 'data' => json_encode(['order_id' => $id]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return ApiResponse::successResponse($this->orderPayload(DB::table('customer_orders')->where('id', $id)->first()), 'Order cancelled and inventory restored.');
+        });
+    }
+
     public function order(Request $request, int $id)
     {
         $order = DB::table('customer_orders')->where('user_id', $request->user()->id)->where('id', $id)->first();
@@ -667,11 +845,48 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->orderPayload($order), 'Order retrieved.');
     }
 
+    public function validateCoupon(Request $request)
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:60']]);
+        $cart = $this->currentCart($request);
+        $items = DB::table('cart_items')->where('cart_id', $cart->id)->get();
+        abort_if($items->isEmpty(), 422, 'Add products to your cart before applying a coupon.');
+        $subtotal = 0.0;
+        foreach ($items as $item) {
+            $product = Product::where('id', $item->product_id)->where('status', 'active')->first();
+            abort_unless($product, 422, 'A product in your cart is no longer available.');
+            $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->first() : null;
+            abort_if($item->variant_id && !$variant, 422, 'A selected product variant is no longer available.');
+            $subtotal += (float) ($variant->price ?? $product->base_price ?? 0) * (int) $item->quantity;
+        }
+
+        $coupon = DB::table('coupons')->where('code', strtoupper(trim($data['code'])))->first();
+        abort_unless($coupon && $coupon->is_active, 422, 'This coupon is invalid or inactive.');
+        abort_if($coupon->starts_at && now()->lt($coupon->starts_at), 422, 'This coupon is not active yet.');
+        abort_if($coupon->ends_at && now()->gt($coupon->ends_at), 422, 'This coupon has expired.');
+        abort_if($subtotal < (float) $coupon->minimum_subtotal, 422, 'Your cart does not meet the minimum subtotal for this coupon.');
+        abort_if($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit, 422, 'This coupon has reached its usage limit.');
+        $uses = DB::table('coupon_redemptions')->where('coupon_id', $coupon->id)->where('user_id', $request->user()->id)->count();
+        abort_if($uses >= (int) $coupon->per_user_limit, 422, 'You have already used this coupon the maximum number of times.');
+
+        $discount = $coupon->discount_type === 'percentage'
+            ? $subtotal * min(100, (float) $coupon->discount_value) / 100
+            : min($subtotal, (float) $coupon->discount_value);
+        if ($coupon->maximum_discount !== null) $discount = min($discount, (float) $coupon->maximum_discount);
+        $discount = round(min($subtotal, max(0, $discount)), 2);
+
+        return ApiResponse::successResponse([
+            'code' => $coupon->code, 'name' => $coupon->name, 'discount_type' => $coupon->discount_type,
+            'subtotal' => round($subtotal, 2), 'discount_amount' => $discount,
+            'discounted_subtotal' => round(max(0, $subtotal - $discount), 2), 'currency' => $cart->currency,
+        ], 'Coupon applied to your cart.');
+    }
+
     public function createOrder(Request $request)
     {
-        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:2000']);
+        $data = $request->validate(['address_id' => 'required|integer', 'payment_method' => 'required|in:cod,mock_card,mock_wallet', 'shipping_method_id' => 'required|string|max:60', 'idempotency_key' => 'nullable|string|max:100', 'coupon_code' => 'nullable|string|max:60', 'notes' => 'nullable|string|max:2000']);
         $userId = $request->user()->id;
-        abort_unless(config('storefront.cash_on_delivery'), 422, 'Cash on delivery is not enabled.');
+        if ($data['payment_method'] === 'cod') abort_unless(config('storefront.cash_on_delivery'), 422, 'Cash on delivery is not enabled.');
         $idempotencyKey = $request->header('Idempotency-Key') ?: ($data['idempotency_key'] ?? null);
         if ($idempotencyKey) {
             $existingOrder = DB::table('customer_orders')->where('user_id', $userId)->where('idempotency_key', $idempotencyKey)->first();
@@ -695,6 +910,17 @@ class StorefrontController extends Controller
             foreach ($items as $item) {
                 $product = Product::where('id', $item->product_id)->where('status', 'active')->lockForUpdate()->first();
                 if (!$product) throw ValidationException::withMessages(['cart' => ['A product is no longer available.']]);
+
+                // A cart can outlive a store suspension. Re-check seller eligibility
+                // at checkout so a hidden/suspended store cannot continue taking orders.
+                if ($product->vendor_id && !DB::table('vendor_profiles')
+                    ->where('user_id', $product->vendor_id)
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')
+                    ->exists()) {
+                    throw ValidationException::withMessages(['cart' => ["{$product->name} is currently unavailable from this store."]]);
+                }
+
                 $variant = $item->variant_id ? DB::table('product_variants')->where('id', $item->variant_id)->where('product_id', $product->id)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($item->variant_id && !$variant) throw ValidationException::withMessages(['cart' => ['A selected variant is no longer available.']]);
                 $inventory = DB::table('inventory_items')->where($variant ? 'variant_id' : 'product_id', $variant?->id ?? $product->id)->lockForUpdate()->first();
@@ -706,14 +932,68 @@ class StorefrontController extends Controller
                 $subtotal += $line;
                 $lines[] = ['item' => $item, 'product' => $product, 'variant' => $variant, 'price' => $price, 'subtotal' => $line, 'inventory' => $inventory];
             }
+            $couponId = null;
+            $discount = 0.0;
+            if (!empty($data['coupon_code'])) {
+                $coupon = DB::table('coupons')->where('code', strtoupper(trim($data['coupon_code'])))->lockForUpdate()->first();
+                abort_unless($coupon && $coupon->is_active, 422, 'This coupon is invalid or inactive.');
+                abort_if($coupon->starts_at && now()->lt($coupon->starts_at), 422, 'This coupon is not active yet.');
+                abort_if($coupon->ends_at && now()->gt($coupon->ends_at), 422, 'This coupon has expired.');
+                abort_if($subtotal < (float) $coupon->minimum_subtotal, 422, 'Your cart does not meet the minimum subtotal for this coupon.');
+                abort_if($coupon->usage_limit !== null && (int) $coupon->usage_count >= (int) $coupon->usage_limit, 422, 'This coupon has reached its usage limit.');
+                $userUses = DB::table('coupon_redemptions')->where('coupon_id', $coupon->id)->where('user_id', $userId)->count();
+                abort_if($userUses >= (int) $coupon->per_user_limit, 422, 'You have already used this coupon the maximum number of times.');
+                $discount = $coupon->discount_type === 'percentage'
+                    ? $subtotal * min(100, (float) $coupon->discount_value) / 100
+                    : min($subtotal, (float) $coupon->discount_value);
+                if ($coupon->maximum_discount !== null) $discount = min($discount, (float) $coupon->maximum_discount);
+                $discount = round(min($subtotal, max(0, $discount)), 2);
+                $couponId = $coupon->id;
+                DB::table('coupons')->where('id', $couponId)->increment('usage_count');
+            }
             $number = 'BG-' . now()->format('Ymd') . '-' . Str::upper(Str::random(8));
             $addressData = ['firstName' => $address->first_name, 'lastName' => $address->last_name, 'address1' => $address->address1, 'address2' => $address->address2, 'city' => $address->city, 'state' => $address->state, 'postalCode' => $address->postal_code, 'country' => $address->country, 'phone' => $address->phone];
-            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'address_id' => $address->id, 'status' => 'confirmed', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => 'cod', 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => 0, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => $subtotal + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('customer_orders')->insertGetId(['number' => $number, 'idempotency_key' => $idempotencyKey, 'user_id' => $userId, 'coupon_id' => $couponId, 'address_id' => $address->id, 'status' => $data['payment_method'] === 'cod' ? 'confirmed' : 'pending', 'payment_status' => 'pending', 'fulfillment_status' => 'pending', 'payment_method' => $data['payment_method'], 'shipping_method_code' => $shippingMethod->code ?? null, 'shipping_method_name' => $shippingMethod->name ?? null, 'shipping_estimated_delivery' => $shippingMethod->estimated_delivery ?? null, 'currency' => $cart->currency, 'subtotal' => $subtotal, 'discount' => $discount, 'shipping' => (float) ($shippingMethod->price ?? 0), 'tax' => 0, 'total' => max(0, $subtotal - $discount) + (float) ($shippingMethod->price ?? 0), 'notes' => $data['notes'] ?? null, 'shipping_address' => json_encode($addressData), 'created_at' => now(), 'updated_at' => now()]);
+            if ($couponId) {
+                DB::table('coupon_redemptions')->insert([
+                    'coupon_id' => $couponId, 'user_id' => $userId, 'order_id' => $id,
+                    'discount_amount' => $discount, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            $fulfillmentItemsByVendor = [];
             foreach ($lines as $line) {
                 $i = $line['item']; $p = $line['product']; $v = $line['variant']; $inventory = $line['inventory'];
-                DB::table('customer_order_items')->insert(['order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id, 'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug, 'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku, 'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'], 'created_at' => now(), 'updated_at' => now()]);
+                $orderItemId = DB::table('customer_order_items')->insertGetId([
+                    'order_id' => $id, 'product_id' => $p->id, 'variant_id' => $v?->id,
+                    'name' => $p->name . ($v ? ' - ' . $v->name : ''), 'product_slug' => $p->slug,
+                    'image_url' => data_get($p->metadata, 'images.0.url'), 'sku' => $v?->sku ?? $p->sku,
+                    'quantity' => $i->quantity, 'unit_price' => $line['price'], 'subtotal' => $line['subtotal'],
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if ($p->vendor_id) $fulfillmentItemsByVendor[$p->vendor_id][] = $orderItemId;
                 if ($inventory && $inventory->manage_inventory) DB::table('inventory_items')->where('id', $inventory->id)->update(['stock_quantity' => max(0, $inventory->stock_quantity - $i->quantity), 'updated_at' => now()]);
                 DB::table('products')->where('id', $p->id)->increment('sold_count', $i->quantity);
+            }
+
+            foreach ($fulfillmentItemsByVendor as $vendorId => $orderItemIds) {
+                $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                    'order_id' => $id, 'vendor_id' => $vendorId, 'status' => 'pending',
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                foreach ($orderItemIds as $orderItemId) {
+                    DB::table('vendor_order_fulfillment_items')->insert([
+                        'fulfillment_id' => $fulfillmentId, 'order_item_id' => $orderItemId,
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
+                DB::table('marketplace_notifications')->insert([
+                    'user_id' => $vendorId, 'type' => 'order.created',
+                    'title' => 'New customer order',
+                    'message' => 'Order ' . $number . ' includes products assigned to your store.',
+                    'action_url' => '/vendor/orders',
+                    'data' => json_encode(['order_id' => $id, 'fulfillment_id' => $fulfillmentId]),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
             }
             DB::table('cart_items')->where('cart_id', $cart->id)->delete();
                 return DB::table('customer_orders')->find($id);
@@ -725,14 +1005,74 @@ class StorefrontController extends Controller
             }
             throw $exception;
         }
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $userId, 'type' => 'order.placed',
+            'title' => 'Order placed successfully',
+            'message' => 'Your order ' . $order->number . ' has been placed.',
+            'action_url' => '/account/orders/' . $order->id,
+            'data' => json_encode(['order_id' => $order->id]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // Record the purchase against the order and each purchased product so
+        // admins can trace customer buying activity independently of HTTP logs.
+        AuditLog::create([
+            'actor_user_id' => $userId,
+            'actor_role' => 'Customer',
+            'action' => 'order.placed',
+            'method' => 'POST',
+            'path' => 'api/v1/orders',
+            'subject_type' => 'CustomerOrder',
+            'subject_id' => (string) $order->id,
+            'status_code' => 201,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'metadata' => [
+                'order_number' => $order->number,
+                'currency' => $order->currency,
+                'total' => (float) $order->total,
+                'payment_method' => $order->payment_method,
+            ],
+        ]);
+
+        foreach ($items as $item) {
+            AuditLog::create([
+                'actor_user_id' => $userId,
+                'actor_role' => 'Customer',
+                'action' => 'product.purchased',
+                'method' => 'POST',
+                'path' => 'api/v1/orders',
+                'subject_type' => 'Product',
+                'subject_id' => (string) $item->product_id,
+                'status_code' => 201,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => [
+                    'order_id' => (int) $order->id,
+                    'quantity' => (int) $item->quantity,
+                    'order_number' => $order->number,
+                ],
+            ]);
+        }
+
         return ApiResponse::createdResponse($this->orderPayload($order), 'Order placed successfully.');
     }
 
     public function upsertShipment(Request $request, int $orderId)
     {
-        abort_unless($request->user()->hasRole(Role::ADMIN), 403);
+        abort_unless($request->user()->hasAnyRole([Role::ADMIN, Role::SUPER_ADMIN]), 403);
         $order = DB::table('customer_orders')->where('id', $orderId)->first();
         abort_unless($order, 404);
+
+        // Marketplace orders with vendor fulfilments must be updated per vendor.
+        // This legacy parent-order shipment endpoint would otherwise bypass
+        // vendor isolation and could mark the whole order delivered prematurely.
+        abort_if(
+            DB::table('vendor_order_fulfillments')->where('order_id', $orderId)->exists(),
+            409,
+            'This order uses vendor-specific fulfilments. Update each vendor fulfilment instead.'
+        );
+
         $data = $request->validate([
             'carrier' => 'nullable|string|max:120',
             'tracking_number' => 'nullable|string|max:160',
@@ -893,7 +1233,7 @@ class StorefrontController extends Controller
     public function adminStores(Request $request)
     {
         $query = DB::table('vendor_profiles as vp')->join('users as u', 'u.id', '=', 'vp.user_id')->whereNull('vp.deleted_at')->select('vp.*', 'u.name as owner_name', 'u.email as owner_email', 'u.phone as owner_phone');
-        if ($request->filled('status')) $query->where('vp.status', $request->input('status'));
+        if ($request->filled('status')) $query->where('vp.status', strtolower($request->input('status')));
         if ($request->filled('search')) $query->where(fn ($q) => $q->where('vp.name', 'like', '%' . $request->input('search') . '%')->orWhere('vp.slug', 'like', '%' . $request->input('search') . '%')->orWhere('u.email', 'like', '%' . $request->input('search') . '%'));
         $page = $query->orderByDesc('vp.created_at')->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($row) => $this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]));
@@ -911,6 +1251,35 @@ class StorefrontController extends Controller
         return ApiResponse::successResponse($this->storePayload($row, (object) ['id' => $row->user_id, 'name' => $row->owner_name, 'email' => $row->owner_email, 'phone' => $row->owner_phone]), 'Store retrieved.');
     }
 
+    public function updateAdminStore(Request $request, int $id)
+    {
+        $profile = DB::table('vendor_profiles')->where('id', $id)->whereNull('deleted_at')->first();
+        abort_unless($profile, 404);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'slug' => 'required|string|max:255|alpha_dash|unique:vendor_profiles,slug,' . $id,
+            'description' => 'nullable|string|max:5000',
+            'logo' => 'nullable|url|max:500',
+            'banner' => 'nullable|url|max:500',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:50',
+        ]);
+
+        DB::table('vendor_profiles')->where('id', $id)->update([
+            'name' => $data['name'],
+            'slug' => $data['slug'],
+            'description' => $data['description'] ?? null,
+            'image_url' => $data['logo'] ?? null,
+            'banner_url' => $data['banner'] ?? null,
+            'email' => $data['email'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'updated_at' => now(),
+        ]);
+
+        return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store profile updated by administrator.');
+    }
+
     public function updateStoreStatus(Request $request, int $id)
     {
         $data = $request->validate(['status' => 'required|in:active,suspended,pending']);
@@ -920,6 +1289,17 @@ class StorefrontController extends Controller
             'status' => $data['status'],
             'approved_at' => $data['status'] === 'active' ? ($profile->approved_at ?: now()) : $profile->approved_at,
             'updated_at' => now(),
+        ]);
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $profile->user_id,
+            'type' => 'store.' . $data['status'],
+            'title' => $data['status'] === 'active' ? 'Your store is approved' : ($data['status'] === 'suspended' ? 'Your store has been suspended' : 'Your store status changed'),
+            'message' => $data['status'] === 'active'
+                ? 'Your store "' . $profile->name . '" is active and can sell approved products.'
+                : 'Your store "' . $profile->name . '" status is now ' . $data['status'] . '.',
+            'action_url' => '/vendor/store/settings',
+            'data' => json_encode(['store_id' => $id, 'status' => $data['status']]),
+            'created_at' => now(), 'updated_at' => now(),
         ]);
         return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store status updated.');
     }
@@ -937,6 +1317,359 @@ class StorefrontController extends Controller
             'commission_type' => $data['commission_type'], 'commission_value' => $data['commission_value'], 'updated_at' => now(),
         ]);
         return ApiResponse::successResponse($this->adminStore($id)->getData(true)['data'], 'Store commission updated.');
+    }
+
+    /**
+     * Vendor-facing order projection. A marketplace order may contain products
+     * from multiple stores, so only this vendor's line items are ever returned.
+     * Parent-order totals and shared shipment state are deliberately omitted.
+     */
+    private function vendorOrderPayload(object $order, int $vendorId): array
+    {
+        $fulfillment = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)
+            ->where('vendor_id', $vendorId)
+            ->first();
+
+        $itemsQuery = DB::table('customer_order_items as oi')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->where('oi.order_id', $order->id)
+            ->where('p.vendor_id', $vendorId);
+
+        if ($fulfillment) {
+            $itemsQuery->whereExists(function ($query) use ($fulfillment) {
+                $query->selectRaw('1')
+                    ->from('vendor_order_fulfillment_items as fi')
+                    ->whereColumn('fi.order_item_id', 'oi.id')
+                    ->where('fi.fulfillment_id', $fulfillment->id);
+            });
+        }
+
+        $items = $itemsQuery->select('oi.id', 'oi.product_id', 'oi.variant_id', 'oi.name', 'oi.product_slug',
+            'oi.image_url', 'oi.sku', 'oi.quantity', 'oi.unit_price', 'oi.subtotal')->get();
+
+        return [
+            'id' => (int) $order->id,
+            'number' => $order->number,
+            'status' => $fulfillment->status ?? $order->status,
+            'parentStatus' => $order->status,
+            'createdAt' => $order->created_at,
+            'currency' => $order->currency,
+            'vendorSubtotal' => (float) $items->sum('subtotal'),
+            'fulfillment' => $fulfillment ? [
+                'id' => (int) $fulfillment->id,
+                'status' => $fulfillment->status,
+                'carrier' => $fulfillment->carrier,
+                'trackingNumber' => $fulfillment->tracking_number,
+                'trackingUrl' => $fulfillment->tracking_url,
+                'estimatedDelivery' => $fulfillment->estimated_delivery,
+                'shippedAt' => $fulfillment->shipped_at,
+                'deliveredAt' => $fulfillment->delivered_at,
+            ] : null,
+            'items' => $items->map(fn ($item) => [
+                'id' => (int) $item->id,
+                'productId' => (int) $item->product_id,
+                'variantId' => $item->variant_id ? (int) $item->variant_id : null,
+                'name' => $item->name,
+                'slug' => $item->product_slug,
+                'imageUrl' => $item->image_url,
+                'sku' => $item->sku,
+                'quantity' => (int) $item->quantity,
+                'unitPrice' => (float) $item->unit_price,
+                'subtotal' => (float) $item->subtotal,
+            ])->values(),
+            // Fulfilment needs the ship-to details, but never another vendor's
+            // items, payment credentials, or the customer's full order total.
+            'shippingAddress' => $order->shipping_address ? json_decode($order->shipping_address, true) : null,
+        ];
+    }
+
+    public function vendorOrders(Request $request)
+    {
+        $vendorId = (int) $request->user()->id;
+        $orders = DB::table('customer_orders as o')
+            ->whereExists(function ($query) use ($vendorId) {
+                $query->selectRaw('1')
+                    ->from('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->whereColumn('oi.order_id', 'o.id')
+                    ->where('p.vendor_id', $vendorId);
+            })
+            ->orderByDesc('o.created_at')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+
+        $data = $orders->getCollection()->map(fn ($order) => $this->vendorOrderPayload($order, $vendorId));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Vendor orders retrieved.',
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'per_page' => $orders->perPage(),
+                'total' => $orders->total(),
+                'count' => $data->count(),
+                'from' => $orders->firstItem(),
+                'to' => $orders->lastItem(),
+                'has_previous' => $orders->currentPage() > 1,
+                'has_next' => $orders->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function vendorOrder(Request $request, int $id)
+    {
+        $vendorId = (int) $request->user()->id;
+        $order = DB::table('customer_orders as o')
+            ->where('o.id', $id)
+            ->whereExists(function ($query) use ($vendorId) {
+                $query->selectRaw('1')
+                    ->from('customer_order_items as oi')
+                    ->join('products as p', 'p.id', '=', 'oi.product_id')
+                    ->whereColumn('oi.order_id', 'o.id')
+                    ->where('p.vendor_id', $vendorId);
+            })
+            ->first();
+
+        abort_unless($order, 404);
+
+        return ApiResponse::successResponse(
+            $this->vendorOrderPayload($order, $vendorId),
+            'Vendor order retrieved.'
+        );
+    }
+
+    public function updateVendorFulfillment(Request $request, int $orderId)
+    {
+        $vendorId = (int) $request->user()->id;
+        $data = $request->validate([
+            'status' => 'required|in:processing,ready_to_ship,shipped',
+            'carrier' => 'required_if:status,shipped|nullable|string|max:120',
+            'tracking_number' => 'required_if:status,shipped|nullable|string|max:160',
+            'tracking_url' => ['nullable', 'url', 'regex:/^https:\\/\\//i'],
+            'estimated_delivery' => 'nullable|date',
+        ]);
+
+        $fulfillment = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $orderId)
+            ->where('vendor_id', $vendorId)
+            ->first();
+        abort_unless($fulfillment, 404, 'Fulfilment not found for this store.');
+
+        $sequence = ['pending' => 0, 'processing' => 1, 'ready_to_ship' => 2, 'shipped' => 3, 'delivered' => 4];
+        $current = $sequence[$fulfillment->status] ?? -1;
+        $next = $sequence[$data['status']] ?? -1;
+        abort_if($next <= $current, 422, 'Fulfilment status must advance to the next step.');
+        abort_if($next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
+        abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
+
+        DB::transaction(function () use ($data, $fulfillment, $orderId) {
+            DB::table('vendor_order_fulfillments')->where('id', $fulfillment->id)->update([
+                'status' => $data['status'],
+                'carrier' => $data['carrier'] ?? $fulfillment->carrier,
+                'tracking_number' => $data['tracking_number'] ?? $fulfillment->tracking_number,
+                'tracking_url' => $data['tracking_url'] ?? $fulfillment->tracking_url,
+                'estimated_delivery' => isset($data['estimated_delivery'])
+                    ? \Illuminate\Support\Carbon::parse($data['estimated_delivery'])->toDateString()
+                    : $fulfillment->estimated_delivery,
+                'shipped_at' => $data['status'] === 'shipped' ? ($fulfillment->shipped_at ?: now()) : $fulfillment->shipped_at,
+                'updated_at' => now(),
+            ]);
+
+            $remaining = DB::table('vendor_order_fulfillments')
+                ->where('order_id', $orderId)
+                ->whereNotIn('status', ['shipped', 'delivered'])
+                ->count();
+            if ($remaining === 0) {
+                $undelivered = DB::table('vendor_order_fulfillments')
+                    ->where('order_id', $orderId)
+                    ->where('status', '<>', 'delivered')
+                    ->count();
+                $orderUpdates = [
+                    'status' => $undelivered === 0 ? 'delivered' : 'shipped',
+                    'fulfillment_status' => $undelivered === 0 ? 'delivered' : 'shipped',
+                    'updated_at' => now(),
+                ];
+                if ($undelivered === 0) {
+                    $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                    if (DB::table('customer_orders')->where('id', $orderId)->value('payment_method') === 'cod') $orderUpdates['payment_status'] = 'paid';
+                }
+                DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
+            }
+            $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $customerOrder->user_id, 'type' => 'order.fulfilment.' . $data['status'],
+                'title' => 'Order fulfilment updated',
+                'message' => 'A store updated order ' . $customerOrder->number . ' to ' . str_replace('_', ' ', $data['status']) . '.',
+                'action_url' => '/account/orders/' . $orderId,
+                'data' => json_encode(['order_id' => $orderId, 'fulfilment_status' => $data['status']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $order = DB::table('customer_orders')->where('id', $orderId)->first();
+        return ApiResponse::successResponse(
+            $this->vendorOrderPayload($order, $vendorId),
+            'Your store fulfilment was updated.'
+        );
+    }
+
+    public function updateAdminFulfillment(Request $request, int $orderId, int $fulfillmentId)
+    {
+        $data = $request->validate([
+            'status' => 'required|in:processing,ready_to_ship,shipped,delivered',
+            'carrier' => 'nullable|string|max:120',
+            'tracking_number' => 'nullable|string|max:160',
+            'tracking_url' => ['nullable', 'url', 'regex:/^https:\\/\\//i'],
+            'estimated_delivery' => 'nullable|date',
+        ]);
+
+        $fulfillment = DB::table('vendor_order_fulfillments')
+            ->where('id', $fulfillmentId)
+            ->where('order_id', $orderId)
+            ->first();
+        abort_unless($fulfillment, 404, 'Vendor fulfilment not found for this order.');
+
+        $sequence = ['pending' => 0, 'processing' => 1, 'ready_to_ship' => 2, 'shipped' => 3, 'delivered' => 4];
+        $current = $sequence[$fulfillment->status] ?? -1;
+        $next = $sequence[$data['status']] ?? -1;
+        abort_if($next <= $current || $next > $current + 1, 422, 'Fulfilment status must advance one step at a time.');
+        abort_if($fulfillment->status === 'delivered', 422, 'Delivered fulfilments cannot be changed.');
+        abort_if($data['status'] === 'shipped' && empty($data['tracking_number']) && empty($fulfillment->tracking_number), 422, 'A tracking number is required before shipping.');
+
+        DB::transaction(function () use ($data, $fulfillment, $orderId) {
+            DB::table('vendor_order_fulfillments')->where('id', $fulfillment->id)->update([
+                'status' => $data['status'],
+                'carrier' => $data['carrier'] ?? $fulfillment->carrier,
+                'tracking_number' => $data['tracking_number'] ?? $fulfillment->tracking_number,
+                'tracking_url' => $data['tracking_url'] ?? $fulfillment->tracking_url,
+                'estimated_delivery' => isset($data['estimated_delivery'])
+                    ? \Illuminate\Support\Carbon::parse($data['estimated_delivery'])->toDateString()
+                    : $fulfillment->estimated_delivery,
+                'shipped_at' => in_array($data['status'], ['shipped', 'delivered'], true) ? ($fulfillment->shipped_at ?: now()) : $fulfillment->shipped_at,
+                'delivered_at' => $data['status'] === 'delivered' ? ($fulfillment->delivered_at ?: now()) : $fulfillment->delivered_at,
+                'updated_at' => now(),
+            ]);
+
+            $notShipped = DB::table('vendor_order_fulfillments')
+                ->where('order_id', $orderId)->whereNotIn('status', ['shipped', 'delivered'])->count();
+            if ($notShipped === 0) {
+                $notDelivered = DB::table('vendor_order_fulfillments')
+                    ->where('order_id', $orderId)->where('status', '<>', 'delivered')->count();
+                $orderUpdates = [
+                    'status' => $notDelivered === 0 ? 'delivered' : 'shipped',
+                    'fulfillment_status' => $notDelivered === 0 ? 'delivered' : 'shipped',
+                    'updated_at' => now(),
+                ];
+                if ($notDelivered === 0) {
+                    $orderUpdates['delivered_at'] = DB::raw('COALESCE(delivered_at, CURRENT_TIMESTAMP)');
+                    if (DB::table('customer_orders')->where('id', $orderId)->value('payment_method') === 'cod') $orderUpdates['payment_status'] = 'paid';
+                }
+                DB::table('customer_orders')->where('id', $orderId)->update($orderUpdates);
+            }
+            $customerOrder = DB::table('customer_orders')->where('id', $orderId)->first();
+            DB::table('marketplace_notifications')->insert([
+                'user_id' => $customerOrder->user_id, 'type' => 'order.fulfilment.' . $data['status'],
+                'title' => 'Order fulfilment updated',
+                'message' => 'The marketplace updated order ' . $customerOrder->number . ' to ' . str_replace('_', ' ', $data['status']) . '.',
+                'action_url' => '/account/orders/' . $orderId,
+                'data' => json_encode(['order_id' => $orderId, 'fulfilment_status' => $data['status']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $order = DB::table('customer_orders')->where('id', $orderId)->first();
+        return ApiResponse::successResponse($this->adminOrderPayload($order), 'Vendor fulfilment updated by administrator.');
+    }
+
+    private function adminOrderPayload(object $order): array
+    {
+        $user = DB::table('users')->where('id', $order->user_id)->first();
+        $fulfillments = DB::table('vendor_order_fulfillments as f')
+            ->join('users as u', 'u.id', '=', 'f.vendor_id')
+            ->where('f.order_id', $order->id)
+            ->orderBy('f.id')
+            ->get()
+            ->map(function ($fulfillment) {
+                $items = DB::table('vendor_order_fulfillment_items as fi')
+                    ->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')
+                    ->where('fi.fulfillment_id', $fulfillment->id)
+                    ->select('oi.id', 'oi.name', 'oi.sku', 'oi.quantity', 'oi.subtotal')
+                    ->get();
+                return [
+                    'id' => (int) $fulfillment->id,
+                    'vendorId' => (int) $fulfillment->vendor_id,
+                    'vendorName' => $fulfillment->name,
+                    'status' => $fulfillment->status,
+                    'carrier' => $fulfillment->carrier,
+                    'trackingNumber' => $fulfillment->tracking_number,
+                    'trackingUrl' => $fulfillment->tracking_url,
+                    'estimatedDelivery' => $fulfillment->estimated_delivery,
+                    'shippedAt' => $fulfillment->shipped_at,
+                    'deliveredAt' => $fulfillment->delivered_at,
+                    'items' => $items,
+                ];
+            })->values();
+
+        return array_merge($this->orderPayload($order), [
+            'customer' => $user ? [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ] : null,
+            'vendorFulfillments' => $fulfillments,
+        ]);
+    }
+
+    public function adminOrders(Request $request)
+    {
+        $query = DB::table('customer_orders as o');
+        if ($request->filled('search')) {
+            $search = trim((string) $request->input('search'));
+            $query->where(function ($filter) use ($search) {
+                $filter->where('o.number', 'like', '%' . $search . '%')
+                    ->orWhereExists(function ($customer) use ($search) {
+                        $customer->selectRaw('1')->from('users as u')
+                            ->whereColumn('u.id', 'o.user_id')
+                            ->where(function ($q) use ($search) {
+                                $q->where('u.name', 'like', '%' . $search . '%')
+                                    ->orWhere('u.email', 'like', '%' . $search . '%');
+                            });
+                    });
+            });
+        }
+        if ($request->filled('status')) $query->where('o.status', strtolower((string) $request->input('status')));
+        if ($request->filled('payment_status')) $query->where('o.payment_status', strtolower((string) $request->input('payment_status')));
+
+        $page = $query->orderByDesc('o.created_at')
+            ->paginate(min(max($request->integer('per_page', 20), 1), 100));
+        $data = $page->getCollection()->map(fn ($order) => $this->adminOrderPayload($order));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Administrator orders retrieved.',
+            'data' => $data,
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'count' => $data->count(),
+                'from' => $page->firstItem(),
+                'to' => $page->lastItem(),
+                'has_previous' => $page->currentPage() > 1,
+                'has_next' => $page->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function adminOrder(int $id)
+    {
+        $order = DB::table('customer_orders')->where('id', $id)->first();
+        abort_unless($order, 404);
+        return ApiResponse::successResponse($this->adminOrderPayload($order), 'Administrator order retrieved.');
     }
 
     public function paymentMethods()

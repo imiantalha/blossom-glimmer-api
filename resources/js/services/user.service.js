@@ -1,30 +1,9 @@
 import api from "../api/axios";
 
-const getUsers = (params = {}) => {
-    return api.get("/users", { params });
-}
+const getUsers = (params = {}) => api.get("/admin/users", { params });
+const getUser = (id) => api.get(`/admin/users/${encodeURIComponent(id)}`);
+const createUser = (data) => api.post("/admin/users", data);
+const updateUser = (id, data) => api.patch(`/admin/users/${encodeURIComponent(id)}`, data);
+const deleteUser = (id) => api.delete(`/admin/users/${encodeURIComponent(id)}`);
 
-const getUser = (id) => {
-    return api.get(`/users/${id}`);
-}
-
-const createUser = (data) => {
-    console.log("Creating user with data:", data);
-    return api.post("/users", data);
-}
-
-const updateUser = (id, data) => {
-    return api.put(`/users/${id}`, data);
-}
-
-const deleteUser = (id) => {
-    return api.delete(`/users/${id}`);
-}
-
-export default {
-    getUsers,
-    getUser,
-    createUser,
-    updateUser,
-    deleteUser,
-}
+export default { getUsers, getUser, createUser, updateUser, deleteUser };

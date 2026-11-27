@@ -7,6 +7,7 @@ use App\Repositories\Contracts\UserRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class UserService
 {
@@ -41,17 +42,18 @@ class UserService
             // Hash password
             $data['password'] = Hash::make($data['password']);
 
-            // Extract roles
-            $roles = $data['roles'] ?? [];
-
-            unset($data['roles']);
+            // The request contract accepts one role. Assign it explicitly so
+            // newly created admins, vendors and customers receive the intended
+            // authorization boundary instead of silently becoming role-less.
+            $role = $data['role'] ?? null;
+            unset($data['role'], $data['password_confirmation']);
 
             // Create user
             $user = $this->userRepository->create($data);
 
-            // Assign roles
-            if (!empty($roles)) {
-                $user->syncRoles($roles);
+            // Assign role
+            if ($role) {
+                $user->syncRoles([$role]);
             }
 
             return $user->load('roles');
@@ -75,10 +77,45 @@ class UserService
             // Extract role
             $roles = $data['role'] ?? null;
 
-            unset($data['role']);
+            unset($data['role'], $data['password_confirmation']);
+
+            // Prevent an administrator from removing their own access through a direct API call.
+            if ((int) auth()->id() === (int) $user->id) {
+                if (array_key_exists('is_active', $data) && !$data['is_active']) {
+                    throw ValidationException::withMessages(['is_active' => 'You cannot deactivate your own account.']);
+                }
+                if (!is_null($roles) && !$user->hasRole($roles)) {
+                    throw ValidationException::withMessages(['role' => 'You cannot change your own administrator role.']);
+                }
+            }
+
+            // Never demote or deactivate the last active administrator.
+            if ($user->hasRole('Admin') && $user->is_active && !is_null($roles) && !in_array('Admin', (array) $roles, true)) {
+                $activeAdmins = User::role('Admin')->where('is_active', true)->count();
+                if ($activeAdmins <= 1) {
+                    throw ValidationException::withMessages([
+                        'role' => 'The last active administrator cannot be demoted.',
+                    ]);
+                }
+            }
+
+            // Never allow the marketplace to be left without an active administrator.
+            if (array_key_exists('is_active', $data) && !$data['is_active'] && $user->hasRole('Admin')) {
+                $activeAdmins = User::role('Admin')->where('is_active', true)->count();
+                if ($activeAdmins <= 1) {
+                    throw ValidationException::withMessages([
+                        'is_active' => 'The last active administrator cannot be deactivated.',
+                    ]);
+                }
+            }
 
             // Update user
             $user = $this->userRepository->update($user, $data);
+
+            // Revoke all existing API tokens immediately when an account is disabled.
+            if (!$user->is_active) {
+                $user->tokens()->delete();
+            }
 
             // Sync role
             if (!is_null($roles)) {

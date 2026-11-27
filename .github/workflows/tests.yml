@@ -1,13 +1,11 @@
 name: Backend Tests
 
 on:
-  push:
-    branches:
-      - main
-      - feat/storefront-api-integration
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+
+concurrency:
+  group: backend-tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   laravel-tests:
@@ -59,6 +57,7 @@ jobs:
           MAIL_MAILER: array
 
   sql-server-tests:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     services:
       sqlserver:

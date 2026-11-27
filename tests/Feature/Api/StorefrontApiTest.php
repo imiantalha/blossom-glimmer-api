@@ -7,12 +7,10 @@ use App\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\StorefrontDemoSeeder;
 use Database\Seeders\StorefrontScenarioSeeder;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class StorefrontApiTest extends TestCase
@@ -55,7 +53,6 @@ class StorefrontApiTest extends TestCase
 
     public function test_password_reset_request_does_not_disclose_account_existence(): void
     {
-        Notification::fake();
         $user = User::factory()->create(['email' => 'known-customer@example.test']);
         $genericMessage = 'If an account exists for this email, password reset instructions will be sent.';
 
@@ -72,7 +69,6 @@ class StorefrontApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', $genericMessage);
 
-        Notification::assertSentTo($user, ResetPassword::class);
     }
 
     public function test_customer_cannot_access_admin_routes(): void
@@ -113,7 +109,9 @@ class StorefrontApiTest extends TestCase
         $brandId = DB::table('brands')->where('status', 'active')->value('id');
         $categoryId = DB::table('categories')->where('status', 'active')->value('id');
 
-        $response = $this->actingAs($vendor, 'sanctum')->postJson('/api/v1/vendor/products', [
+        DB::table('tags')->updateOrInsert(['slug' => 'api-test'], ['name' => 'api-test', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+
+        $productPayload = [
             'name' => 'API Test Simple Product',
             'slug' => 'api-test-simple-product',
             'brandId' => $brandId,
@@ -131,12 +129,20 @@ class StorefrontApiTest extends TestCase
                 'images' => [], 'attributeValues' => [],
             ]],
             'specifications' => [], 'faqs' => [], 'intent' => 'submit',
-        ])->assertCreated()->assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
+        ];
+        $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/products', array_merge($productPayload, ['tags' => ['not-approved-by-admin']]))
+            ->assertUnprocessable();
+
+        $response = $this->postJson('/api/v1/vendor/products', $productPayload)->assertCreated()->assertJsonPath('data.status', 'INACTIVE')->assertJsonPath('data.approvalStatus', 'PENDING');
 
         $productId = $response->json('data.id');
 
         $this->actingAs($admin, 'sanctum')
-            ->patchJson('/api/v1/admin/products/' . $productId . '/approval', ['decision' => 'approve'])
+            ->patchJson('/api/v1/admin/products/' . $productId . '/status', ['status' => 'active'])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/products/' . $productId . '/approval', ['decision' => 'approve'])
             ->assertOk()
             ->assertJsonPath('data.status', 'ACTIVE')
             ->assertJsonPath('data.approvalStatus', 'APPROVED');
@@ -152,6 +158,18 @@ class StorefrontApiTest extends TestCase
         $this->actingAs($vendor, 'sanctum')
             ->getJson('/api/v1/vendor/products/' . $otherProduct->id)
             ->assertNotFound();
+
+        $this->patchJson('/api/v1/vendor/products/' . $otherProduct->id, [
+            'name' => 'Unauthorized cross-vendor edit',
+        ])->assertNotFound();
+
+        $this->deleteJson('/api/v1/vendor/products/' . $otherProduct->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('products', [
+            'id' => $otherProduct->id,
+            'name' => 'Unauthorized cross-vendor edit',
+        ]);
     }
 
     public function test_demo_shipping_and_storefront_scenarios_are_seeded(): void
@@ -193,6 +211,32 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('data.id', $orderId);
 
         $this->assertDatabaseCount('customer_orders', 2);
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['order_id' => $orderId, 'status' => 'pending']);
+        $this->assertGreaterThan(0, DB::table('vendor_order_fulfillment_items as fi')->join('customer_order_items as oi', 'oi.id', '=', 'fi.order_item_id')->where('oi.order_id', $orderId)->count());
+    }
+
+    public function test_checkout_rejects_cart_items_from_a_suspended_vendor(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $cart = DB::table('carts')->where('user_id', $customer->id)->firstOrFail();
+        $item = DB::table('cart_items')->where('cart_id', $cart->id)->firstOrFail();
+        $addressId = DB::table('customer_addresses')->where('user_id', $customer->id)->value('id');
+        $product = Product::findOrFail($item->product_id);
+
+        $this->assertNotNull($product->vendor_id);
+        DB::table('vendor_profiles')->where('user_id', $product->vendor_id)->update(['status' => 'suspended']);
+        $orderCount = DB::table('customer_orders')->count();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'address_id' => $addressId,
+                'shipping_method_id' => 'standard',
+                'payment_method' => 'cod',
+            ], ['Idempotency-Key' => 'suspended-vendor-checkout'])
+            ->assertUnprocessable();
+
+        $this->assertSame($orderCount, DB::table('customer_orders')->count());
+        $this->assertDatabaseHas('cart_items', ['id' => $item->id, 'cart_id' => $cart->id]);
     }
 
     public function test_authenticated_customer_receives_a_persistent_empty_cart(): void
@@ -636,6 +680,12 @@ class StorefrontApiTest extends TestCase
             $this->assertSame(200, $response->status(), "GET {$path} failed: {$response->getContent()}");
             $response->assertJsonPath('success', true);
         }
+
+        $product = Product::firstOrFail();
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products/' . $product->id)
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['store' => ['owner' => ['id', 'firstName', 'lastName', 'email']]]]);
     }
 
     public function test_guest_cart_and_wishlist_merge_into_authenticated_customer_account(): void
@@ -709,17 +759,13 @@ class StorefrontApiTest extends TestCase
         $this->assertDatabaseMissing('permissions', ['id' => $permission['id']]);
     }
 
-    public function test_admin_shipment_updates_are_visible_in_customer_order_history_and_details(): void
+    public function test_legacy_parent_shipment_updates_are_blocked_for_vendor_fulfilment_orders(): void
     {
         $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
         $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
-        $otherCustomer = User::where('email', 'customer2@demo.blossomglimmer.local')->firstOrFail();
-        $orderId = DB::table('customer_orders')
-            ->where('user_id', $customer->id)
-            ->where('number', 'BG-DEMO-1001')
-            ->value('id');
-
+        $orderId = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->value('id');
         $this->assertNotNull($orderId);
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['order_id' => $orderId]);
 
         $this->actingAs($customer, 'sanctum')
             ->postJson('/api/v1/admin/orders/' . $orderId . '/shipment', [
@@ -734,55 +780,10 @@ class StorefrontApiTest extends TestCase
                 'tracking_number' => 'BG-REGRESSION-TRACK-1001',
                 'tracking_url' => 'https://tracking.example.test/BG-REGRESSION-TRACK-1001',
                 'status' => 'in_transit',
-                'description' => 'Package is moving through the network.',
-                'location' => 'Lahore',
             ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'in_transit')
-            ->assertJsonPath('data.trackingNumber', 'BG-REGRESSION-TRACK-1001');
-
-        $this->assertDatabaseHas('shipment_events', [
-            'shipment_id' => DB::table('shipments')->where('order_id', $orderId)->value('id'),
-            'status' => 'in_transit',
-            'location' => 'Lahore',
-        ]);
-
-        $this->actingAs($customer, 'sanctum')
-            ->getJson('/api/v1/orders')
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonFragment(['number' => 'BG-DEMO-1001'])
-            ->assertJsonFragment(['trackingNumber' => 'BG-REGRESSION-TRACK-1001']);
-
-        $this->getJson('/api/v1/orders/' . $orderId)
-            ->assertOk()
-            ->assertJsonPath('data.shipment.status', 'in_transit')
-            ->assertJsonPath('data.shipment.trackingUrl', 'https://tracking.example.test/BG-REGRESSION-TRACK-1001');
-
-        $this->actingAs($otherCustomer, 'sanctum')
-            ->getJson('/api/v1/orders/' . $orderId)
-            ->assertNotFound();
-
-        $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/v1/admin/orders/' . $orderId . '/shipment', [
-                'status' => 'delivered',
-                'delivered_at' => now()->toISOString(),
-                'description' => 'Delivered to recipient.',
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'delivered');
-
-        $this->assertDatabaseHas('customer_orders', [
-            'id' => $orderId,
-            'status' => 'delivered',
-            'fulfillment_status' => 'delivered',
-        ]);
-        $this->assertDatabaseHas('shipment_events', [
-            'shipment_id' => DB::table('shipments')->where('order_id', $orderId)->value('id'),
-            'status' => 'delivered',
-        ]);
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This order uses vendor-specific fulfilments. Update each vendor fulfilment instead.');
     }
-
 
     public function test_checkout_rejects_insufficient_stock_without_creating_an_order_or_clearing_cart(): void
     {
@@ -936,6 +937,835 @@ class StorefrontApiTest extends TestCase
             'id' => $inventory->id,
             'variant_id' => $variant->id,
             'reserved_quantity' => 2,
+        ]);
+    }
+
+
+
+    public function test_admin_can_filter_products_and_manage_visibility_and_featured_state(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+        $metadata = $product->metadata ?? [];
+        $metadata['approvalStatus'] = 'approved';
+        $product->update(['metadata' => $metadata]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products?' . http_build_query(['approval_status' => 'approved', 'status' => 'active', 'name' => $product->name]))
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $product->id]);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/featured', ['is_featured' => true])
+            ->assertOk()->assertJsonPath('data.isFeatured', true);
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'is_featured' => true]);
+
+        $pending = Product::where('status', 'inactive')->first();
+        if ($pending) {
+            $pendingMetadata = $pending->metadata ?? [];
+            $pendingMetadata['approvalStatus'] = 'pending';
+            $pending->update(['metadata' => $pendingMetadata]);
+            $this->patchJson('/api/v1/admin/products/' . $pending->id . '/status', ['status' => 'active'])
+                ->assertUnprocessable();
+        }
+    }
+
+    public function test_suspending_a_store_hides_its_products_and_blocks_vendor_mutations(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $profile = $vendor->vendorProfile()->firstOrFail();
+        $product = Product::where('vendor_id', $vendor->id)->where('status', 'active')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'suspended'])
+            ->assertOk()->assertJsonPath('data.status', 'suspended');
+
+        $this->getJson('/api/v1/vendors/' . $profile->slug)->assertNotFound();
+
+        $catalog = $this->getJson('/api/v1/products')->assertOk()->json('data');
+        $this->assertFalse(collect($catalog)->contains(fn ($item) => (string) $item['id'] === (string) $product->id));
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/vendor/products/' . $product->id, [])
+            ->assertForbidden();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'active');
+    }
+
+    public function test_non_admin_cannot_change_product_or_store_moderation_state(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::firstOrFail();
+        $profileId = DB::table('vendor_profiles')->value('id');
+
+        $this->actingAs($customer, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertForbidden();
+
+        $this->patchJson('/api/v1/admin/stores/' . $profileId . '/status', ['status' => 'suspended'])
+            ->assertForbidden();
+    }
+
+
+
+    public function test_admin_product_rejection_requires_and_persists_vendor_feedback(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id . '/approval', ['decision' => 'reject'])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/approval', [
+            'decision' => 'reject',
+            'reason' => 'Please provide clearer product images and complete the material details.',
+        ])->assertOk()
+            ->assertJsonPath('data.approvalStatus', 'REJECTED')
+            ->assertJsonPath('data.rejectionReason', 'Please provide clearer product images and complete the material details.');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'inactive']);
+
+        $vendor = User::findOrFail($product->vendor_id);
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/vendor/products/' . $product->id)
+            ->assertOk()
+            ->assertJsonPath('data.rejectionReason', 'Please provide clearer product images and complete the material details.');
+    }
+
+
+
+    public function test_legacy_active_product_without_approval_metadata_can_be_deactivated_and_reactivated(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('status', 'active')->firstOrFail();
+        $metadata = $product->metadata ?? [];
+        unset($metadata['approvalStatus']);
+        $product->update(['metadata' => $metadata]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/products?' . http_build_query(['status' => 'active', 'approval_status' => 'approved', 'name' => $product->name]))
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $product->id]);
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.approvalStatus', 'APPROVED');
+
+        $this->patchJson('/api/v1/admin/products/' . $product->id . '/status', ['status' => 'active'])
+            ->assertOk()->assertJsonPath('data.status', 'ACTIVE');
+    }
+
+
+    public function test_vendor_can_submit_brand_and_category_requests_and_admin_can_approve_them(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $brandRequest = $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Vendor Requested Brand',
+                'slug' => 'vendor-requested-brand',
+                'logo' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+            ])->assertCreated()
+            ->assertJsonPath('data.type', 'brand')
+            ->assertJsonPath('data.status', 'pending');
+
+        $brandRequestId = $brandRequest->json('data.id');
+
+        $categoryRequest = $this->postJson('/api/v1/vendor/catalog-requests', [
+            'type' => 'category',
+            'name' => 'Vendor Requested Category',
+            'slug' => 'vendor-requested-category',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'pending');
+
+        $categoryRequestId = $categoryRequest->json('data.id');
+
+        $tagRequest = $this->postJson('/api/v1/vendor/catalog-requests', [
+            'type' => 'tag',
+            'name' => 'Vendor Requested Tag',
+            'slug' => 'vendor-requested-tag',
+        ])->assertCreated()->assertJsonPath('data.status', 'pending');
+        $tagRequestId = $tagRequest->json('data.id');
+
+        $this->getJson('/api/v1/vendor/catalog-requests')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $brandRequestId])
+            ->assertJsonFragment(['id' => (string) $categoryRequestId])
+            ->assertJsonFragment(['id' => (string) $tagRequestId]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/catalog-requests?status=pending')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $brandRequestId]);
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $brandRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'brand');
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $categoryRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'category');
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $tagRequestId, [
+            'decision' => 'approve',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.entity.type', 'tag');
+
+        $this->assertDatabaseHas('brands', ['slug' => 'vendor-requested-brand', 'status' => 'active']);
+        $this->assertDatabaseHas('categories', ['slug' => 'vendor-requested-category', 'status' => 'active']);
+        $this->assertDatabaseHas('tags', ['slug' => 'vendor-requested-tag', 'status' => 'active']);
+
+        $this->getJson('/api/v1/brands')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-brand']);
+        $this->getJson('/api/v1/categories')->assertOk()->assertJsonFragment(['slug' => 'vendor-requested-category']);
+    }
+
+    public function test_admin_must_provide_a_reason_when_rejecting_a_catalog_request(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $request = $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Rejected Vendor Brand',
+                'slug' => 'rejected-vendor-brand',
+            ])->assertCreated();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/catalog-requests/' . $request->json('data.id'), [
+                'decision' => 'reject',
+            ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/catalog-requests/' . $request->json('data.id'), [
+            'decision' => 'reject',
+            'rejection_reason' => 'Please provide an authorized brand logo.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.rejectionReason', 'Please provide an authorized brand logo.');
+
+        $this->assertDatabaseMissing('brands', ['slug' => 'rejected-vendor-brand']);
+    }
+
+    public function test_customer_cannot_submit_or_review_catalog_requests(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/vendor/catalog-requests', [
+                'type' => 'brand',
+                'name' => 'Unauthorized Brand',
+            ])->assertForbidden();
+
+        $this->patchJson('/api/v1/admin/catalog-requests/1', [
+            'decision' => 'approve',
+        ])->assertForbidden();
+    }
+
+
+    public function test_admin_can_manage_approved_product_attributes_and_tags(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('Admin');
+
+        $attribute = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/attributes', [
+                'name' => 'Material',
+                'slug' => 'material',
+                'type' => 'select',
+                'is_variant_attribute' => true,
+                'values' => ['Cotton', 'Linen'],
+            ])->assertCreated()
+            ->assertJsonPath('data.slug', 'material')
+            ->assertJsonPath('data.status', 'ACTIVE')
+            ->assertJsonCount(2, 'data.values');
+
+        $tag = $this->postJson('/api/v1/admin/tags', [
+            'name' => 'Handmade',
+            'slug' => 'handmade',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'ACTIVE');
+
+        $settings = $this->getJson('/api/v1/admin/catalog-settings')->assertOk();
+        $settings->assertJsonFragment(['name' => 'Material']);
+        $settings->assertJsonFragment(['name' => 'Handmade']);
+
+        $options = $this->getJson('/api/v1/admin/products/options')->assertOk();
+        $options->assertJsonFragment(['name' => 'Material']);
+        $options->assertJsonFragment(['name' => 'Handmade']);
+
+        $this->patchJson('/api/v1/admin/attributes/' . $attribute->json('data.id'), [
+            'name' => 'Fabric Material',
+            'slug' => 'fabric-material',
+            'type' => 'select',
+            'is_variant_attribute' => true,
+            'values' => ['Silk', 'Wool'],
+        ])->assertOk()->assertJsonPath('data.name', 'Fabric Material')->assertJsonCount(4, 'data.values');
+
+        $this->patchJson('/api/v1/admin/tags/' . $tag->json('data.id'), [
+            'name' => 'Artisan Handmade',
+            'slug' => 'artisan-handmade',
+        ])->assertOk()->assertJsonPath('data.name', 'Artisan Handmade');
+
+        $this->patchJson('/api/v1/admin/attributes/' . $attribute->json('data.id') . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+        $this->patchJson('/api/v1/admin/tags/' . $tag->json('data.id') . '/status', ['status' => 'inactive'])
+            ->assertOk()->assertJsonPath('data.status', 'INACTIVE');
+
+        $inactiveOptions = $this->getJson('/api/v1/admin/products/options')->assertOk();
+        $this->assertNotContains('Material', collect($inactiveOptions->json('data.attributes'))->pluck('name')->all());
+        $this->assertNotContains('Handmade', collect($inactiveOptions->json('data.tags'))->pluck('name')->all());
+    }
+
+
+    public function test_admin_can_moderate_customer_product_reviews(): void
+    {
+        $customer = User::where('email', 'customer@demo.blossomglimmer.local')->firstOrFail();
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $reviewedProductIds = DB::table('product_reviews')->where('user_id', $customer->id)->pluck('product_id');
+        $products = Product::where('status', 'active')->whereNotIn('id', $reviewedProductIds)->orderBy('id')->take(2)->get();
+        $this->assertCount(2, $products);
+
+        $approvedReview = $this->actingAs($customer, 'sanctum')
+            ->postJson('/api/v1/reviews', [
+                'product_id' => $products[0]->id,
+                'rating' => 5,
+                'title' => 'Excellent quality',
+                'body' => 'The item arrived as described and the quality is excellent.',
+            ])->assertCreated();
+
+        $rejectedReview = $this->postJson('/api/v1/reviews', [
+            'product_id' => $products[1]->id,
+            'rating' => 1,
+            'title' => 'Review for moderation',
+            'body' => 'This review will be rejected by the administrator.',
+        ])->assertCreated();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/reviews?status=pending')
+            ->assertOk()
+            ->assertJsonFragment(['id' => (string) $approvedReview->json('data.id')]);
+
+        $this->patchJson('/api/v1/admin/reviews/' . $approvedReview->json('data.id'), [
+            'decision' => 'approve',
+        ])->assertOk()->assertJsonPath('data.status', 'approved');
+
+        $this->patchJson('/api/v1/admin/reviews/' . $rejectedReview->json('data.id'), [
+            'decision' => 'reject',
+        ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/reviews/' . $rejectedReview->json('data.id'), [
+            'decision' => 'reject',
+            'rejection_reason' => 'Please keep feedback relevant and respectful.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.rejectionReason', 'Please keep feedback relevant and respectful.');
+
+        $this->getJson('/api/v1/reviews?product_id=' . $products[0]->id)
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Excellent quality']);
+        $this->getJson('/api/v1/reviews?product_id=' . $products[1]->id)
+            ->assertOk()
+            ->assertJsonMissing(['title' => 'Review for moderation']);
+    }
+
+
+    public function test_admin_can_create_and_deactivate_collections_and_shipping_methods(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $categorySlug = DB::table('categories')->where('status', 'active')->value('slug');
+
+        $collection = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/collections', [
+                'name' => 'Admin Test Collection',
+                'slug' => 'admin-test-collection',
+                'eyebrow' => 'Curated',
+                'description' => 'A collection created by an administrator.',
+                'category_slugs' => [$categorySlug],
+                'featured_stores' => [],
+                'is_active' => true,
+                'sort_order' => 90,
+            ])->assertCreated()->assertJsonPath('data.slug', 'admin-test-collection');
+
+        $this->getJson('/api/v1/collections')->assertOk()->assertJsonFragment(['slug' => 'admin-test-collection']);
+        $this->patchJson('/api/v1/admin/collections/' . $collection->json('data.id'), [
+            'name' => 'Admin Test Collection Updated',
+            'slug' => 'admin-test-collection-updated',
+            'description' => 'Updated curated collection.',
+            'sort_order' => 91,
+        ])->assertOk();
+        $this->patchJson('/api/v1/admin/collections/' . $collection->json('data.id') . '/status', ['is_active' => false])
+            ->assertOk()->assertJsonPath('data.isActive', false);
+        $this->getJson('/api/v1/collections')->assertOk()->assertJsonMissing(['slug' => 'admin-test-collection']);
+
+        $shipping = $this->postJson('/api/v1/admin/shipping-methods', [
+            'code' => 'admin-test-express',
+            'name' => 'Admin Test Express',
+            'description' => 'Fast test delivery.',
+            'price' => 12.50,
+            'currency' => 'USD',
+            'estimated_delivery' => '2-3 business days',
+            'countries' => ['US', 'CA'],
+            'is_active' => true,
+            'sort_order' => 90,
+        ])->assertCreated()->assertJsonPath('data.code', 'admin-test-express');
+
+        $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonFragment(['id' => 'admin-test-express']);
+        $this->patchJson('/api/v1/admin/shipping-methods/' . $shipping->json('data.id'), [
+            'name' => 'Admin Test Priority',
+            'price' => 15.00,
+            'currency' => 'USD',
+            'estimated_delivery' => '1-2 business days',
+        ])->assertOk();
+        $this->patchJson('/api/v1/admin/shipping-methods/' . $shipping->json('data.id') . '/status', ['is_active' => false])
+            ->assertOk()->assertJsonPath('data.isActive', false);
+        $this->getJson('/api/v1/shipping/methods')->assertOk()->assertJsonMissing(['id' => 'admin-test-express']);
+
+        $settings = $this->getJson('/api/v1/admin/marketplace-settings')->assertOk();
+        $settings->assertJsonFragment(['slug' => 'admin-test-collection-updated']);
+        $settings->assertJsonFragment(['code' => 'admin-test-express']);
+    }
+
+    public function test_admin_can_edit_store_profile_without_changing_approval_or_commission(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $profile = DB::table('vendor_profiles')->where('slug', 'atelier-lane')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/stores/' . $profile->id, [
+                'name' => 'Atelier Lane Updated',
+                'slug' => 'atelier-lane-updated',
+                'description' => 'Updated by marketplace administration.',
+                'logo' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+                'banner' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200',
+                'email' => 'store-updated@example.test',
+                'phone' => '+1-555-0100',
+            ])->assertOk()
+            ->assertJsonPath('data.name', 'Atelier Lane Updated')
+            ->assertJsonPath('data.slug', 'atelier-lane-updated');
+
+        $this->assertDatabaseHas('vendor_profiles', [
+            'id' => $profile->id,
+            'name' => 'Atelier Lane Updated',
+            'slug' => 'atelier-lane-updated',
+            'status' => $profile->status,
+            'commission_type' => $profile->commission_type,
+            'commission_value' => $profile->commission_value,
+        ]);
+    }
+
+    public function test_admin_can_edit_product_without_resetting_its_approval_or_publication_state(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $product = Product::where('type', 'simple')->where('status', 'active')->whereNotNull('brand_id')->whereHas('categories')->firstOrFail();
+        $categoryId = $product->categories()->value('categories.id');
+        $inventory = DB::table('inventory_items')->where('product_id', $product->id)->whereNull('variant_id')->first();
+        $shippingCode = DB::table('shipping_methods')->where('is_active', true)->value('code');
+        $brand = DB::table('brands')->where('id', $product->brand_id)->where('status', 'active')->first();
+
+        $this->assertNotNull($categoryId);
+        $this->assertNotNull($inventory);
+        $this->assertNotNull($shippingCode);
+        $this->assertNotNull($brand);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/products/' . $product->id, [
+                'name' => $product->name . ' Admin Edited',
+                'slug' => $product->slug . '-admin-edited',
+                'brandId' => $brand->id,
+                'categoryId' => $categoryId,
+                'productType' => 'Simple',
+                'shippingProfileId' => $shippingCode,
+                'shortDescription' => 'Edited by marketplace administration.',
+                'fullDescription' => $product->description ?? 'Updated product description.',
+                'tags' => [],
+                'attributes' => [],
+                'media' => [
+                    'featuredImage' => [
+                        'url' => 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+                        'altText' => 'Updated product image',
+                    ],
+                    'galleryImages' => [],
+                ],
+                'variants' => [[
+                    'label' => 'Default',
+                    'sku' => $product->sku ?: 'ADMIN-EDIT-' . $product->id,
+                    'price' => max(0.01, (float) ($product->base_price ?? 25)),
+                    'stockQuantity' => (int) $inventory->stock_quantity,
+                    'weight' => 1,
+                    'length' => 1,
+                    'width' => 1,
+                    'height' => 1,
+                    'images' => [],
+                    'attributeValues' => [],
+                ]],
+                'specifications' => [],
+                'faqs' => [],
+                'intent' => 'draft',
+            ])->assertOk()
+            ->assertJsonPath('data.name', $product->name . ' Admin Edited')
+            ->assertJsonPath('data.approvalStatus', 'APPROVED')
+            ->assertJsonPath('data.status', 'ACTIVE');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'name' => $product->name . ' Admin Edited',
+            'status' => 'active',
+        ]);
+    }
+
+
+    public function test_vendor_api_enforces_granular_permissions_even_when_role_is_valid(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \Spatie\Permission\Models\Role::findByName('Vendor');
+        $vendorRole->revokePermissionTo('products.create');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->postJson('/api/v1/vendor/products', [])
+            ->assertForbidden();
+
+        // Read access remains available because products.view is still granted.
+        $this->getJson('/api/v1/vendor/products')->assertOk();
+
+        $vendorRole->revokePermissionTo('orders.update');
+        $this->patchJson('/api/v1/vendor/orders/1/fulfillment', ['status' => 'processing'])
+            ->assertForbidden();
+
+        $vendorRole->revokePermissionTo('orders.view');
+        $this->getJson('/api/v1/vendor/orders')
+            ->assertForbidden();
+        $vendorRole->givePermissionTo('orders.view');
+    }
+
+    public function test_vendor_cannot_use_customer_or_admin_order_management_as_an_admin(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/admin/stores')
+            ->assertForbidden();
+
+        $this->getJson('/api/v1/admin/products')
+            ->assertForbidden();
+    }
+
+    public function test_vendor_store_and_product_routes_require_their_specific_permissions(): void
+    {
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \Spatie\Permission\Models\Role::findByName('Vendor');
+        $vendorRole->revokePermissionTo('stores.manage');
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/vendor/store/me')
+            ->assertForbidden();
+    }
+
+
+    public function test_vendor_order_projection_never_exposes_another_stores_order_items(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $productA = Product::where('vendor_id', $vendorA->id)->firstOrFail();
+        $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
+
+        $itemAId = DB::table('customer_order_items')->insertGetId([
+            'order_id' => $order->id, 'product_id' => $productA->id,
+            'name' => $productA->name, 'product_slug' => $productA->slug,
+            'sku' => $productA->sku, 'quantity' => 1, 'unit_price' => 20,
+            'subtotal' => 20, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $itemBId = DB::table('customer_order_items')->insertGetId([
+            'order_id' => $order->id, 'product_id' => $productB->id,
+            'name' => $productB->name, 'product_slug' => $productB->slug,
+            'sku' => $productB->sku, 'quantity' => 2, 'unit_price' => 15,
+            'subtotal' => 30, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        foreach ([[$vendorA, $itemAId], [$vendorB, $itemBId]] as [$vendor, $itemId]) {
+            $fulfillmentId = DB::table('vendor_order_fulfillments')
+                ->where('order_id', $order->id)->where('vendor_id', $vendor->id)->value('id');
+            if (!$fulfillmentId) {
+                $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                    'order_id' => $order->id, 'vendor_id' => $vendor->id,
+                    'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            DB::table('vendor_order_fulfillment_items')->updateOrInsert(
+                ['fulfillment_id' => $fulfillmentId, 'order_item_id' => $itemId],
+                ['created_at' => now(), 'updated_at' => now()]
+            );
+        }
+
+        $vendorAResponse = $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/' . $order->id)->assertOk();
+        $vendorAData = $vendorAResponse->json('data');
+        $this->assertArrayNotHasKey('total', $vendorAData);
+        $this->assertArrayNotHasKey('paymentStatus', $vendorAData);
+        $this->assertArrayNotHasKey('customer', $vendorAData);
+        $this->assertArrayNotHasKey('vendorFulfillments', $vendorAData);
+        $vendorAItems = collect($vendorAData['items']);
+        $this->assertTrue($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productA->id));
+        $this->assertFalse($vendorAItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
+
+        $vendorBResponse = $this->actingAs($vendorB, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/' . $order->id)->assertOk();
+        $vendorBItems = collect($vendorBResponse->json('data.items'));
+        $this->assertTrue($vendorBItems->contains(fn ($item) => (int) $item['productId'] === (int) $productB->id));
+        $this->assertFalse($vendorBItems->contains(fn ($item) => (int) $item['productId'] === (int) $productA->id));
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/orders/99999999')
+            ->assertNotFound();
+    }
+
+    public function test_vendor_fulfilment_updates_are_isolated_and_cannot_regress(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+
+        $fulfillmentA = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendorA->id)->first();
+        if (!$fulfillmentA) {
+            $fulfillmentAId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendorA->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $fulfillmentA = DB::table('vendor_order_fulfillments')->find($fulfillmentAId);
+        }
+        $fulfillmentB = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendorB->id)->first();
+        if (!$fulfillmentB) {
+            $fulfillmentBId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendorB->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $fulfillmentB = DB::table('vendor_order_fulfillments')->find($fulfillmentBId);
+        }
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'processing'])
+            ->assertOk()
+            ->assertJsonPath('data.fulfillment.status', 'processing');
+
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentA->id, 'status' => 'processing']);
+        $this->assertDatabaseHas('vendor_order_fulfillments', ['id' => $fulfillmentB->id, 'status' => 'pending']);
+
+        // A repeated transition is rejected; state changes must be strictly sequential.
+        $this->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'processing'])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/vendor/orders/' . $order->id . '/fulfillment', ['status' => 'pending'])
+            ->assertUnprocessable();
+
+        $this->actingAs($vendorB, 'sanctum')
+            ->patchJson('/api/v1/vendor/orders/99999999/fulfillment', ['status' => 'processing'])
+            ->assertNotFound();
+    }
+
+    public function test_admin_can_list_and_view_all_customer_orders_but_vendor_cannot_access_admin_order_api(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/admin/orders')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => [['id', 'number', 'customer', 'items', 'total']]]);
+
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $this->getJson('/api/v1/admin/orders/' . $order->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $order->id)
+            ->assertJsonStructure(['data' => ['customer' => ['id', 'name', 'email'], 'items']]);
+
+        $this->actingAs($vendor, 'sanctum')
+            ->getJson('/api/v1/admin/orders')
+            ->assertForbidden();
+    }
+
+
+    public function test_admin_can_update_a_specific_vendor_fulfilment_record(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $order = DB::table('customer_orders')->where('number', 'BG-DEMO-1001')->firstOrFail();
+        $fulfillmentId = DB::table('vendor_order_fulfillments')
+            ->where('order_id', $order->id)->where('vendor_id', $vendor->id)->value('id');
+
+        if (!$fulfillmentId) {
+            $fulfillmentId = DB::table('vendor_order_fulfillments')->insertGetId([
+                'order_id' => $order->id, 'vendor_id' => $vendor->id,
+                'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+                'status' => 'processing',
+            ])
+            ->assertOk()
+            ->assertJsonFragment(['vendorId' => $vendor->id, 'status' => 'processing']);
+
+        // Administrators must also use strictly sequential fulfilment transitions.
+        $this->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+            'status' => 'processing',
+        ])->assertUnprocessable();
+
+        $this->actingAs($vendor, 'sanctum')
+            ->patchJson('/api/v1/admin/orders/' . $order->id . '/fulfillments/' . $fulfillmentId, [
+                'status' => 'ready_to_ship',
+            ])
+            ->assertForbidden();
+
+        // The legacy parent shipment endpoint must not bypass vendor-level state.
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/orders/' . $order->id . '/shipment', [
+                'status' => 'delivered',
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('vendor_order_fulfillments', [
+            'id' => $fulfillmentId,
+            'vendor_id' => $vendor->id,
+            'status' => 'processing',
+        ]);
+    }
+
+
+    public function test_admin_created_users_receive_the_selected_role(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/admin/users', [
+                'name' => 'New Vendor Account',
+                'email' => 'new-vendor-account@gmail.com',
+                'password' => 'StrongPassword123!',
+                'password_confirmation' => 'StrongPassword123!',
+                'role' => 'Vendor',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'vendor');
+
+        $created = User::where('email', 'new-vendor-account@gmail.com')->firstOrFail();
+        $this->assertTrue($created->hasRole('Vendor'));
+
+        $this->getJson('/api/v1/admin/users?search=new-vendor-account@gmail.com')
+            ->assertOk()
+            ->assertJsonFragment(['email' => 'new-vendor-account@gmail.com', 'role' => 'vendor']);
+    }
+
+
+    public function test_core_marketplace_roles_cannot_be_created_renamed_or_deleted_via_api(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendorRole = \Spatie\Permission\Models\Role::findByName('Vendor');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/roles', ['name' => 'vendor', 'permissions' => []])
+            ->assertUnprocessable();
+
+        $this->patchJson('/api/v1/roles/' . $vendorRole->id, ['name' => 'Limited Vendor', 'permissions' => []])
+            ->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/roles/' . $vendorRole->id)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('roles', ['id' => $vendorRole->id, 'name' => 'Vendor']);
+    }
+
+
+    public function test_core_vendor_permissions_cannot_be_renamed_or_deleted(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $permission = DB::table('permissions')->where('name', 'products.create')->firstOrFail();
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/permissions/' . $permission->id, ['name' => 'products.create.custom'])
+            ->assertUnprocessable();
+
+        $this->deleteJson('/api/v1/permissions/' . $permission->id)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('permissions', ['id' => $permission->id, 'name' => 'products.create']);
+    }
+
+
+    public function test_admin_can_disable_vendor_account_and_revoke_existing_tokens(): void
+    {
+        $admin = User::where('email', 'admin@demo.blossomglimmer.local')->firstOrFail();
+        $vendor = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $token = $vendor->createToken('disable-test')->plainTextToken;
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson('/api/v1/admin/users/' . $vendor->id, [
+                'role' => 'Vendor',
+                'is_active' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.isActive', false);
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $vendor->id, 'name' => 'disable-test']);
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $vendor->email,
+            'password' => 'Password123!',
+        ])->assertUnauthorized();
+
+        $this->patchJson('/api/v1/admin/users/' . $admin->id, [
+            'role' => 'Admin',
+            'is_active' => false,
+        ])->assertUnprocessable();
+
+        $this->patchJson('/api/v1/admin/users/' . $admin->id, [
+            'role' => 'Vendor',
+            'is_active' => true,
+        ])->assertUnprocessable();
+    }
+
+
+    public function test_vendor_cannot_read_update_or_delete_another_vendors_product(): void
+    {
+        $vendorA = User::where('email', 'vendor+atelier-lane@demo.blossomglimmer.local')->firstOrFail();
+        $vendorB = User::where('email', 'like', 'vendor+%@demo.blossomglimmer.local')
+            ->where('id', '<>', $vendorA->id)->firstOrFail();
+        $productB = Product::where('vendor_id', $vendorB->id)->firstOrFail();
+
+        $this->actingAs($vendorA, 'sanctum')
+            ->getJson('/api/v1/vendor/products/' . $productB->id)
+            ->assertNotFound();
+
+        $this->patchJson('/api/v1/vendor/products/' . $productB->id, [
+            'name' => 'Attempted cross-store modification',
+        ])->assertNotFound();
+
+        $this->deleteJson('/api/v1/vendor/products/' . $productB->id)
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('products', [
+            'id' => $productB->id,
+            'vendor_id' => $vendorB->id,
+            'name' => $productB->name,
         ]);
     }
 

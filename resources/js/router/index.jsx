@@ -1,45 +1,83 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import GuestRoute from "../components/routes/GuestRoute";
 import ProtectedRoute from "../components/routes/ProtectedRoute";
-
-import GuestLayout from '../layouts/GuestLayout';
-import DashboardLayout from '../layouts/DashboardLayout';
-
-import Login from '../pages/auth/Login';
-import Dashboard from '../pages/dashboard/Dashboard';
-import ErrorPage from '../pages/errors/ErrorPage';
+import GuestLayout from "../layouts/GuestLayout";
+import DashboardLayout from "../layouts/DashboardLayout";
+import Login from "../pages/auth/Login";
+import Dashboard from "../pages/dashboard/Dashboard";
+import ErrorPage from "../pages/errors/ErrorPage";
 import UsersPage from "../pages/users/UsersPage";
 import CreateUserPage from "../pages/users/CreateUserPage";
 import EditUserPage from "../pages/users/EditUserPage";
+import CustomersPage from "../pages/customers/CustomersPage";
+import AuditLogsPage from "../pages/audit/AuditLogsPage";
+import VendorDashboard from "../pages/vendor/VendorDashboard";
+import VendorProductsPage from "../pages/vendor/VendorProductsPage";
+import VendorOrdersPage from "../pages/vendor/VendorOrdersPage";
+import VendorStorePage from "../pages/vendor/VendorStorePage";
+import VendorFinancePage from "../pages/vendor/VendorFinancePage";
+import PayoutManagementPage from "../pages/finance/PayoutManagementPage";
+import SupportTicketsPage from "../pages/support/SupportTicketsPage";
+import VendorSupportPage from "../pages/vendor/VendorSupportPage";
+import VendorReviewsPage from "../pages/vendor/VendorReviewsPage";
+import NotificationsPage from "../pages/notifications/NotificationsPage";
+import RefundManagementPage from "../pages/finance/RefundManagementPage";
+import CouponsPage from "../pages/marketing/CouponsPage";
+import AdminOrdersPage from "../pages/orders/AdminOrdersPage";
+import AdminProductsPage from "../pages/catalog/AdminProductsPage";
+import AdminStoresPage from "../pages/stores/AdminStoresPage";
+import CatalogManagementPage from "../pages/catalog/CatalogManagementPage";
+import MarketplaceSettingsPage from "../pages/catalog/MarketplaceSettingsPage";
+import CatalogSettingsPage from "../pages/catalog/CatalogSettingsPage";
+import AdminReviewsPage from "../pages/reviews/AdminReviewsPage";
+import RolesPage from "../pages/roles/RolesPage";
+import PermissionsPage from "../pages/permissions/PermissionsPage";
 
 export default function Router() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route element={
-                    <GuestRoute>
-                        <GuestLayout />
-                    </GuestRoute>
-                }>
+                <Route element={<GuestRoute><GuestLayout /></GuestRoute>}>
                     <Route path="/login" element={<Login />} />
                 </Route>
 
-                <Route element={
-                    <ProtectedRoute>
-                        <DashboardLayout />
-                    </ProtectedRoute>
-                }>
+                <Route element={<ProtectedRoute roles={["Admin", "Super Admin"]}><DashboardLayout /></ProtectedRoute>}>
                     <Route index element={<Dashboard />} />
-                    <Route path="dashboard" index element={<Dashboard />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/customers" element={<CustomersPage />} />
                     <Route path="/users/create" element={<CreateUserPage />} />
                     <Route path="/users/:id/edit" element={<EditUserPage />} />
+                    <Route path="/audit-logs" element={<AuditLogsPage />} />
+                    <Route path="/payouts" element={<PayoutManagementPage />} />
+                    <Route path="/refunds" element={<RefundManagementPage />} />
+                    <Route path="/coupons" element={<CouponsPage />} />
+                    <Route path="/orders" element={<AdminOrdersPage />} />
+                    <Route path="/products" element={<AdminProductsPage />} />
+                    <Route path="/stores" element={<AdminStoresPage />} />
+                    <Route path="/catalog" element={<CatalogManagementPage />} />
+                    <Route path="/marketplace-settings" element={<MarketplaceSettingsPage />} />
+                    <Route path="/catalog-settings" element={<CatalogSettingsPage />} />
+                    <Route path="/reviews" element={<AdminReviewsPage />} />
+                    <Route path="/support" element={<SupportTicketsPage />} />
+                    <Route path="/roles" element={<ProtectedRoute roles={["Super Admin"]}><RolesPage /></ProtectedRoute>} />
+                    <Route path="/permissions" element={<ProtectedRoute roles={["Super Admin"]}><PermissionsPage /></ProtectedRoute>} />
                 </Route>
-                <Route path="*" element={<ErrorPage 
-                    code="404" 
-                    title="Page Not Found" 
-                    description="The page you are looking for does not exist." />} />
-            </Routes>    
+
+                <Route element={<ProtectedRoute roles={["Vendor"]}><DashboardLayout /></ProtectedRoute>}>
+                    <Route path="/vendor" element={<VendorDashboard />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
+                    <Route path="/vendor/products" element={<VendorProductsPage />} />
+                    <Route path="/vendor/orders" element={<VendorOrdersPage />} />
+                    <Route path="/vendor/store" element={<VendorStorePage />} />
+                    <Route path="/vendor/finance" element={<VendorFinancePage />} />
+                    <Route path="/vendor/support" element={<VendorSupportPage />} />
+                    <Route path="/vendor/reviews" element={<VendorReviewsPage />} />
+                </Route>
+
+                <Route path="*" element={<ErrorPage code="404" title="Page Not Found" description="The page you are looking for does not exist." />} />
+            </Routes>
         </BrowserRouter>
     );
 }

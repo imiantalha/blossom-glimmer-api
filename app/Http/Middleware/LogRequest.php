@@ -2,115 +2,137 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AuditLog;
 use Closure;
-use App\Models\RequestLog;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Stevebauman\Location\Facades\Location;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class LogRequest
 {
     /**
-     * Handle an incoming request.
-     *
-     * @param  Closure(Request): (Response)  $next
+     * Record API activity without persisting credentials, payment details or
+     * arbitrary request bodies. This operational trail complements financial
+     * ledger entries and domain-specific activity events.
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (app()->environment('testing')) {
-            return $next($request);
+        $startedAt = microtime(true);
+
+        try {
+            $response = $next($request);
+        } catch (Throwable $exception) {
+            $this->record($request, 500, $startedAt);
+            throw $exception;
         }
 
-        $start = microtime(true);
-
-        $response = $next($request);
-        
-        $requestIp = $request->ip();
-        $staticIp = env('STATIC_IP', '39.37.154.26');
-        $ip = $requestIp === '127.0.0.1' ? $staticIp : $requestIp;
-
-        $location = Location::get($ip);
-
-        $location = $location ?: (object) [
-            'countryName' => null,
-            'countryCode' => null,
-            'regionName'  => null,
-            'cityName'    => null,
-            'latitude'    => null,
-            'longitude'   => null,
-            'timezone'    => null,
-        ];
-
-        Log::channel('requestlog')->info('Incomming Request', [
-            'method'    => $request->method(),
-            'url'       => $request->fullUrl(),
-            'path'      => $request->path(),
-
-            'ip'        => $ip,
-            'country'   => $location->countryName,
-            'country_code' => $location->countryCode,
-            'region'    => $location->regionName,
-            'city'      => $location->cityName,
-            'latitude'  => $location->latitude,
-            'longitude' => $location->longitude,
-            'timezone'  => $location->timezone,
-
-            'user_agent'=> $request->userAgent(),
-            'headers'   => collect($request->headers->all())
-                ->except(['authorization', 'cookie'])
-                ->toArray(),
-            'query'       => $request->query(),
-            'payload' => $request->except([
-                'password', 'password_confirmation', 'token',
-            ]),
-            'user_id'   => optional($request->user())->id,
-            'timestamp' => now()->toDateTimeString(),
-        ]);
-
-        $log = RequestLog::create([
-            'method'        => $request->method(),
-            'url'           => $request->fullUrl(),
-            'path'          => $request->path(),
-
-            'ip'            => $ip,
-            'country'       => $location?->countryName,
-            'country_code'  => $location?->countryCode,
-            'region'        => $location?->regionName,
-            'city'          => $location?->cityName,
-            'latitude'      => $location?->latitude,
-            'longitude'     => $location?->longitude,
-            'timezone'      => $location?->timezone,
-
-            'user_agent'    => $request->userAgent(),
-
-            'headers'       => collect($request->headers->all())
-                                    ->except(['authorization', 'cookie'])
-                                    ->toArray(),
-
-            'query'         => $request->query(),
-
-            'payload'       => $request->except([
-                                    'password',
-                                    'password_confirmation',
-                                    'token',
-                                ]),
-
-            'user_id'       => optional($request->user())->id,
-
-            'timestamp'     => now(),
-
-            'response_status' => null,
-            'response_time_ms' => null,
-        ]);
-
-        $log->update([
-            'status'            => 'completed',
-            'response_status'   => $response->getStatusCode(),
-            'response_headers'  => $response->headers->all(),
-            'response_time_ms'  => round((microtime(true) - $start) * 1000, 2),
-        ]);
+        $this->record($request, $response->getStatusCode(), $startedAt);
 
         return $response;
+    }
+
+    private function record(Request $request, int $status, float $startedAt): void
+    {
+        if (!$request->is('api/*') || $request->is('api/v1/health')) {
+            return;
+        }
+
+        try {
+            $actor = $request->user();
+            $roles = $actor?->getRoleNames() ?? collect();
+            $route = $request->route();
+            $parameters = $route?->parameters() ?? [];
+            $resourcePath = preg_replace('#^api/v1/?#', '', $request->path()) ?: $request->path();
+            $resourceSegments = array_values(array_filter(explode('/', trim($resourcePath, '/'))));
+            if (in_array($resourceSegments[0] ?? '', ['admin', 'vendor'], true)) {
+                array_shift($resourceSegments);
+            }
+            $subjectType = isset($resourceSegments[0])
+                ? Str::studly(Str::singular($resourceSegments[0]))
+                : null;
+            $subjectId = null;
+
+            foreach ($parameters as $value) {
+                if (is_object($value) && method_exists($value, 'getKey')) {
+                    $subjectType = class_basename($value);
+                    $subjectId = (string) $value->getKey();
+                    break;
+                }
+                if (is_scalar($value)) {
+                    $subjectId = Str::limit((string) $value, 120, '');
+                    break;
+                }
+            }
+
+            $path = $request->path();
+            $action = $this->resolveAction($request->method(), $path, $route?->getName());
+
+            AuditLog::create([
+                'actor_user_id' => $actor?->id,
+                'actor_role' => $roles->first() ?? 'Guest',
+                'action' => $action,
+                'method' => $request->method(),
+                'path' => Str::limit($path, 500, ''),
+                'subject_type' => $subjectType,
+                'subject_id' => $subjectId,
+                'status_code' => $status,
+                'ip_address' => $request->ip(),
+                'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+                'metadata' => [
+                    'route' => $route?->getName(),
+                    'query_keys' => array_keys($request->query()),
+                    'body_keys' => array_keys($request->except([
+                        'password', 'password_confirmation', 'current_password',
+                        'token', 'access_token', 'refresh_token', 'authorization',
+                        'card_number', 'cvv', 'cvc', 'expiry', 'payment_token',
+                        'bank_account', 'iban', 'secret',
+                    ])),
+                    'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+                    'outcome' => $status >= 400 ? 'failed' : 'succeeded',
+                ],
+            ]);
+        } catch (Throwable $loggingException) {
+            // Audit infrastructure failures must not take down customer actions.
+            report($loggingException);
+        }
+    }
+
+    private function resolveAction(string $method, string $path, ?string $routeName): string
+    {
+        if ($routeName) {
+            return Str::limit($routeName, 160, '');
+        }
+
+        $path = preg_replace('#^api/v1/?#', '', $path) ?: $path;
+        $segments = array_values(array_filter(explode('/', trim($path, '/'))));
+        $scope = in_array($segments[0] ?? '', ['admin', 'vendor'], true) ? array_shift($segments) : null;
+        $resource = $segments[0] ?? 'api';
+        $verb = match (strtoupper($method)) {
+            'GET' => 'view',
+            'POST' => 'create',
+            'PUT', 'PATCH' => 'update',
+            'DELETE' => 'delete',
+            default => strtolower($method),
+        };
+
+        if ($resource === 'orders' && strtoupper($method) === 'POST') {
+            $verb = 'purchase';
+        } elseif ($resource === 'products' && strtoupper($method) === 'GET' && count($segments) > 1) {
+            $resource = 'product';
+            $verb = 'view';
+        }
+
+        $knownActions = [
+            'approval', 'status', 'featured', 'commission', 'fulfillment',
+            'shipment', 'inventory', 'addresses', 'password', 'login',
+            'logout', 'register', 'merge', 'quote', 'validate', 'retry',
+        ];
+        $last = end($segments);
+        if (count($segments) > 1 && in_array($last, $knownActions, true)) {
+            $resource .= '.' . $last;
+        }
+
+        return Str::limit(implode('.', array_filter([$scope, $resource, $verb])), 160, '');
     }
 }

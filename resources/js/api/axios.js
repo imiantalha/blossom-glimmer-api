@@ -2,7 +2,7 @@ import axios from "axios";
 import token from "../utils/token";
 
 const api = axios.create({
-    baseURL: "/api",
+    baseURL: "/api/v1",
     "headers": {
         Accept: "application/json",
         "Content-Type": "application/json",

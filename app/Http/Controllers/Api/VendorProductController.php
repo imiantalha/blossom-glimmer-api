@@ -17,6 +17,12 @@ use Illuminate\Validation\ValidationException;
 
 class VendorProductController extends Controller
 {
+    private function ensureVendorStoreCanSell(Request $request): void
+    {
+        $profile = $request->user()->vendorProfile()->first();
+        abort_if(!$profile || $profile->status === 'suspended' || $profile->deleted_at, 403, 'Your store is disabled. Contact an administrator for assistance.');
+    }
+
     private function ownedProduct(Request $request, int $id): Product
     {
         return Product::where('id', $id)->where('vendor_id', $request->user()->id)->firstOrFail();
@@ -26,6 +32,11 @@ class VendorProductController extends Controller
     {
         $product->load(['vendor.vendorProfile', 'brand', 'categories.parent', 'variants.inventoryItems']);
         $profile = $product->vendor?->vendorProfile;
+        $shippingProfileId = (string) data_get($product->metadata, 'shippingProfileId', '');
+        if ($shippingProfileId === '') {
+            $shippingProfileId = (string) DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->value('code');
+        }
+        $shippingProfile = DB::table('shipping_methods')->where('code', $shippingProfileId)->first(['code', 'name']);
         $images = collect(data_get($product->metadata, 'images', []))->values()->map(fn ($image, $index) => [
             'id' => (string) ($image['id'] ?? 'image-' . $index), 'url' => $image['url'] ?? '',
             'altText' => $image['altText'] ?? $image['alt'] ?? null, 'sortOrder' => (int) ($image['sortOrder'] ?? $index),
@@ -33,7 +44,7 @@ class VendorProductController extends Controller
         ])->all();
         $category = $product->categories->first();
         $variants = $product->variants->map(function ($variant) {
-            $inventory = $variant->inventoryItems->sum(fn ($item) => max(0, $item->stock_quantity - $item->reserved_quantity));
+            $inventory = $variant->inventoryItems->sum(fn ($item) => max(0, $item->stock_quantity));
             $attributes = data_get($variant->metadata, 'attributes', []);
             return [
                 'id' => (string) $variant->id, 'sku' => $variant->sku, 'price' => (string) ($variant->compare_at_price ?? $variant->price),
@@ -61,25 +72,38 @@ class VendorProductController extends Controller
             'id' => (string) ($index + 1), 'attributeId' => Str::slug($attribute['name'] ?? 'attribute'),
             'attributeName' => $attribute['name'] ?? 'Attribute', 'values' => collect($attribute['values'] ?? [])->map(fn ($value, $valueIndex) => ['id' => (string) ($valueIndex + 1), 'value' => is_array($value) ? ($value['value'] ?? '') : $value])->values(),
         ])->values();
+        $ownerName = trim((string) ($product->vendor?->name ?? ''));
+        $ownerParts = preg_split('/\s+/', $ownerName, 2) ?: [];
 
         return [
             'id' => (string) $product->id, 'storeId' => (string) ($profile?->id ?? $product->vendor_id),
             'brandId' => $product->brand_id ? (string) $product->brand_id : null,
             'categoryId' => $category ? (string) $category->id : null,
-            'productTypeId' => $product->type, 'shippingProfileId' => (string) data_get($product->metadata, 'shippingProfileId', ''),
+            'productTypeId' => $product->type, 'shippingProfileId' => $shippingProfileId,
             'name' => $product->name, 'slug' => $product->slug, 'shortDescription' => $product->short_description,
-            'description' => $product->description, 'status' => strtoupper($product->status),
+            'description' => $product->description, 'status' => strtoupper($product->status), 'isFeatured' => (bool) $product->is_featured,
             'approvalStatus' => strtoupper(data_get($product->metadata, 'approvalStatus', $product->status === 'active' ? 'approved' : 'pending')),
+            'rejectionReason' => data_get($product->metadata, 'rejectionReason'),
             'createdById' => (string) $product->vendor_id, 'updatedById' => (string) $product->vendor_id,
             'createdAt' => $product->created_at?->toISOString(), 'updatedAt' => $product->updated_at?->toISOString(),
-            'store' => ['id' => (string) ($profile?->id ?? $product->vendor_id), 'name' => $profile?->name ?? $product->vendor?->name, 'slug' => $profile?->slug ?? Str::slug($product->vendor?->name ?? '')],
+            'store' => [
+                'id' => (string) ($profile?->id ?? $product->vendor_id),
+                'name' => $profile?->name ?? $product->vendor?->name,
+                'slug' => $profile?->slug ?? Str::slug($product->vendor?->name ?? ''),
+                'owner' => $product->vendor ? [
+                    'id' => (string) $product->vendor->id,
+                    'firstName' => $ownerParts[0] ?? '',
+                    'lastName' => $ownerParts[1] ?? '',
+                    'email' => $product->vendor->email,
+                ] : null,
+            ],
             'brand' => $product->brand ? ['id' => (string) $product->brand->id, 'name' => $product->brand->name, 'slug' => $product->brand->slug, 'logo' => $product->brand->image_url] : null,
             'category' => $category ? ['id' => (string) $category->id, 'name' => $category->name, 'slug' => $category->slug] : null,
             'productType' => ['id' => $product->type, 'name' => ucfirst($product->type)],
-            'shippingProfile' => ['id' => (string) data_get($product->metadata, 'shippingProfileId', ''), 'name' => (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
+            'shippingProfile' => ['id' => $shippingProfileId, 'name' => $shippingProfile?->name ?? (string) data_get($product->metadata, 'shippingProfileName', 'Default shipping')],
             'images' => $images, 'variants' => $variants, 'attributes' => $productAttributes,
             'tags' => collect(data_get($product->metadata, 'tags', []))->map(fn ($tag, $index) => ['id' => (string) ($index + 1), 'name' => $tag])->values(),
-            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? '', 'value' => $item['value'] ?? '']),
+            'specifications' => collect(data_get($product->metadata, 'specifications', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'key' => $item['key'] ?? $item['name'] ?? $item['label'] ?? '', 'value' => $item['value'] ?? '']),
             'faqs' => collect(data_get($product->metadata, 'faqs', []))->values()->map(fn ($item, $index) => ['id' => (string) ($index + 1), 'question' => $item['question'] ?? '', 'answer' => $item['answer'] ?? '']), 'variantCount' => $variants->count(),
         ];
     }
@@ -89,16 +113,18 @@ class VendorProductController extends Controller
         $brands = Brand::where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']);
         $categories = Category::where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug']);
         $shipping = DB::table('shipping_methods')->where('is_active', true)->orderBy('sort_order')->get(['code', 'name']);
-        $attributes = DB::table('attributes')->orderBy('name')->get()->map(fn ($attribute) => [
+        $attributes = DB::table('attributes')->where('status', 'active')->orderBy('name')->get()->map(fn ($attribute) => [
             'id' => (string) $attribute->id, 'name' => $attribute->name,
             'values' => DB::table('attribute_values')->where('attribute_id', $attribute->id)->orderBy('value')->get()->map(fn ($value) => ['id' => (string) $value->id, 'value' => $value->value]),
         ]);
+        $tags = DB::table('tags')->where('status', 'active')->orderBy('name')->get(['id', 'name', 'slug'])->map(fn ($tag) => ['id' => (string) $tag->id, 'name' => $tag->name, 'slug' => $tag->slug]);
         return ApiResponse::successResponse([
             'brands' => $brands->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->name, 'slug' => $item->slug]),
             'categories' => $categories->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->name, 'slug' => $item->slug]),
             'shippingProfiles' => $shipping->map(fn ($item) => ['id' => $item->code, 'name' => $item->name]),
             'productTypes' => [['id' => 'simple', 'name' => 'Simple'], ['id' => 'variable', 'name' => 'Variable']],
             'attributes' => $attributes,
+            'tags' => $tags,
         ], 'Product creation options retrieved.');
     }
 
@@ -110,7 +136,20 @@ class VendorProductController extends Controller
         if ($request->filled('brand_id')) $query->where('brand_id', $request->integer('brand_id'));
         if ($request->filled('category_id')) $query->whereHas('categories', fn ($q) => $q->where('categories.id', $request->integer('category_id')));
         if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
-        if ($request->filled('approval_status')) $query->where('metadata->approvalStatus', strtolower($request->input('approval_status')));
+        if ($request->filled('approval_status')) {
+            $approvalStatus = strtolower($request->input('approval_status'));
+            $approvalPattern = '%"approvalStatus":"' . $approvalStatus . '"%';
+            $query->where(function ($approval) use ($approvalStatus, $approvalPattern) {
+                $approval->where('metadata', 'like', $approvalPattern);
+                if ($approvalStatus === 'approved') {
+                    $approval->orWhere(function ($legacy) {
+                        $legacy->where('status', 'active')->where(function ($metadata) {
+                            $metadata->whereNull('metadata')->orWhere('metadata', 'not like', '%"approvalStatus"%');
+                        });
+                    });
+                }
+            });
+        }
         if ($request->filled('sku')) $query->where(fn ($q) => $q->where('sku', 'like', '%' . $request->input('sku') . '%')->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', '%' . $request->input('sku') . '%')));
         $page = $query->latest()->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($product) => $this->adminPayload($product));
@@ -127,6 +166,7 @@ class VendorProductController extends Controller
 
     public function store(Request $request)
     {
+        $this->ensureVendorStoreCanSell($request);
         $data = $this->validateProduct($request);
         $userId = $request->user()->id;
         $slug = $data['slug'] ?: Str::slug($data['name']);
@@ -151,6 +191,7 @@ class VendorProductController extends Controller
 
     public function update(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $data = $this->validateProduct($request, $product->id);
         $slug = $data['slug'] ?: Str::slug($data['name']);
@@ -184,7 +225,7 @@ class VendorProductController extends Controller
             'media.featuredImage.url' => 'required|url|max:500', 'media.featuredImage.altText' => 'nullable|string|max:255',
             'media.galleryImages' => 'array|max:10', 'media.galleryImages.*.url' => 'required|url|max:500',
             'attributes' => 'array|max:3', 'attributes.*.name' => 'required|string|max:100', 'attributes.*.values' => 'array|max:12',
-            'variants' => 'required|array|min:1', 'variants.*.sku' => 'required|string|max:100',
+            'variants' => 'required|array|min:1', 'variants.*.sku' => 'required|string|max:100|distinct',
             'variants.*.price' => 'required|numeric|min:0.01', 'variants.*.salePrice' => 'nullable|numeric|min:0.01',
             'variants.*.stockQuantity' => 'required|integer|min:0', 'variants.*.weight' => 'required|numeric|min:0',
             'variants.*.length' => 'required|numeric|min:0', 'variants.*.width' => 'required|numeric|min:0', 'variants.*.height' => 'required|numeric|min:0',
@@ -194,6 +235,43 @@ class VendorProductController extends Controller
         ]);
         Brand::where('id', $data['brandId'])->where('status', 'active')->firstOrFail();
         Category::where('id', $data['categoryId'])->where('status', 'active')->firstOrFail();
+
+        $submittedSkus = collect($data['variants'])->pluck('sku')->values();
+        $duplicateProductSku = Product::whereIn('sku', $submittedSkus)
+            ->when($ignoreId, fn ($query) => $query->where('id', '<>', $ignoreId))
+            ->exists();
+        $duplicateVariantSku = ProductVariant::whereIn('sku', $submittedSkus)
+            ->when($ignoreId, fn ($query) => $query->where('product_id', '<>', $ignoreId))
+            ->exists();
+        if ($duplicateProductSku || $duplicateVariantSku) {
+            throw ValidationException::withMessages(['variants' => ['One or more SKUs are already used by another product.']]);
+        }
+        foreach ($data['variants'] as $index => $variant) {
+            if (!empty($variant['salePrice']) && (float) $variant['salePrice'] >= (float) $variant['price']) {
+                throw ValidationException::withMessages(["variants.{$index}.salePrice" => ['Sale price must be lower than the regular price.']]);
+            }
+        }
+
+        foreach ($data['tags'] ?? [] as $tagName) {
+            if (!DB::table('tags')->where('slug', Str::slug($tagName))->where('status', 'active')->exists()) {
+                throw ValidationException::withMessages(['tags' => ["The tag '{$tagName}' is not in the approved catalog. Ask an administrator to add it."]]);
+            }
+        }
+
+        foreach ($data['attributes'] ?? [] as $attributeData) {
+            $attribute = DB::table('attributes')->where('name', $attributeData['name'])->where('status', 'active')->first();
+            if (!$attribute) {
+                throw ValidationException::withMessages(['attributes' => ["The attribute '{$attributeData['name']}' is not in the approved catalog."]]);
+            }
+            $submittedValues = collect($attributeData['values'] ?? [])->pluck('value')->filter()->values();
+            if ($submittedValues->isNotEmpty()) {
+                $allowedCount = DB::table('attribute_values')->where('attribute_id', $attribute->id)->whereIn('value', $submittedValues)->count();
+                if ($allowedCount !== $submittedValues->unique()->count()) {
+                    throw ValidationException::withMessages(['attributes' => ["One or more values for '{$attributeData['name']}' are not approved."]]);
+                }
+            }
+        }
+
         return $data;
     }
 
@@ -211,7 +289,10 @@ class VendorProductController extends Controller
     {
         $ids = [];
         foreach ($tags as $name) {
-            $tag = Tag::firstOrCreate(['slug' => Str::slug($name)], ['name' => $name]);
+            $tag = Tag::query()->where('slug', Str::slug($name))->where('status', 'active')->first();
+            if (!$tag) {
+                throw ValidationException::withMessages(['tags' => ["The tag '{$name}' is not in the approved catalog."]]);
+            }
             $ids[] = $tag->id;
         }
         $product->tags()->sync($ids);
@@ -384,6 +465,7 @@ class VendorProductController extends Controller
 
     public function destroy(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $product->update(['status' => 'archived']);
         return ApiResponse::deletedResponse('Product archived.');
@@ -396,6 +478,19 @@ class VendorProductController extends Controller
         if ($request->filled('brand_id')) $query->where('brand_id', $request->integer('brand_id'));
         if ($request->filled('category_id')) $query->whereHas('categories', fn ($q) => $q->where('categories.id', $request->integer('category_id')));
         if ($request->filled('status')) $query->where('status', strtolower($request->input('status')));
+        if ($request->filled('approval_status')) {
+            $approvalStatus = strtolower($request->input('approval_status'));
+            $query->where(function ($approval) use ($approvalStatus) {
+                $approval->where('metadata->approvalStatus', $approvalStatus);
+                if ($approvalStatus === 'approved') {
+                    if (DB::connection()->getDriverName() === 'sqlsrv') {
+                        $approval->orWhereRaw("JSON_VALUE([metadata], '$.approvalStatus') IS NULL AND [status] = ?", ['active']);
+                    } else {
+                        $approval->orWhereRaw("json_extract(metadata, '$.approvalStatus') IS NULL AND status = ?", ['active']);
+                    }
+                }
+            });
+        }
         if ($request->filled('sku')) $query->where(fn ($q) => $q->where('sku', 'like', '%' . $request->input('sku') . '%')->orWhereHas('variants', fn ($v) => $v->where('sku', 'like', '%' . $request->input('sku') . '%')));
         $page = $query->latest()->paginate(min(max($request->integer('per_page', 20), 1), 100));
         $data = $page->getCollection()->map(fn ($product) => $this->adminPayload($product));
@@ -410,18 +505,115 @@ class VendorProductController extends Controller
         return ApiResponse::successResponse($this->adminPayload(Product::findOrFail($id)), 'Product retrieved.');
     }
 
+    public function updateAdminProduct(Request $request, int $id)
+    {
+        $product = Product::findOrFail($id);
+        abort_if($product->status === 'archived', 422, 'Archived products must be restored before editing.');
+
+        $data = $this->validateProduct($request, $product->id);
+        $slug = $data['slug'] ?: Str::slug($data['name']);
+        abort_if(Product::where('slug', $slug)->where('id', '<>', $product->id)->exists(), 422, 'This product URL is already taken.');
+
+        $type = strtolower($data['productType']) === 'variable' ? 'variable' : 'simple';
+        $prices = collect($data['variants'])->map(fn ($variant) => (float) ($variant['salePrice'] ?? $variant['price']));
+        $existingMetadata = $product->metadata ?? [];
+        $metadata = array_merge($existingMetadata, $this->metadata($data, 'draft'));
+        $approval = strtolower((string) ($existingMetadata['approvalStatus'] ?? ($product->status === 'active' ? 'approved' : 'pending')));
+        $metadata['approvalStatus'] = $approval;
+        if (!empty($existingMetadata['rejectionReason'])) {
+            $metadata['rejectionReason'] = $existingMetadata['rejectionReason'];
+        }
+
+        DB::transaction(function () use ($product, $data, $slug, $type, $prices, $metadata) {
+            $product->update([
+                'brand_id' => $data['brandId'],
+                'name' => $data['name'],
+                'slug' => $slug,
+                'type' => $type,
+                'sku' => $type === 'simple' ? ($data['variants'][0]['sku'] ?? null) : null,
+                'short_description' => $data['shortDescription'] ?? null,
+                'description' => $data['fullDescription'] ?? null,
+                'base_price' => $prices->min(),
+                'metadata' => $metadata,
+            ]);
+            $product->categories()->sync([$data['categoryId']]);
+            $this->saveTags($product, $data['tags'] ?? []);
+            $this->saveInventoryAndVariants($product, $data, $type);
+        });
+
+        return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product updated by administrator.');
+    }
+
     public function updateApproval(Request $request, int $id)
     {
-        $data = $request->validate(['decision' => 'required|in:approve,reject']);
+        $data = $request->validate([
+            'decision' => 'required|in:approve,reject',
+            'reason' => 'required_if:decision,reject|nullable|string|max:1000',
+        ]);
         $product = Product::findOrFail($id);
+        $product->load('vendor.vendorProfile');
+        abort_if($product->status === 'archived', 422, 'Archived products cannot be approved or rejected.');
+        if ($data['decision'] === 'approve') {
+            abort_unless($product->vendor?->vendorProfile?->status === 'active' && !$product->vendor?->vendorProfile?->deleted_at, 422, 'The vendor store must be active before approving products.');
+        }
         $metadata = $product->metadata ?? [];
         $metadata['approvalStatus'] = $data['decision'] === 'approve' ? 'approved' : 'rejected';
-        $product->update(['status' => $data['decision'] === 'approve' ? 'active' : 'inactive', 'metadata' => $metadata]);
+        if ($data['decision'] === 'reject') {
+            $metadata['rejectionReason'] = trim($data['reason']);
+        } else {
+            unset($metadata['rejectionReason']);
+        }
+        $product->update([
+            'status' => $data['decision'] === 'approve' ? 'active' : 'inactive',
+            'is_featured' => $data['decision'] === 'approve' ? $product->is_featured : false,
+            'metadata' => $metadata,
+        ]);
+        DB::table('marketplace_notifications')->insert([
+            'user_id' => $product->vendor_id,
+            'type' => 'product.' . $metadata['approvalStatus'],
+            'title' => $data['decision'] === 'approve' ? 'Product approved' : 'Product needs changes',
+            'message' => $data['decision'] === 'approve'
+                ? 'Your product "' . $product->name . '" has been approved and is now eligible for sale.'
+                : 'Your product "' . $product->name . '" was rejected: ' . trim($data['reason']),
+            'action_url' => '/vendor/products',
+            'data' => json_encode(['product_id' => $product->id, 'approval_status' => $metadata['approvalStatus']]),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product approval updated.');
+    }
+
+    public function updateAdminStatus(Request $request, int $id)
+    {
+        $data = $request->validate(['status' => 'required|in:active,inactive,archived']);
+        $product = Product::with('vendor.vendorProfile')->findOrFail($id);
+        $metadata = $product->metadata ?? [];
+        $approval = strtolower((string) ($metadata['approvalStatus'] ?? ($product->status === 'active' ? 'approved' : 'pending')));
+        abort_if($data['status'] === 'active' && $approval !== 'approved', 422, 'Only approved products can be activated.');
+        abort_if($data['status'] === 'active' && ($product->vendor?->vendorProfile?->status !== 'active' || $product->vendor?->vendorProfile?->deleted_at), 422, 'The vendor store must be active before activating products.');
+        if (!array_key_exists('approvalStatus', $metadata)) {
+            $metadata['approvalStatus'] = $approval;
+        }
+        $product->update([
+            'status' => $data['status'],
+            'is_featured' => $data['status'] === 'archived' ? false : $product->is_featured,
+            'metadata' => $metadata,
+        ]);
+        return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product status updated.');
+    }
+
+    public function updateFeatured(Request $request, int $id)
+    {
+        $data = $request->validate(['is_featured' => 'required|boolean']);
+        $product = Product::with('vendor.vendorProfile')->findOrFail($id);
+        abort_if($data['is_featured'] && $product->status !== 'active', 422, 'Only active products can be featured.');
+        abort_if($data['is_featured'] && ($product->vendor?->vendorProfile?->status !== 'active' || $product->vendor?->vendorProfile?->deleted_at), 422, 'The vendor store must be active before featuring products.');
+        $product->update(['is_featured' => $data['is_featured']]);
+        return ApiResponse::successResponse($this->adminPayload($product->fresh()), 'Product featured status updated.');
     }
 
     public function updateInventory(Request $request, int $id)
     {
+        $this->ensureVendorStoreCanSell($request);
         $product = $this->ownedProduct($request, $id);
         $data = $request->validate([
             'variant_id' => 'nullable|integer', 'stock_quantity' => 'required|integer|min:0',
